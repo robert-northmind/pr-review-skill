@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="__CSRF_TOKEN__">
+<title>PR inbox</title>
+<link rel="stylesheet" href="/assets/dashboard.css">
+<script src="/assets/dashboard.js" defer></script>
+<script src="/assets/reporting.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#pr-list">Skip to pull requests</a>
+<main>
+<header class="page-header">
+  <div><p class="eyebrow">REVIEW WORKSPACE</p><h1>PR inbox<span class="brand-dot" aria-hidden="true"></span></h1><p class="intro">Your requests, your watchlist, and the work behind each review.</p></div>
+  <div class="sync-controls"><button id="refresh" class="button">↻ <span>Refresh GitHub</span></button><p id="freshness" class="muted">Checking saved state…</p></div>
+</header>
+<div id="connection" class="notice" role="status" hidden></div>
+<div id="warnings" class="notice warning" hidden></div>
+<section class="workspace-controls" aria-label="Review settings">
+  <div class="settings-summary"><span class="status-dot" aria-hidden="true"></span><span id="effective-agent">Loading review settings…</span><span id="active-runs" class="muted"></span></div>
+  <details id="settings"><summary>Settings</summary>
+    <div class="settings-content">
+      <form id="agent-form">
+        <h2>Review agent</h2><p class="muted">Used when you start a review or explanation. Model and effort are remembered for each agent.</p>
+        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code</option><option value="codex">Codex CLI</option></select></label>
+        <label>Model<input id="model" name="model" list="model-options" placeholder="CLI default" autocomplete="off"><datalist id="model-options"></datalist></label>
+        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="CLI default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
+        <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
+      </form>
+      <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
+        <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
+      </section>
+    </div>
+  </details>
+</section>
+<nav id="views" class="views" aria-label="Inbox views">
+<button data-view="requested" aria-pressed="true">Requested from you <span class="count">0</span></button>
+<button data-view="watching" aria-pressed="false">Watching <span class="count">0</span></button>
+<button data-view="mine" aria-pressed="false">Your PRs <span class="count">0</span></button>
+<button data-view="hidden" aria-pressed="false">Hidden <span class="count">0</span></button>
+<button id="reporting-tab" aria-pressed="false">Reporting</button>
+</nav>
+<div id="inbox-content">
+<section class="filters" aria-label="Filter pull requests">
+<label class="search-field"><span class="sr-only">Search pull requests</span><input id="search" type="search" placeholder="Search title, repository, author, or #number" autocomplete="off"></label>
+<details id="repository-picker" class="filter-picker">
+<summary id="repository-summary">All repositories</summary>
+<section class="filter-panel" aria-label="Choose repositories">
+<div class="filter-panel-heading"><strong>Repositories</strong><button class="text-button" type="button" id="repository-done">Done</button></div>
+<p class="muted">Show PRs from any selected repository, or leave “Show only” empty for all repositories. Exclusions always take priority.</p>
+<label class="sr-only" for="repository-search">Search repositories</label><input id="repository-search" type="search" placeholder="Find a repository" autocomplete="off">
+<div class="filter-shortcuts"><button type="button" class="text-button" id="repository-clear">Reset repositories</button></div>
+<div id="repository-options" class="filter-options"></div>
+<p id="repository-selection" class="muted" aria-live="polite"></p>
+</section></details>
+<details id="author-picker" class="filter-picker">
+<summary id="author-summary">All authors</summary>
+<section class="filter-panel" aria-label="Choose authors">
+<div class="filter-panel-heading"><strong>Authors</strong><button class="text-button" type="button" id="author-done">Done</button></div>
+<p class="muted">Show PRs from any of your “Show only” authors, or leave that empty for everyone. Excluded authors are always filtered out.</p>
+<label class="sr-only" for="author-search">Search authors</label><input id="author-search" type="search" placeholder="Find a name or username" autocomplete="off">
+<div class="filter-shortcuts"><button type="button" class="text-button" id="exclude-renovate">Exclude Renovate</button><button type="button" class="text-button" id="author-clear">Reset authors</button></div>
+<div id="author-options" class="filter-options"></div>
+<p id="author-selection" class="muted" aria-live="polite"></p>
+</section></details>
+<details id="status-picker" class="filter-picker">
+<summary id="status-summary">Any review status</summary>
+<section class="filter-panel" aria-label="Choose statuses">
+<div class="filter-panel-heading"><strong>Statuses</strong><button class="text-button" type="button" id="status-done">Done</button></div>
+<p class="muted">Show PRs matching any selected status. A PR can have several statuses; exclusions always take priority.</p>
+<label class="sr-only" for="status-search">Search statuses</label><input id="status-search" type="search" placeholder="Find a status" autocomplete="off">
+<div class="filter-shortcuts"><button type="button" class="text-button" id="status-clear">Reset statuses</button></div>
+<div id="status-options" class="filter-options"></div>
+<p id="status-selection" class="muted" aria-live="polite"></p>
+</section></details>
+<div class="filter-bottom"><label class="star-filter"><input id="starred" type="checkbox"> Starred only</label><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="starred">Starred first</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
+</section>
+<div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><p id="view-description" class="muted">PRs assigned to you or requesting your review.</p></div><span id="result-count" class="muted" aria-live="polite"></span></div>
+<section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>
+</div>
+<section id="reporting-view" aria-label="Reporting" hidden>
+<div class="report-header"><div><h2>Reporting</h2><p class="muted">Your GitHub reviews and your merged PRs. Days use Europe/Berlin time.</p></div><button id="report-refresh" class="button">Refresh history</button></div>
+<p id="report-freshness" class="muted" role="status"></p>
+<p id="report-error" class="notice warning" role="status" hidden></p>
+<div class="report-toolbar">
+<details id="reportrepository-picker" class="filter-picker">
+<summary id="reportrepository-summary">All report repositories</summary>
+<section class="filter-panel" aria-label="Choose reporting repositories">
+<div class="filter-panel-heading"><strong>Repositories</strong><button class="text-button" type="button" id="reportrepository-done">Done</button></div>
+<p class="muted">Show PRs from any selected repository, or leave “Show only” empty for all repositories. Exclusions always take priority.</p>
+<label class="sr-only" for="reportrepository-search">Search repositories</label><input id="reportrepository-search" type="search" placeholder="Find a repository" autocomplete="off">
+<div class="filter-shortcuts"><button type="button" class="text-button" id="reportrepository-clear">Reset repositories</button></div>
+<div id="reportrepository-options" class="filter-options"></div>
+<p id="reportrepository-selection" class="muted" aria-live="polite"></p>
+</section></details>
+<div class="report-modes" role="group" aria-label="Chart interval"><button class="button" id="report-daily" aria-pressed="true">Daily</button><button class="button" id="report-weekly" aria-pressed="false">Weekly</button></div>
+<button class="button" id="report-yesterday">Yesterday</button></div>
+<div id="report-content"></div>
+<p class="report-rules muted">A PR counts once per day or week, even if you review it again. Weekly totals count distinct PRs, so they can be lower than the sum of the days. Submitted GitHub reviews include comment-only reviews; draft reviews, ordinary comments and AI runs are excluded. Hidden inbox PRs still count here. History covers repositories your GitHub login can access.</p>
+</section>
+<footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<noscript><p>This dashboard needs JavaScript for local actions and live review status.</p></noscript>
+</body>
+</html>

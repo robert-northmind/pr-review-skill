@@ -1,0 +1,11 @@
+const path=require('node:path'),fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const s=fs.readFileSync(path.join(__dirname,'../assets/reporting.js'),'utf8');const c=vm.createContext({});vm.runInContext(s.slice(0,s.indexOf('function showReporting(')),c);
+const e=[{date:'2026-09-07',kind:'review',url:'a'},{date:'2026-09-07',kind:'review',url:'a'},{date:'2026-09-08',kind:'review',url:'a'},{date:'2026-09-09',kind:'merge',url:'b'}];
+assert.equal(c.reportCounts(e,'2026-09-07','2026-09-07').review.length,1);
+assert.equal(c.reportCounts(e,'2026-09-07','2026-09-13').review.length,1);
+assert.equal(c.reportCounts(e,'2026-09-07','2026-09-13').merge.length,1);
+assert.equal(c.reportCounts(e,'2026-09-10','2026-09-10').review.length,0);
+assert.equal(c.reportPeriods('2026-08-10','2026-09-10','weekly').length,5);
+assert.equal(c.reportPeriods('2026-08-10','2026-09-10','daily').length,32);
+assert.equal(vm.runInContext("weekStart('2026-09-06')",c),'2026-08-31');
+console.log('7 reporting aggregation checks passed.');

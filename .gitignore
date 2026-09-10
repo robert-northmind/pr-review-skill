@@ -1,0 +1,13 @@
+# Local runtime and editor files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+*.log
+*.swp
+*.swo
+.venv/
+venv/
+.env
+.env.*
+!.env.example
