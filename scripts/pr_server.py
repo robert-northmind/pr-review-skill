@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
-            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js'):
+            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')
             elif parsed.path in ('/api/state','/api/reporting','/status'):

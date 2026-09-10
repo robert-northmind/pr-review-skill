@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="__CSRF_TOKEN__">
 <title>PR inbox</title>
+<script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/dashboard.css">
 <script src="/assets/dashboard.js" defer></script>
 <script src="/assets/reporting.js" defer></script>
@@ -14,7 +15,8 @@
 <main>
 <header class="page-header">
   <div><p class="eyebrow">REVIEW WORKSPACE</p><h1>PR inbox<span class="brand-dot" aria-hidden="true"></span></h1><p class="intro">Your requests, your watchlist, and the work behind each review.</p></div>
-  <div class="sync-controls"><button id="refresh" class="button">↻ <span>Refresh GitHub</span></button><p id="freshness" class="muted">Checking saved state…</p></div>
+  <div class="header-actions"><label class="theme-control">Theme<select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <div class="sync-controls"><button id="refresh" class="button">↻ <span>Refresh GitHub</span></button><p id="freshness" class="muted">Checking saved state…</p></div></div>
 </header>
 <div id="connection" class="notice" role="status" hidden></div>
 <div id="warnings" class="notice warning" hidden></div>
