@@ -17,9 +17,10 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_runtime as runtime
 import dashboard_reporting as reporting
+import dashboard_queue as queue
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
-MUTATIONS = {'/refresh-reporting','/refresh','/hide','/unhide','/star','/unstar','/set-config',
+MUTATIONS = {'/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/star','/unstar','/set-config',
              '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer'}
 
 
@@ -104,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
-            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js'):
+            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')
             elif parsed.path in ('/api/state','/api/reporting','/status'):
@@ -144,7 +145,17 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/refresh-reporting':
                 self._send(202,{'started':reporting.start_refresh()}); return
             if path == '/refresh':
+                queue.start_refresh(force=True)
                 self._send(202,{'started':runtime.start_refresh()}); return
+            if path in ('/refresh-queue', '/recover-reviews'):
+                self._send(202, {'started':queue.start_refresh(force=data.get('force') is True or path == '/recover-reviews',
+                                                             recovery=path == '/recover-reviews')}); return
+            if path == '/queue':
+                result = queue.mutate(str(data.get('url', '')), str(data.get('action', '')), data)
+                self._send(200, result)
+                if data.get('action') in ('enqueue', 'restore'):
+                    queue.start_refresh(force=True)
+                return
             if path in ('/regenerate-review','/regenerate-explainer'):
                 result=runtime.start_launch(str(data.get('url','')),
                     'review' if path.endswith('review') else 'explainer', retry=data.get('retry') is True)

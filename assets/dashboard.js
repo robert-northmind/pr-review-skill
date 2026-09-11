@@ -53,7 +53,7 @@ function card(pr){
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';
  const newestArtifact=Object.values(arts).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
- return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><button class="star" aria-label="${pr.starred?'Unstar':'Star'} PR ${esc(pr.number)}" aria-pressed="${!!pr.starred}" data-action="/${pr.starred?'unstar':'star'}" data-url="${esc(pr.url)}">${pr.starred?'★':'☆'}</button><div><a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta"><span>${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</span><span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}</div></div>
+ return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><button class="star" aria-label="${pr.starred?'Unstar':'Star'} PR ${esc(pr.number)}" aria-pressed="${!!pr.starred}" data-action="/${pr.starred?'unstar':'star'}" data-url="${esc(pr.url)}">${pr.starred?'★':'☆'}</button><div><a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta"><span>${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</span><span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}${newestArtifact?`<span title="${esc(when(newestArtifact.created_at))}">Results ${esc(since(newestArtifact.created_at))}</span>`:''}</div>
  <details class="run-details"><summary>Review actions${run?' & history':''}</summary><div class="detail-content">
  ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button><button class="button" data-action="/regenerate-explainer" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${arts['explanation-html']?'Regenerate explainer':'Generate explainer'}</button></div>`:''}
@@ -61,7 +61,7 @@ function card(pr){
  ${attention(run)||['starting','queued'].includes(run.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
  ${Object.keys(arts).length?`<section><p class="detail-heading">Results currently shown</p>${Object.entries(arts).map(([name,a])=>`<p class="muted">${name==='review-markdown'?'Notes':'Explainer'}: ${esc(when(a.created_at))} · ${esc(a.tool)} · commit ${esc(a.head_sha?.slice(0,12)||'not recorded')}${a.status!=='completed'?' · partial result':''}</p>`).join('')}</section>`:''}${history}</div></details></article>`;
 }
-const statusOptions={unreviewed:'Not reviewed on GitHub',reviewed:'Reviewed on GitHub',ready:'AI notes available',running:'AI run active',attention:'AI run needs attention',older:'Older AI results'};
+const statusOptions={unreviewed:'No GitHub feedback yet',reviewed:'Reviewed or commented on GitHub',ready:'AI notes available',running:'AI run active',attention:'AI run needs attention',older:'Older AI results'};
 const pickerConfig={reportrepository:{prefix:'reportRepositories',title:'Repositories',empty:'All report repositories'},author:{prefix:'authors',title:'Authors',empty:'All authors'},repository:{prefix:'repositories',title:'Repositories',empty:'All repositories'},status:{prefix:'statuses',title:'Statuses',empty:'Any review status'}};
 const pickerSignatures={};
 function filterOptions(id){
@@ -112,8 +112,8 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const id
 document.addEventListener('click',event=>{for(const id of Object.keys(pickerConfig))if(!event.composedPath().includes($(id+'-picker')))closePicker(id);});
 function matchesStatus(pr,status){
  switch(status){
-  case 'unreviewed':return !pr.my_review_at;
-  case 'reviewed':return !!pr.my_review_at;
+  case 'unreviewed':return !pr.my_review_at&&!pr.my_comment_at;
+  case 'reviewed':return !!(pr.my_review_at||pr.my_comment_at);
   case 'ready':return !!pr.artifacts['review-markdown'];
   case 'running':return !!active(pr.run);
   case 'attention':return !!attention(pr.run);
@@ -124,7 +124,7 @@ function matchesStatus(pr,status){
 function matchesSelection(only,excluded,matches){return (!only.length||only.some(matches))&&!excluded.some(matches);}
 function visiblePrs(){
  const text=filters.search.toLowerCase().trim().replace(/^#/,'');
- return state.prs.filter(pr=>filters.view==='hidden'?pr.hidden:!pr.hidden&&pr.group===filters.view).filter(pr=>{
+ return state.prs.filter(pr=>pr.discovered!==false).filter(pr=>filters.view==='hidden'?pr.hidden:!pr.hidden&&pr.group===filters.view).filter(pr=>{
   if(text&&!`${pr.title} ${pr.owner}/${pr.repository} ${pr.number} ${pr.author_login} ${pr.author_name||''}`.toLowerCase().includes(text))return false;
   if(!matchesSelection(filters.repositoriesOnly,filters.repositoriesExcluded,value=>value===pr.owner+'/'+pr.repository))return false;
   if(!matchesSelection(filters.authorsOnly,filters.authorsExcluded,value=>value===pr.author_login))return false;
@@ -142,7 +142,7 @@ function visiblePrs(){
 function renderList(force=false){if(!state)return;const prs=visiblePrs();const signature=JSON.stringify([prs,filters]);
  $('result-count').textContent=`${prs.length} ${prs.length===1?'PR':'PRs'}`;
  $('view-heading').textContent=labels[filters.view];$('view-description').textContent=descriptions[filters.view];
- document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>view==='hidden'?pr.hidden:!pr.hidden&&pr.group===view).length;});
+ document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>pr.discovered!==false).filter(pr=>view==='hidden'?pr.hidden:!pr.hidden&&pr.group===view).length;});
  if(!force&&signature===listSignature)return;listSignature=signature;
  const expanded=new Set([...document.querySelectorAll('.pr-card:has(details[open])')].map(el=>el.dataset.pr));
  const focused=document.activeElement,focusUrl=focused?.dataset?.url,focusAction=focused?.dataset?.action;
@@ -154,6 +154,7 @@ function renderList(force=false){if(!state)return;const prs=visiblePrs();const s
 function showConfig(config){configSignature=JSON.stringify(config);profiles=structuredClone(config.agent_profiles);editingAgent=config.agent;$('agent').value=editingAgent;fillAgent();settingsDirty=false;markDirty();}
 function fillAgent(){const profile=profiles[editingAgent]||{model:'',effort:''};$('model').value=profile.model;$('effort').value=profile.effort;$('model-options').innerHTML=state.models[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');$('effort-options').innerHTML=state.efforts[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');}
 function markDirty(){if(!state)return;const config=state.config;settingsDirty=editingAgent!==config.agent||$('model').value!==config.model||$('effort').value!==config.effort;$('save-state').textContent=settingsDirty?'Unsaved changes — save before starting a review.':'Saved. Blank fields use the CLI defaults.';$('discard').hidden=!settingsDirty;}
+function queueCaptureButton(pr){return `<button class="button ${pr.workflow?'':'primary'}" data-queue-action="${pr.workflow?'show':'enqueue'}" data-url="${esc(pr.url)}">${pr.workflow?'My reviews':'Add to Up next'}</button>`;}
 function renderState(){
  const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · Approve for me':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
  const count=state.prs.filter(pr=>active(pr.run)).length;$('active-runs').textContent=count?`${count} active ${count===1?'run':'runs'}`:'';
@@ -166,12 +167,13 @@ function renderState(){
  renderPickers();
  $('watched-repos').innerHTML=config.watched_repos.map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-repo="${esc(repo)}" aria-label="Stop watching ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No watched repositories yet.</li>';
  renderList();
+ if(typeof renderQueue==='function')renderQueue();
 }
 async function loadState(){if(loading)return;loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;}}
 function syncFilterControls(){ $('search').value=filters.search;$('starred').checked=filters.starred;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;}
 function clearFilters(){for(const id of Object.keys(pickerConfig))$(id+'-search').value='';filters={...defaults,view:filters.view,reportRepositoriesOnly:filters.reportRepositoriesOnly,reportRepositoriesExcluded:filters.reportRepositoriesExcluded};syncFilterControls();saveFilters();renderList();}
 document.addEventListener('click',async event=>{
- const view=event.target.closest('[data-view]');if(view){showReporting(false);filters.view=view.dataset.view;saveFilters();renderList();return;}
+ const view=event.target.closest('[data-view]');if(view){if(typeof showQueue==='function')showQueue(false);showReporting(false);filters.view=view.dataset.view;saveFilters();renderList();return;}
  if(event.target.closest('[data-clear]')||event.target.closest('#clear-filters')){clearFilters();return;}
  if(event.target.closest('#undo')){const action=undoAction;undoAction=null;$('toast').hidden=true;try{await action?.();}catch(error){notify(error.message);}return;}
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}

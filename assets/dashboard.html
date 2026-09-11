@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/assets/dashboard.css">
 <script src="/assets/dashboard.js" defer></script>
 <script src="/assets/reporting.js" defer></script>
+<script src="/assets/queue.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#pr-list">Skip to pull requests</a>
@@ -38,6 +39,7 @@
   </details>
 </section>
 <nav id="views" class="views" aria-label="Inbox views">
+<button id="my-reviews-tab" aria-pressed="false">My reviews <span class="count">0</span></button>
 <button data-view="requested" aria-pressed="true">Requested from you <span class="count">0</span></button>
 <button data-view="watching" aria-pressed="false">Watching <span class="count">0</span></button>
 <button data-view="mine" aria-pressed="false">Your PRs <span class="count">0</span></button>
@@ -82,6 +84,16 @@
 <div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><p id="view-description" class="muted">PRs assigned to you or requesting your review.</p></div><span id="result-count" class="muted" aria-live="polite"></span></div>
 <section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>
 </div>
+<section id="queue-view" aria-label="My reviews" hidden>
+<div class="queue-heading"><div><h2>My reviews</h2><p class="muted">Your saved reviews across all repositories. Inbox filters do not hide items here.</p></div><button class="button" id="queue-refresh">Check for updates</button></div>
+<p class="muted" id="queue-freshness" role="status"></p>
+<form id="queue-add" class="queue-add"><label>Save a PR link<input name="url" type="url" placeholder="https://github.com/owner/repo/pull/123" required></label><button class="button primary" type="submit">Add to Up next</button></form>
+<p id="queue-error" class="notice warning" role="status" hidden></p>
+<div id="queue-list"></div>
+<details id="queue-history"><summary>History <span id="queue-history-count"></span></summary><div id="queue-history-list"></div></details>
+<details id="queue-recovery"><summary>Find reviews you already started</summary><p class="muted">Choose PRs from your GitHub participation or local review runs to follow. Nothing is added automatically.</p><button id="queue-recover" class="button">Find on GitHub</button><div id="queue-candidates"></div></details>
+</section>
+<dialog id="queue-note-dialog"><form id="queue-note-form"><h2>Private review note</h2><p id="queue-note-title" class="muted"></p><label>Where you stopped or what to check next<textarea id="queue-note" rows="5" maxlength="4000"></textarea></label><p id="queue-note-error" class="notice warning" role="alert" hidden></p><div class="action-bar"><button class="button primary" type="submit">Save note</button><button class="button" type="button" id="queue-note-cancel">Cancel</button></div></form></dialog>
 <section id="reporting-view" aria-label="Reporting" hidden>
 <div class="report-header"><div><h2>Reporting</h2><p class="muted">Your GitHub reviews and your merged PRs. Days use Europe/Berlin time.</p></div><button id="report-refresh" class="button">Refresh history</button></div>
 <p id="report-freshness" class="muted" role="status"></p>

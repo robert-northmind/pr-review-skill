@@ -6,6 +6,7 @@ from pathlib import Path
 import threading
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
+import dashboard_queue as queue
 
 ARTIFACT_NAMES = ('explanation-html', 'review-markdown')
 TERMINAL = {'completed', 'failed', 'blocked', 'cancelled'}
@@ -68,12 +69,14 @@ def snapshot():
     with dashboard.state_lock():
         data = dashboard.load_dashboard()
         config = dashboard.load_config()
+        personal = queue.load()
+        entries = queue.merged_entries(data['prs'], personal)
     runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
     grouped = {}
     for run in runs:
         grouped.setdefault(run['pr_url'], []).append(run)
     prs = []
-    for url, entry in data['prs'].items():
+    for url, entry in entries.items():
         history = grouped.get(url, [])
         artifacts = collect_artifacts(history)
         reasons = entry.get('reasons', [])
@@ -101,7 +104,16 @@ def snapshot():
             'run':summarize_run(history[0]) if history else None,
             'history':[summarize_run(r) for r in history],
             'history_total':len(history)})
-    return {'prs':prs, 'config':config,
+    candidates = dict(personal.get('candidates', {}))
+    for url, entry in data['prs'].items():
+        if 'author' not in entry.get('reasons', []) and (entry.get('my_review_at') or entry.get('my_comment_at')):
+            candidates[url] = entry
+    for url, history in grouped.items():
+        if url not in candidates:
+            _, fallback = queue.identity(url)
+            candidates[url] = {**fallback, 'title': history[0].get('title') or fallback['title']}
+    candidates = [{'url':url, **entry} for url, entry in candidates.items() if url not in personal['prs']]
+    return {'prs':prs, 'config':config, 'queue_refresh':queue.status(), 'queue_candidates':candidates,
         'last_github_refresh_at':data.get('last_github_refresh_at', ''),
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,
@@ -115,7 +127,7 @@ def start_launch(url, kind, retry=False):
     if kind not in ('review', 'explainer'):
         raise dashboard.DashboardError('Unknown review action.')
     with dashboard.state_lock():
-        entry = dashboard.load_dashboard()['prs'].get(canonical)
+        entry = queue.merged_entries(dashboard.load_dashboard()['prs']).get(canonical)
         if entry is None:
             raise dashboard.DashboardError('This PR is no longer in the inbox. Refresh the page.')
         runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
@@ -150,7 +162,9 @@ def start_launch(url, kind, retry=False):
         except (OSError, dashboard.DashboardError) as error:
             _record_exit(run_id, 1, str(error))
             raise dashboard.DashboardError(str(error)) from error
-        return {'run_id':run_id, 'existing':False}
+    if kind == 'review' and not entry.get('workflow'):
+        queue.mutate(canonical, 'enqueue')
+    return {'run_id':run_id, 'existing':False}
 
 
 def _record_exit(run_id, code, message=''):

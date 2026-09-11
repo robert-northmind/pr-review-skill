@@ -9,7 +9,8 @@ python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py open
 The launchd job `com.pr-review.dashboard-server` runs `pr_server.py`.
 The current HTML/CSS/JavaScript shell is in `assets/dashboard.*`. The page
 reads local tracker state through `/api/state`, including newly registered
-artifacts; loading the page does not contact GitHub or run retention cleanup.
+artifacts. Saved personal reviews are refreshed on opening/refocusing the page
+and every five minutes while it is visible; no retention cleanup runs on page load.
 
 ## Triage and freshness
 
@@ -36,6 +37,65 @@ Refresh does not delete review artifacts or checkouts. Retention and cleanup
 remain part of the tracker's explicit `list`/`refresh` workflow described in
 SKILL.md. Dashboard state/config transactions are serialized across CLI and
 HTTP callers; a refresh merges fetched data into current local preferences.
+
+## My reviews
+
+**My reviews** is a durable personal queue across repositories, independent of
+Requested/Watching membership and their filters. Use **Add to Up next** on an
+inbox card or paste a GitHub PR URL, including a PR outside watched repositories.
+Starting an AI review also saves an untracked PR in Up next; AI completion never
+completes the human review.
+
+- **Up next** has Start reviewing and Move up controls.
+- **Reviewing** records the displayed commit and activity observation. Waiting
+  for author acknowledges that observation, so commits or replies arriving
+  during the review remain pending.
+- **Waiting** retains the PR until it needs another look.
+- **Needs another look** shows head changes, human replies in review threads
+  you participated in, author comments after your feedback, mentions, and
+  direct review re-requests. Links open the relevant conversation or comparison.
+  Merely opening a PR does not acknowledge its updates. Mark updates checked
+  acknowledges only the observation displayed in that browser.
+- **Done for now** moves the PR to History; a subsequent direct re-request
+  returns it. Remove stops personal tracking. Both offer Undo; removed entries
+  can also be restored from History and are never automatically re-enrolled.
+- Add a private note to retain context or where you stopped. It stays local.
+
+Find reviews you already started shows unsaved local runs and cached GitHub
+participation. Find on GitHub adds candidates from open reviewed/commented PRs;
+choose Follow this review to enroll one. Recovery initializes the baseline from
+its latest submitted review when available. It never enrolls every past comment.
+Recovery reports incomplete searches or more than 100 results per source rather
+than silently claiming complete coverage.
+
+`dashboard_queue.py` owns `my-reviews.json`, separate from `dashboard.json` and
+the run registry. It uses the existing dashboard lock and atomic writes. UI
+actions carry a revision to prevent stale tabs/notes overwriting newer choices.
+GitHub refresh merges observations into current personal preferences. Personal
+records remain if discovery drops the PR or GitHub becomes inaccessible.
+
+Follow-up refresh uses read-only, paginated GitHub CLI REST requests, with at
+most four PRs fetched concurrently. It ignores your own replies, bot comments,
+and unrelated thread/CI activity. A newly submitted GitHub review while Reviewing
+moves the PR to Waiting at that review's commit, retaining later updates. Ordinary
+comments do not automatically finish the review; use Waiting for author.
+
+Every saved PR shows its last successful check and any error. Automatic refresh
+checks open tracked PRs, including Done items for re-requests, while the page is
+visible. Explicit Check for updates also checks closed history for reopening.
+Only a confirmed closed/merged status moves a PR to History; an unavailable PR
+stays saved. There are no notifications or checks while the page is closed.
+The personal queue is bound to the first GitHub login that refreshes it; changing
+accounts yields an explicit error instead of interpreting another user's activity.
+
+New authenticated JSON POST actions: `/queue` (enqueue/start/wait/acknowledge/
+done/remove/restore/undo/note/move_up), `/refresh-queue`, and `/recover-reviews`.
+The page and `/api/state` include `assets/queue.js`, workflow observations,
+recovery candidates, and queue refresh status. Do not edit the JSON by hand.
+
+Validate changes with `test_queue` plus the existing dashboard, launch, reporting,
+and notes suites. Browser checks must use disposable tracker data; cover capture,
+waiting, notes, removal/Undo, reload, navigation, and 320px/390px layouts.
 
 ## Starting and following a review
 
