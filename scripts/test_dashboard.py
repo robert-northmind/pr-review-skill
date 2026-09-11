@@ -151,6 +151,18 @@ class HTTP(Isolated):
   except HTTPError as error:response=error
   with response:return response.status,response.headers,response.read()
  def auth(self):return {'Origin':self.base,'X-CSRF-Token':self.server.csrf_token,'Content-Type':'application/json'}
+ def test_copy_prompts_preserve_state_and_do_not_launch(self):
+  before={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+  with patch.object(d,'open_interactive_terminal') as launch, patch.object(t,'command_start') as start:
+   for kind,builder in [('review',d.full_review_prompt),('explainer',d.explainer_prompt)]:
+    code,_,body=self.request('/copy-prompt','POST',{'url':URL,'kind':kind},self.auth())
+    self.assertEqual(code,200);self.assertEqual(json.loads(body)['prompt'],builder(URL))
+   self.assertEqual(self.request('/copy-prompt','POST',{'url':URL,'kind':'review'})[0],403)
+   self.assertEqual(self.request('/copy-prompt','POST',{'url':URL,'kind':'unknown'},self.auth())[0],400)
+   self.assertEqual(self.request('/copy-prompt','POST',{'url':'not a PR','kind':'review'},self.auth())[0],400)
+   launch.assert_not_called();start.assert_not_called()
+  after={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+  self.assertEqual(before,after)
  def test_reporting_uses_same_origin_and_authenticated_refresh(self):
   self.assertEqual(self.request('/api/reporting',headers={'Origin':'https://elsewhere.example'})[0],403)
   self.assertEqual(self.request('/api/reporting',headers={'Sec-Fetch-Site':'cross-site'})[0],403)

@@ -103,7 +103,15 @@ The review buttons create a tracker run before opening Terminal, then pass
 that exact ID to the agent. Reuse it. The tracker ID is the launch identity;
 never attach whichever unrelated run happens to finish next.
 
-Both actions use the saved agent settings:
+**Copy review prompt** and **Copy explainer prompt** are available beside the
+launch actions and in My reviews → Review tools. They copy the same workflow
+prompt for pasting into any agent session, without opening Terminal, creating
+a tracker run, or applying the saved agent settings. The receiving agent
+registers its run and artifacts when it starts. If clipboard access fails, a
+dialog shows selected prompt text for manual copying. `/copy-prompt` validates
+the PR URL and prompt kind and returns the prompt without changing local state.
+
+Both Terminal launch actions use the saved agent settings:
 
 - Review: the entire pr-review workflow, including explanation and notes.
 - Explainer: explain-diff-html only; other review tasks are already skipped.

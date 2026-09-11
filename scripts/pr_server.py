@@ -21,7 +21,7 @@ import dashboard_queue as queue
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/star','/unstar','/set-config',
-             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer'}
+             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt'}
 
 
 class Server(ThreadingHTTPServer):
@@ -142,6 +142,13 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict):
                 raise ValueError('Expected an object.')
+            if path == '/copy-prompt':
+                canonical, *_ = tracker.canonical_pr_url(str(data.get('url', '')))
+                kind = data.get('kind')
+                if kind not in ('review', 'explainer'):
+                    raise ValueError('Choose a review or explainer prompt.')
+                prompt = (dashboard.full_review_prompt if kind == 'review' else dashboard.explainer_prompt)(canonical)
+                self._send(200, {'prompt': prompt}); return
             if path == '/refresh-reporting':
                 self._send(202,{'started':reporting.start_refresh()}); return
             if path == '/refresh':

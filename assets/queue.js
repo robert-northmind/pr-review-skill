@@ -28,7 +28,7 @@ function queueCard(pr){
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
   <div class="queue-actions">${actions}</div>
-  <details class="queue-tools"><summary>Review tools${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary><div class="action-bar">${artifactLink(pr.artifacts['review-markdown'],'Open notes')}${artifactLink(pr.artifacts['explanation-html'],'Explainer')}<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${active(run)?'disabled':''}>${active(run)?'AI run in progress':'Run AI review'}</button></div>${pr.artifact_freshness==='older'?'<p class="muted">AI results are from an older commit.</p>':''}</details>
+  <details class="queue-tools"><summary>Review tools${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary><div class="action-bar">${artifactLink(pr.artifacts['review-markdown'],'Open notes')}${artifactLink(pr.artifacts['explanation-html'],'Explainer')}<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${active(run)?'disabled':''}>${active(run)?'AI run in progress':'Run AI review'}</button>${copyPromptButton(pr,'review')}${copyPromptButton(pr,'explainer')}</div>${pr.artifact_freshness==='older'?'<p class="muted">AI results are from an older commit.</p>':''}</details>
  </article>`;
 }
 function renderQueue(force=false){

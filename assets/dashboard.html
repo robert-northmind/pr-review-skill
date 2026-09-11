@@ -117,6 +117,12 @@
 <footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
 </main>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="prompt-dialog" aria-labelledby="prompt-heading" aria-describedby="prompt-help">
+<h2 id="prompt-heading">Copy prompt</h2>
+<p id="prompt-help" class="muted">Clipboard access is unavailable. Copy the selected text with ⌘C or Ctrl+C, then paste it into your preferred agent session.</p>
+<textarea id="prompt-text" rows="12" readonly aria-label="Agent prompt"></textarea>
+<form method="dialog"><button class="button">Close</button></form>
+</dialog>
 <noscript><p>This dashboard needs JavaScript for local actions and live review status.</p></noscript>
 </body>
 </html>

@@ -31,6 +31,18 @@ function since(stamp){if(!stamp)return 'Unknown';const minutes=Math.max(0,Math.f
 function notify(text,undo){clearTimeout(toastTimer);undoAction=undo||null;$('toast').replaceChildren(document.createTextNode(text));if(undo){const button=document.createElement('button');button.textContent='Undo';button.id='undo';$('toast').append(button);}$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,undo?10000:6000);}
 async function post(action,data={}){const response=await fetch(action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw new Error(result.error||'The action failed.');return result;}
 function artifactLink(a,label){return a?`<a class="button ${label==='Open notes'?'primary':''}" href="${esc(artifactUrl(a.path))}" target="_blank" rel="noopener" title="${esc(when(a.created_at)+' · '+a.tool+' · '+(a.head_sha?.slice(0,8)||'commit not recorded'))}">${esc(label)}</a>`:'';}
+function copyPromptButton(pr,kind){return `<button class="button" data-copy-prompt="${kind}" data-url="${esc(pr.url)}" title="Copy the prompt to paste into an agent session of your choice">Copy ${kind} prompt</button>`;}
+async function copyPrompt(button){
+ if(button.disabled)return;
+ button.disabled=true;
+ try{
+  const {prompt}=await post('/copy-prompt',{url:button.dataset.url,kind:button.dataset.copyPrompt});
+  try{await navigator.clipboard.writeText(prompt);notify('Prompt copied. Paste it into your preferred agent session.');}
+  catch{
+   $('prompt-text').value=prompt;$('prompt-dialog').showModal();$('prompt-text').focus();$('prompt-text').select();
+  }
+ }catch(error){notify(error.message);}finally{button.disabled=false;}
+}
 function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${Object.entries(run.artifacts).map(([name,a])=>`<a target="_blank" rel="noopener" href="${esc(artifactUrl(a.path))}">${name==='review-markdown'?'Notes':'Explainer'}</a>`).join('')}</div></div>`).join('');}
 function authorBadge(pr){
  const login=pr.author_login||'';
@@ -45,7 +57,7 @@ function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!arts['review-markdown'], hidden=!!pr.hidden;
  const buttons=hidden?`<button class="button" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
   artifactLink(arts['review-markdown'],'Open notes')+artifactLink(arts['explanation-html'],'Explainer')+
-  (!hasNotes?`<button class="button primary" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${isActive?'Run in progress':'Run review'}</button>`:'')+`<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}" aria-label="Hide PR ${esc(pr.number)}" title="Hide this PR — you can undo or restore it later">Hide</button>`;
+  (!hasNotes?copyPromptButton(pr,'review')+`<button class="button primary" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${isActive?'Run in progress':'Run review'}</button>`:'')+`<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}" aria-label="Hide PR ${esc(pr.number)}" title="Hide this PR — you can undo or restore it later">Hide</button>`;
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes)status+=`<span class="chip good">AI notes available</span>`;
  if(pr.artifact_freshness==='older')status+='<span class="chip warn">Older commit · rerun to update</span>';
@@ -56,7 +68,7 @@ function card(pr){
  return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><button class="star" aria-label="${pr.starred?'Unstar':'Star'} PR ${esc(pr.number)}" aria-pressed="${!!pr.starred}" data-action="/${pr.starred?'unstar':'star'}" data-url="${esc(pr.url)}">${pr.starred?'★':'☆'}</button><div><a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta"><span>${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</span><span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}${newestArtifact?`<span title="${esc(when(newestArtifact.created_at))}">Results ${esc(since(newestArtifact.created_at))}</span>`:''}</div>
  <details class="run-details"><summary>Review actions${run?' & history':''}</summary><div class="detail-content">
- ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button><button class="button" data-action="/regenerate-explainer" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${arts['explanation-html']?'Regenerate explainer':'Generate explainer'}</button></div>`:''}
+ ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button>${copyPromptButton(pr,'review')}<button class="button" data-action="/regenerate-explainer" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${arts['explanation-html']?'Regenerate explainer':'Generate explainer'}</button>${copyPromptButton(pr,'explainer')}</div>`:''}
  ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded activity ${esc(since(run.updated_at))}. ${isActive?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
  ${attention(run)||['starting','queued'].includes(run.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
  ${Object.keys(arts).length?`<section><p class="detail-heading">Results currently shown</p>${Object.entries(arts).map(([name,a])=>`<p class="muted">${name==='review-markdown'?'Notes':'Explainer'}: ${esc(when(a.created_at))} · ${esc(a.tool)} · commit ${esc(a.head_sha?.slice(0,12)||'not recorded')}${a.status!=='completed'?' · partial result':''}</p>`).join('')}</section>`:''}${history}</div></details></article>`;
@@ -177,6 +189,7 @@ document.addEventListener('click',async event=>{
  if(event.target.closest('[data-clear]')||event.target.closest('#clear-filters')){clearFilters();return;}
  if(event.target.closest('#undo')){const action=undoAction;undoAction=null;$('toast').hidden=true;try{await action?.();}catch(error){notify(error.message);}return;}
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}
+ const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Refresh GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
  const {action,url,retry}=button.dataset;const launching=action.startsWith('/regenerate-');
