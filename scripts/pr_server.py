@@ -20,7 +20,7 @@ import dashboard_reporting as reporting
 import dashboard_queue as queue
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
-MUTATIONS = {'/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/star','/unstar','/set-config',
+MUTATIONS = {'/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
              '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt'}
 
 
@@ -167,6 +167,11 @@ class Handler(BaseHTTPRequestHandler):
                 result=runtime.start_launch(str(data.get('url','')),
                     'review' if path.endswith('review') else 'explainer', retry=data.get('retry') is True)
                 self._send(202,result); return
+            if path in ('/snooze', '/unsnooze'):
+                if path == '/snooze' and data.get('days') is None:
+                    raise ValueError('Choose a snooze duration.')
+                self._send(200, dashboard.set_snooze(str(data.get('url', '')),
+                           data.get('days') if path == '/snooze' else None)); return
             if path == '/set-config':
                 dashboard.save_agent_config(str(data.get('agent','')),str(data.get('model','')),str(data.get('effort','')))
             elif path == '/add-repo':
@@ -174,7 +179,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/remove-repo':
                 dashboard.remove_watched_repo(str(data.get('repo','')))
             else:
-                dashboard.set_flag(str(data.get('url','')), 'hidden' if path in ('/hide','/unhide') else 'starred',path in ('/hide','/star'))
+                dashboard.set_flag(str(data.get('url','')), 'hidden',path == '/hide')
             self._send(200,{'ok':True})
         except (OSError, ValueError, dashboard.DashboardError, tracker.TrackerError) as error:
             self._error(400,str(error))

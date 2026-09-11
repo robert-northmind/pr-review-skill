@@ -17,7 +17,11 @@ and every five minutes while it is visible; no retention cleanup runs on page lo
 Requested from you includes direct reviewer requests and assignments.
 Watching includes open PRs from watched repositories. Your PRs includes
 Robert's authored PRs. Hidden PRs can be restored. Filters are saved in the
-browser, independently from the registry.
+browser, independently from the registry. Legacy star filters are ignored.
+Cards show a prominent repository and PR number, plus the age since GitHub
+creation alongside recent activity. Missing opening dates show “Age unknown”
+until a GitHub refresh; first-seen time is never used as PR age.
+Review actions expand below their disclosure, keeping it in the same position.
 
 GitHub participation distinguishes comments, approvals, requested changes,
 and dismissed reviews. It is not inferred from an AI run finishing. Legacy
@@ -37,6 +41,25 @@ Refresh does not delete review artifacts or checkouts. Retention and cleanup
 remain part of the tracker's explicit `list`/`refresh` workflow described in
 SKILL.md. Dashboard state/config transactions are serialized across CLI and
 HTTP callers; a refresh merges fetched data into current local preferences.
+
+## Snooze
+
+Snooze an inbox PR for **1 day**, **2 days**, or **1 week** (24/48/168 hours).
+The Snoozed view shows its return time and **Bring back now**; snoozing offers
+Undo. Hide remains indefinite, and hiding/restoring clears a snooze. Snooze
+only affects inbox discovery views; saved commitments in My reviews remain.
+
+The deadline persists in `dashboard.json` as `snoozed_until`. On expiry, the
+visible dashboard requests a GitHub refresh, retrying at most every five minutes.
+An observed open PR returns to its current source view. Closed/merged PRs drop
+out through normal discovery refresh; incomplete sources retain snoozed entries
+until an open result confirms they can return. The page shows expired entries
+as awaiting a GitHub check. A page opened after expiry checks then; no scheduled
+job or notification is created. Refresh merges current preferences so a new
+snooze applied during a fetch is preserved.
+
+Authenticated JSON POST `/snooze` takes `url` and `days` (1, 2, or 7);
+`/unsnooze` takes `url`. Both preserve GitHub freshness and review artifacts.
 
 ## My reviews
 
@@ -165,17 +188,16 @@ python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py refresh
 python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py set-config --agent codex --model '' --effort ''
 python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py add-repo owner/repo
 python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py remove-repo owner/repo
-python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py star 'https://github.com/owner/repo/pull/1'
 python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py hide 'https://github.com/owner/repo/pull/1'
 ```
 
-Use corresponding `unstar`/`unhide` commands to reverse those preferences.
+Use `unhide` to restore a hidden PR.
 Adding/removing a watched repository updates settings immediately; refresh
 GitHub to update its PR membership.
 
 When changing server Python modules, restart the launchd job after validation.
 Asset-only changes are picked up on page reload. Validate with the
-`test_dashboard`, `test_dashboard_launch`, and `test_review_notes` unittest
+`test_snooze`, `test_dashboard`, `test_dashboard_launch`, and `test_review_notes` unittest
 modules, plus browser interaction and responsive checks. HTTP tests use a
 random loopback port and disposable data; never point test mutations at the
 live tracker.

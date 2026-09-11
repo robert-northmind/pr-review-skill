@@ -58,22 +58,38 @@ class Refresh(Isolated):
   data=d.load_dashboard();data['prs'][URL]['reasons']=['assignee','review-requested'];d.save_dashboard(data)
   self.refresh(lambda reason: (_ for _ in ()).throw(d.DashboardError('Unavailable')) if reason=='assignee' else ([ITEM] if reason=='review-requested' else []))
   self.assertEqual(d.load_dashboard()['prs'][URL]['reasons'],['assignee','review-requested'])
+ def test_opening_date_is_distinct_from_activity_and_first_seen(self):
+  opened='2025-12-01T00:00:00Z'
+  updated='2026-01-03T00:00:00Z'
+  self.refresh(lambda reason:[{**ITEM,'createdAt':opened}] if reason=='review-requested' else [],
+               {'createdAt':opened,'updatedAt':updated})
+  pr=r.snapshot()['prs'][0]
+  self.assertEqual(pr['pr_created_at'],opened);self.assertEqual(pr['pr_updated_at'],updated)
+  self.assertNotEqual(pr['pr_created_at'],pr['first_seen_at'])
+  self.refresh(lambda reason:[ITEM] if reason=='review-requested' else [])
+  self.assertEqual(r.snapshot()['prs'][0]['pr_created_at'],opened)
+
+ def test_search_supplies_opening_date_when_details_omit_it(self):
+  opened='2025-12-01T00:00:00Z'
+  self.refresh(lambda reason:[{**ITEM,'createdAt':opened}] if reason=='review-requested' else [])
+  self.assertEqual(r.snapshot()['prs'][0]['pr_created_at'],opened)
+
  def test_comment_does_not_mark_reviewed_and_tracks_actual_state(self):
   self.refresh(lambda reason:[ITEM] if reason=='review-requested' else [],{'comments':[{'author':{'login':'me'},'createdAt':'2026-01-02T00:00:00Z'}],'reviews':[],'headRefOid':'b'*40})
   row=r.snapshot()['prs'][0];self.assertEqual(row['participation'],'Commented');self.assertFalse(row['my_review_at'])
   self.refresh(lambda reason:[ITEM] if reason=='review-requested' else [],{'comments':[],'reviews':[{'author':{'login':'me'},'submittedAt':'2026-01-03T00:00:00Z','state':'CHANGES_REQUESTED'}]})
   self.assertEqual(r.snapshot()['prs'][0]['participation'],'Changes requested')
- def test_star_change_during_network_is_preserved(self):
+ def test_hide_change_during_network_is_preserved(self):
   def search(reason):
    if reason=='review-requested':
     with d.state_lock():
-     data=d.load_dashboard();data['prs'][URL]['starred']=False;d.save_dashboard(data)
+     data=d.load_dashboard();data['prs'][URL]['hidden']=True;d.save_dashboard(data)
     return [ITEM]
    return []
-  self.refresh(search);self.assertFalse(d.load_dashboard()['prs'][URL]['starred'])
+  self.refresh(search);self.assertTrue(d.load_dashboard()['prs'][URL]['hidden'])
  def test_local_mutation_does_not_change_github_freshness_or_warnings(self):
   data=d.load_dashboard();data.update(last_github_refresh_at='2026-01-01T00:00:00Z',refresh_warnings=['Keep this warning']);d.save_dashboard(data)
-  with patch.object(d,'render_html'):d.set_flag(URL,'starred',False)
+  with patch.object(d,'render_html'):d.set_flag(URL,'hidden',True)
   after=d.load_dashboard();self.assertEqual(after['last_github_refresh_at'],'2026-01-01T00:00:00Z');self.assertEqual(after['refresh_warnings'],['Keep this warning'])
 
 class ArtifactsAndConfig(Isolated):
@@ -181,12 +197,13 @@ class HTTP(Isolated):
   headers=self.auth();headers['X-CSRF-Token']='invalid';self.assertEqual(self.request('/hide','POST',{'url':URL},headers)[0],403)
   self.assertFalse(d.load_dashboard()['prs'][URL]['hidden'])
  def test_concurrent_preferences_do_not_overwrite_each_other(self):
-  data=d.load_dashboard();data['prs'][URL]['starred']=False;d.save_dashboard(data)
+  other=URL+'2'
+  data=d.load_dashboard();data['prs'][other]={**ENTRY,'number':12};d.save_dashboard(data)
   from concurrent.futures import ThreadPoolExecutor
   with ThreadPoolExecutor(max_workers=2) as pool:
-   results=list(pool.map(lambda action:self.request(action,'POST',{'url':URL},self.auth())[0],['/star','/hide']))
-  self.assertEqual(results,[200,200]);entry=d.load_dashboard()['prs'][URL]
-  self.assertTrue(entry['starred']);self.assertTrue(entry['hidden'])
+   results=list(pool.map(lambda url:self.request('/hide','POST',{'url':url},self.auth())[0],[URL,other]))
+  self.assertEqual(results,[200,200]);entries=d.load_dashboard()['prs']
+  self.assertTrue(entries[URL]['hidden']);self.assertTrue(entries[other]['hidden'])
 
  def test_valid_mutation_and_reload_state(self):
   self.assertEqual(self.request('/hide','POST',{'url':URL},self.auth())[0],200)

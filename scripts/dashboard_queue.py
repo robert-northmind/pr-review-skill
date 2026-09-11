@@ -187,7 +187,7 @@ def merged_entries(entries, data=None):
     for url, record in data['prs'].items():
         # Removed entries remain in personal history, but never become discovery results.
         metadata = {k:v for k,v in record.get('metadata', {}).items() if k not in (
-            'hidden', 'starred', 'reasons', 'sources', 'starred_at', 'hidden_at')}
+            'hidden', 'starred', 'snoozed_until', 'reasons', 'sources', 'starred_at', 'hidden_at')}
         result[url] = {**result.get(url, {}), **metadata,
                        'discovered': url in entries, 'workflow': presentation(record)}
     for url in entries:
@@ -221,7 +221,7 @@ def classify(url, login, pr, comments, discussion, requests, reviews):
     metadata.update(title=pr.get('title') or metadata['title'], author_login=author,
                     author_avatar_url=(pr.get('user') or {}).get('avatar_url', ''),
                     is_draft=bool(pr.get('draft')), head_sha=pr.get('head', {}).get('sha', ''),
-                    pr_updated_at=pr.get('updated_at', ''),
+                    pr_updated_at=pr.get('updated_at', ''), pr_created_at=pr.get('created_at', ''),
                     pr_state='merged' if pr.get('merged_at') else pr.get('state', ''))
     mine = lambda item: (item.get('user') or {}).get('login', '').lower() == login.lower()
     my_reviews = [r for r in reviews if mine(r) and r.get('submitted_at') and r.get('state') != 'PENDING']
@@ -348,7 +348,7 @@ def recover():
         for item in result.get('items', []):
             url, metadata = identity(item.get('html_url', ''))
             metadata.update(title=item.get('title', metadata['title']), author_login=(item.get('user') or {}).get('login', ''),
-                            pr_updated_at=item.get('updated_at', ''))
+                            pr_updated_at=item.get('updated_at', ''), pr_created_at=item.get('created_at', ''))
             items[url] = metadata
     with dashboard.state_lock():
         data = load()

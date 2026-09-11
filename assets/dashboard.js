@@ -3,14 +3,16 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const artifactUrl = path => '/artifact?path='+encodeURIComponent(path);
 const safeUrl = value => {try {const u=new URL(value);return u.protocol==='https:'?u.href:'#';} catch{return '#';}};
-const labels={requested:'Requested from you',watching:'Watching',mine:'Your PRs',hidden:'Hidden'};
-const descriptions={requested:'PRs assigned to you or requesting your review.',watching:'Open PRs from repositories you follow.',mine:'Open pull requests you created.',hidden:'Set aside for now. Restore a PR to bring it back to its view.'};
+const labels={requested:'Requested from you',watching:'Watching',mine:'Your PRs',snoozed:'Snoozed',hidden:'Hidden'};
+const descriptions={requested:'PRs assigned to you or requesting your review.',watching:'Open PRs from repositories you follow.',mine:'Open pull requests you created.',snoozed:'Temporarily out of your inbox. Open PRs return after their snooze, once checked on GitHub.',hidden:'Set aside for now. Restore a PR to bring it back to its view.'};
 const statusLabels={starting:'Starting',queued:'Starting',running:'Reviewing',completed:'Completed',blocked:'Needs input',failed:'Run failed',cancelled:'Tracking stopped','no-activity':'No recent activity'};
 const active = run => run && ['starting','queued','running','no-activity'].includes(run.status);
 const attention = run => run && ['blocked','failed','no-activity'].includes(run.status);
-const defaults={view:'requested',search:'',reportRepositoriesOnly:[],reportRepositoriesExcluded:[],repositoriesOnly:[],repositoriesExcluded:[],authorsOnly:[],authorsExcluded:[],statusesOnly:[],statusesExcluded:[],starred:false,drafts:'all',sort:'updated'};
+const defaults={view:'requested',search:'',reportRepositoriesOnly:[],reportRepositoriesExcluded:[],repositoriesOnly:[],repositoriesExcluded:[],authorsOnly:[],authorsExcluded:[],statusesOnly:[],statusesExcluded:[],drafts:'all',sort:'updated'};
 let filters={...defaults};
 try {filters={...defaults,...JSON.parse(localStorage.getItem('pr-inbox-filters')||'{}')};}catch{}
+delete filters.starred;
+if(!['updated','oldest'].includes(filters.sort))filters.sort='updated';
 // Preserve selections saved by the earlier single-author filter.
 const authorLogins = values => [...new Set((Array.isArray(values)?values:[]).filter(value=>typeof value==='string'&&value).map(value=>value.startsWith('app/')?value.slice(4)+'[bot]':value))];
 filters.authorsOnly=authorLogins(Array.isArray(filters.authorsOnly)&&filters.authorsOnly.length?filters.authorsOnly:filters.author?[filters.author]:[]);
@@ -53,11 +55,38 @@ function authorBadge(pr){
  try {const u=new URL(pr.author_avatar_url);if(u.protocol==='https:'&&u.hostname==='avatars.githubusercontent.com')avatar=u.href;}catch{}
  return `<a class="pr-author" href="${esc(profileUrl)}" target="_blank" rel="noopener" aria-label="Author: ${esc(name===login?login:name+' ('+login+')')}"><span class="avatar-wrap"><span class="avatar-fallback" aria-hidden="true">${esc(login.slice(0,1).toUpperCase())}</span><img class="author-avatar" src="${esc(avatar)}" alt="" width="28" height="28" loading="lazy" referrerpolicy="no-referrer"></span><span>${esc(name)}${name!==login?` <span class="author-login">@${esc(login)}</span>`:''}</span>${login.endsWith('[bot]')?'<span class="chip">Bot</span>':''}</a>`;
 }
+function prIdentity(pr){return `<div class="pr-identity"><a href="https://github.com/${esc(encodeURIComponent(pr.owner))}/${esc(encodeURIComponent(pr.repository))}" target="_blank" rel="noopener">${esc(pr.owner+'/'+pr.repository)}</a><a class="pr-number" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">#${esc(pr.number)}</a></div>`;}
+function prAge(pr){return pr.pr_created_at?`<span title="Opened ${esc(new Date(pr.pr_created_at).toLocaleString())}">Opened ${esc(since(pr.pr_created_at))}</span>`:'<span title="Refresh GitHub to fetch the opening date">Age unknown</span>';}
+function snoozeControl(pr){
+ if(pr.snoozed_until)return `<button class="button" data-action="/unsnooze" data-url="${esc(pr.url)}">Bring back now</button>`;
+ return `<details class="snooze-picker"><summary class="button" aria-label="Snooze PR ${esc(pr.number)}">Snooze</summary><div class="snooze-options"><p class="muted">Snooze for</p>${[[1,'1 day'],[2,'2 days'],[7,'1 week']].map(([days,label])=>`<button class="button" data-action="/snooze" data-days="${days}" data-url="${esc(pr.url)}">${label}</button>`).join('')}</div></details>`;
+}
+function snoozeStatus(pr){
+ if(!pr.snoozed_until)return '';
+ const pending=new Date(pr.snoozed_until)<=Date.now();
+ return `<span class="chip" title="${esc(new Date(pr.snoozed_until).toLocaleString())}">${pending?'Snooze ended · awaiting GitHub check':'Snoozed until '+esc(when(pr.snoozed_until))}</span>`;
+}
+function inView(pr,view){
+ if(pr.discovered===false)return false;
+ if(view==='hidden')return !!pr.hidden;
+ if(pr.hidden)return false;
+ return view==='snoozed'?!!pr.snoozed_until:!pr.snoozed_until&&pr.group===view;
+}
+let snoozeRefreshAttempt=0;
+async function refreshExpiredSnoozes(){
+ if(document.hidden||!state||state.refresh?.status==='running'||Date.now()-snoozeRefreshAttempt<300000)return;
+ if(!state.prs.some(pr=>pr.discovered!==false&&!pr.hidden&&pr.snoozed_until&&new Date(pr.snoozed_until)<=Date.now()))return;
+ snoozeRefreshAttempt=Date.now();
+ try{await post('/refresh');}catch(error){notify('Could not check expired snoozes. '+error.message);}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState();});
+document.addEventListener('click',event=>{for(const picker of document.querySelectorAll('.snooze-picker[open]'))if(!picker.contains(event.target))picker.open=false;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const picker of document.querySelectorAll('.snooze-picker[open]')){picker.open=false;picker.querySelector('summary').focus();}});
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!arts['review-markdown'], hidden=!!pr.hidden;
  const buttons=hidden?`<button class="button" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
   artifactLink(arts['review-markdown'],'Open notes')+artifactLink(arts['explanation-html'],'Explainer')+
-  (!hasNotes?copyPromptButton(pr,'review')+`<button class="button primary" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${isActive?'Run in progress':'Run review'}</button>`:'')+`<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}" aria-label="Hide PR ${esc(pr.number)}" title="Hide this PR — you can undo or restore it later">Hide</button>`;
+  (!hasNotes?copyPromptButton(pr,'review')+`<button class="button primary" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${isActive?'Run in progress':'Run review'}</button>`:'')+`<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}" aria-label="Hide PR ${esc(pr.number)}" title="Hide this PR — you can undo or restore it later">Hide</button>`+snoozeControl(pr);
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes)status+=`<span class="chip good">AI notes available</span>`;
  if(pr.artifact_freshness==='older')status+='<span class="chip warn">Older commit · rerun to update</span>';
@@ -65,7 +94,7 @@ function card(pr){
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';
  const newestArtifact=Object.values(arts).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
- return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><button class="star" aria-label="${pr.starred?'Unstar':'Star'} PR ${esc(pr.number)}" aria-pressed="${!!pr.starred}" data-action="/${pr.starred?'unstar':'star'}" data-url="${esc(pr.url)}">${pr.starred?'★':'☆'}</button><div><a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta"><span>${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</span><span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
+ return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}${newestArtifact?`<span title="${esc(when(newestArtifact.created_at))}">Results ${esc(since(newestArtifact.created_at))}</span>`:''}</div>
  <details class="run-details"><summary>Review actions${run?' & history':''}</summary><div class="detail-content">
  ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button>${copyPromptButton(pr,'review')}<button class="button" data-action="/regenerate-explainer" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${arts['explanation-html']?'Regenerate explainer':'Generate explainer'}</button>${copyPromptButton(pr,'explainer')}</div>`:''}
@@ -136,30 +165,28 @@ function matchesStatus(pr,status){
 function matchesSelection(only,excluded,matches){return (!only.length||only.some(matches))&&!excluded.some(matches);}
 function visiblePrs(){
  const text=filters.search.toLowerCase().trim().replace(/^#/,'');
- return state.prs.filter(pr=>pr.discovered!==false).filter(pr=>filters.view==='hidden'?pr.hidden:!pr.hidden&&pr.group===filters.view).filter(pr=>{
+ return state.prs.filter(pr=>inView(pr,filters.view)).filter(pr=>{
   if(text&&!`${pr.title} ${pr.owner}/${pr.repository} ${pr.number} ${pr.author_login} ${pr.author_name||''}`.toLowerCase().includes(text))return false;
   if(!matchesSelection(filters.repositoriesOnly,filters.repositoriesExcluded,value=>value===pr.owner+'/'+pr.repository))return false;
   if(!matchesSelection(filters.authorsOnly,filters.authorsExcluded,value=>value===pr.author_login))return false;
-  if(filters.starred&&!pr.starred)return false;
   if(filters.drafts==='ready'&&pr.is_draft || filters.drafts==='only'&&!pr.is_draft)return false;
   if(!matchesSelection(filters.statusesOnly,filters.statusesExcluded,value=>matchesStatus(pr,value)))return false;
   return true;
  }).sort((a,b)=>{
-  if(filters.sort==='starred'&&a.starred!==b.starred)return Number(!!b.starred)-Number(!!a.starred);
   const field=filters.sort==='oldest'?'first_seen_at':'pr_updated_at';
   const left=a[field]||a.first_seen_at||'',right=b[field]||b.first_seen_at||'';
   return (filters.sort==='oldest'?left.localeCompare(right):right.localeCompare(left)) || a.url.localeCompare(b.url);
  });
 }
-function renderList(force=false){if(!state)return;const prs=visiblePrs();const signature=JSON.stringify([prs,filters]);
+function renderList(force=false){if(!state)return;const prs=visiblePrs();const signature=JSON.stringify([prs,filters,Math.floor(Date.now()/60000)]);
  $('result-count').textContent=`${prs.length} ${prs.length===1?'PR':'PRs'}`;
  $('view-heading').textContent=labels[filters.view];$('view-description').textContent=descriptions[filters.view];
- document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>pr.discovered!==false).filter(pr=>view==='hidden'?pr.hidden:!pr.hidden&&pr.group===view).length;});
+ document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>inView(pr,view)).length;});
  if(!force&&signature===listSignature)return;listSignature=signature;
- const expanded=new Set([...document.querySelectorAll('.pr-card:has(details[open])')].map(el=>el.dataset.pr));
+ const expanded=new Set([...document.querySelectorAll('.pr-card:has(.run-details[open])')].map(el=>el.dataset.pr));
  const focused=document.activeElement,focusUrl=focused?.dataset?.url,focusAction=focused?.dataset?.action;
- $('pr-list').innerHTML=prs.map(card).join('')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.starred||filters.drafts!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or refresh GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
- document.querySelectorAll('.pr-card').forEach(el=>{if(expanded.has(el.dataset.pr))el.querySelector('details').open=true;});
+ $('pr-list').innerHTML=prs.map(card).join('')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.drafts!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or refresh GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
+ document.querySelectorAll('.pr-card').forEach(el=>{if(expanded.has(el.dataset.pr))el.querySelector('.run-details').open=true;});
  if(focusUrl&&focusAction){const replacement=[...document.querySelectorAll('[data-action]')].find(el=>el.dataset.url===focusUrl&&el.dataset.action===focusAction);replacement?.focus({preventScroll:true});}
  for(const button of document.querySelectorAll('[data-action]'))if(busy.has(button.dataset.url))button.disabled=true;
 }
@@ -181,8 +208,8 @@ function renderState(){
  renderList();
  if(typeof renderQueue==='function')renderQueue();
 }
-async function loadState(){if(loading)return;loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;}}
-function syncFilterControls(){ $('search').value=filters.search;$('starred').checked=filters.starred;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;}
+async function loadState(){if(loading)return;loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();refreshExpiredSnoozes();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;}}
+function syncFilterControls(){ $('search').value=filters.search;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;}
 function clearFilters(){for(const id of Object.keys(pickerConfig))$(id+'-search').value='';filters={...defaults,view:filters.view,reportRepositoriesOnly:filters.reportRepositoriesOnly,reportRepositoriesExcluded:filters.reportRepositoriesExcluded};syncFilterControls();saveFilters();renderList();}
 document.addEventListener('click',async event=>{
  const view=event.target.closest('[data-view]');if(view){if(typeof showQueue==='function')showQueue(false);showReporting(false);filters.view=view.dataset.view;saveFilters();renderList();return;}
@@ -192,12 +219,14 @@ document.addEventListener('click',async event=>{
  const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Refresh GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
- const {action,url,retry}=button.dataset;const launching=action.startsWith('/regenerate-');
+ const {action,url,retry,days}=button.dataset;const launching=action.startsWith('/regenerate-');
  if(launching&&settingsDirty){notify('Save or discard your agent settings before starting a review.');$('settings').open=true;return;}
  if(retry==='true'&&!confirm('Close the previous Terminal session first. Retry stops tracking that run; it does not stop its process. Start a new review?'))return;
  busy.add(url);button.disabled=true;
- try{const result=await post(action,{url,retry:retry==='true'});
+ try{const result=await post(action,{url,retry:retry==='true',...(days?{days:Number(days)}:{})});
   if(launching)notify(result.existing?'This PR already has an active run. Open its review history for details.':'Terminal opened. Progress will appear here and survives reloading the page.');
+  else if(action==='/snooze')notify('Snoozed until '+when(result.snoozed_until)+'.',async()=>{await post('/unsnooze',{url});await loadState();});
+  else if(action==='/unsnooze')notify('PR returned to your inbox.');
   else if(action==='/hide')notify('PR hidden.',async()=>{await post('/unhide',{url});await loadState();});
   else if(action==='/unhide')notify('PR restored.');
   await loadState();
@@ -207,7 +236,6 @@ for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort']])
 
 // Keep a legible avatar fallback if a profile image is missing or unavailable.
 document.addEventListener('error',event=>{if(event.target.matches?.('.author-avatar'))event.target.hidden=true;},true);
-$('starred').addEventListener('change',()=>{filters.starred=$('starred').checked;saveFilters();renderList();});
 $('agent').addEventListener('change',()=>{profiles[editingAgent]={model:$('model').value,effort:$('effort').value};editingAgent=$('agent').value;fillAgent();markDirty();});
 $('model').addEventListener('input',markDirty);$('effort').addEventListener('input',markDirty);
 $('discard').addEventListener('click',()=>showConfig(state.config));

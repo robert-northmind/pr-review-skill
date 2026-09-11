@@ -580,7 +580,7 @@ makes a separate explicit request.
 
 The local inbox is served at `http://127.0.0.1:8765/` by `scripts/pr_server.py`.
 It separates requests from watched-repository PRs and PRs Robert created,
-with search, repository/review/draft filters, stars, hiding, and run history.
+with search, repository/review/draft filters, PR age, snoozing, hiding, and run history.
 GitHub participation and AI review progress are separate states.
 
 Read [references/dashboard.md](references/dashboard.md) when operating or

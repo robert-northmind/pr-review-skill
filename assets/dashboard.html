@@ -43,6 +43,7 @@
 <button data-view="requested" aria-pressed="true">Requested from you <span class="count">0</span></button>
 <button data-view="watching" aria-pressed="false">Watching <span class="count">0</span></button>
 <button data-view="mine" aria-pressed="false">Your PRs <span class="count">0</span></button>
+<button data-view="snoozed" aria-pressed="false">Snoozed <span class="count">0</span></button>
 <button data-view="hidden" aria-pressed="false">Hidden <span class="count">0</span></button>
 <button id="reporting-tab" aria-pressed="false">Reporting</button>
 </nav>
@@ -79,7 +80,7 @@
 <div id="status-options" class="filter-options"></div>
 <p id="status-selection" class="muted" aria-live="polite"></p>
 </section></details>
-<div class="filter-bottom"><label class="star-filter"><input id="starred" type="checkbox"> Starred only</label><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="starred">Starred first</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
+<div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
 </section>
 <div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><p id="view-description" class="muted">PRs assigned to you or requesting your review.</p></div><span id="result-count" class="muted" aria-live="polite"></span></div>
 <section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>

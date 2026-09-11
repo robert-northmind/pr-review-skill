@@ -22,7 +22,7 @@ function queueCard(pr){
  const reviewed=w.review_observation?.head_sha;
  const stateLabel=w.closed?(pr.pr_state==='merged'?'Merged':'Closed'):queueLabels[w.stage];
  return `<article class="pr-card queue-card" data-queue-pr="${esc(pr.url)}">
-  <div class="queue-card-heading"><div><a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta"><span>${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</span><span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><span class="muted" title="${esc(when(w.checked_at))}">${w.checked_at?'Checked '+esc(since(w.checked_at)):'Awaiting first check'}</span></div>
+  <div class="queue-card-heading"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><span class="muted" title="${esc(when(w.checked_at))}">${w.checked_at?'Checked '+esc(since(w.checked_at)):'Awaiting first check'}</span></div>
   ${reasons.length?`<div class="queue-reasons">${reasons.map(reason=>`<a target="_blank" rel="noopener" class="chip warn" href="${esc(safeUrl(reason.url))}">${esc(reason.label)} ↗</a>`).join('')}</div>`:''}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}

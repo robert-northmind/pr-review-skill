@@ -26,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
@@ -42,11 +42,11 @@ REASONS = {
     "review-requested": "--review-requested",
     "author": "--author",
 }
-SEARCH_JSON_FIELDS = "url,title,repository,number,isDraft,updatedAt,author"
+SEARCH_JSON_FIELDS = "url,title,repository,number,isDraft,createdAt,updatedAt,author"
 # `gh pr list` (unlike `gh search prs`) has no `repository` field — it's
 # implied by --repo. upsert() derives owner/repository from the URL either
 # way, so this doesn't lose anything.
-PR_LIST_JSON_FIELDS = "url,title,number,isDraft,updatedAt,author"
+PR_LIST_JSON_FIELDS = "url,title,number,isDraft,createdAt,updatedAt,author"
 STALE_RUN_HOURS = 6.0
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8765
@@ -360,7 +360,7 @@ def fetch_pr_details(canonical: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [gh_executable(), "pr", "view", canonical, "--json",
-             "reviews,comments,updatedAt,headRefOid"],
+             "reviews,comments,createdAt,updatedAt,headRefOid"],
             capture_output=True, text=True, timeout=30, check=False)
         if result.returncode:
             raise DashboardError(f"Could not refresh details for {canonical}")
@@ -471,7 +471,7 @@ def _refresh_sources() -> None:
     profiles = author_profiles(logins, snapshot.get("author_profiles", {}))
 
     with state_lock():
-        data = load_dashboard()  # Preserve stars/hiding changed during the network work.
+        data = load_dashboard()  # Preserve hiding changed during the network work.
         entries = data["prs"]
         current_sources = set(REASONS) | {"repo:" + repo for repo in load_config()["watched_repos"]}
         complete.intersection_update(current_sources)
@@ -492,13 +492,21 @@ def _refresh_sources() -> None:
                     number=found["number"], title=item.get("title", ""),
                     author_login=normalize_author_login((item.get("author") or {}).get("login", "")),
                     is_draft=bool(item.get("isDraft")), last_seen_at=now)
+                # Search sources contain only open PRs. Release an expired snooze
+                # only after this refresh observed the PR; failed sources keep it asleep.
+                until = entry.get("snoozed_until")
+                if until and tracker.parse_time(until) <= tracker.parse_time(now):
+                    entry.pop("snoozed_until", None)
+                if item.get("createdAt"):
+                    entry["pr_created_at"] = item["createdAt"]
             entry.setdefault("first_seen_at", now)
             entry.setdefault("hidden", False)
-            entry.setdefault("starred", False)
             entry["sources"] = sorted(membership)
             entry["reasons"] = sorted({"watched-repo" if x.startswith("repo:") else x for x in membership})
             if url in details:
                 payload = details[url]
+                if payload.get("createdAt"):
+                    entry["pr_created_at"] = payload["createdAt"]
                 entry["pr_updated_at"] = payload.get("updatedAt", "")
                 entry["head_sha"] = payload.get("headRefOid", "")
                 entry["details_checked_at"] = now
@@ -574,14 +582,6 @@ def command_unhide(args: argparse.Namespace) -> None:
     set_flag(args.pr_url, "hidden", False)
 
 
-def command_star(args: argparse.Namespace) -> None:
-    set_flag(args.pr_url, "starred", True)
-
-
-def command_unstar(args: argparse.Namespace) -> None:
-    set_flag(args.pr_url, "starred", False)
-
-
 def command_set_config(args: argparse.Namespace) -> None:
     save_agent_config(args.agent, args.model or "", args.effort or "")
     data = load_dashboard()
@@ -613,18 +613,40 @@ def command_remove_repo(args: argparse.Namespace) -> None:
 
 
 @serialized
+def set_snooze(pr_url: str, days: int | None) -> dict:
+    if days is not None and (type(days) is not int or days not in (1, 2, 7)):
+        raise DashboardError("Choose 1 day, 2 days, or 1 week.")
+    canonical, *_ = tracker.canonical_pr_url(pr_url)
+    data = load_dashboard()
+    entry = data["prs"].get(canonical)
+    if entry is None:
+        raise DashboardError(f"PR is not tracked in the dashboard: {canonical}")
+    if days is None:
+        entry.pop("snoozed_until", None)
+    else:
+        if entry.get("hidden"):
+            raise DashboardError("Restore this hidden PR before snoozing it.")
+        entry["snoozed_until"] = (tracker.parse_time(tracker.utc_now()) + timedelta(days=days)).isoformat(timespec="seconds")
+    save_dashboard(data)
+    return {"ok": True, "snoozed_until": entry.get("snoozed_until")}
+
+
+@serialized
 def set_flag(pr_url: str, flag: str, value: bool) -> None:
+    if flag != "hidden":
+        raise DashboardError(f"Unknown preference: {flag}")
     canonical, _owner, _repository, _number = tracker.canonical_pr_url(pr_url)
     data = load_dashboard()
     entries = data["prs"]
     if canonical not in entries:
         raise DashboardError(f"PR is not tracked in the dashboard: {canonical}")
+    entries[canonical].pop("snoozed_until", None)
     entries[canonical][flag] = value
     entries[canonical][f"{flag}_at"] = tracker.utc_now() if value else None
     save_dashboard(data)
     review_state, new_activity, review_links = compute_review_state(entries)
     render_html(entries, review_state, new_activity, review_links, [])
-    verb = {"hidden": ("hidden", "unhidden"), "starred": ("starred", "unstarred")}[flag]
+    verb = ("hidden", "unhidden")
     print(f"{verb[0] if value else verb[1]}: {canonical}")
 
 
@@ -876,14 +898,6 @@ def build_parser() -> argparse.ArgumentParser:
     unhide_parser = subparsers.add_parser("unhide")
     unhide_parser.add_argument("pr_url")
     unhide_parser.set_defaults(func=command_unhide)
-
-    star_parser = subparsers.add_parser("star")
-    star_parser.add_argument("pr_url")
-    star_parser.set_defaults(func=command_star)
-
-    unstar_parser = subparsers.add_parser("unstar")
-    unstar_parser.add_argument("pr_url")
-    unstar_parser.set_defaults(func=command_unstar)
 
     config_parser = subparsers.add_parser("set-config")
     config_parser.add_argument("--agent", choices=AGENTS, required=True)
