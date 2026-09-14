@@ -20,7 +20,7 @@ import dashboard_reporting as reporting
 import dashboard_queue as queue
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
-MUTATIONS = {'/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
+MUTATIONS = {'/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
              '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt'}
 
 
@@ -142,6 +142,9 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict):
                 raise ValueError('Expected an object.')
+            if path == '/artifact-opened':
+                self._send(200, runtime.mark_artifact_opened(str(data.get('run_id', '')),
+                    str(data.get('name', '')), data.get('version'))); return
             if path == '/copy-prompt':
                 canonical, *_ = tracker.canonical_pr_url(str(data.get('url', '')))
                 kind = data.get('kind')

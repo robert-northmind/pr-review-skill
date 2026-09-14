@@ -31,8 +31,37 @@ function saveFilters(){try{localStorage.setItem('pr-inbox-filters',JSON.stringif
 function when(stamp){if(!stamp)return 'Not yet checked';const date=new Date(stamp);return Number.isNaN(date.valueOf())?'Unknown date':date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function since(stamp){if(!stamp)return 'Unknown';const minutes=Math.max(0,Math.floor((Date.now()-new Date(stamp))/60000));if(!Number.isFinite(minutes))return 'Unknown';if(minutes<1)return 'just now';if(minutes<60)return minutes+'m ago';if(minutes<1440)return Math.floor(minutes/60)+'h ago';return Math.floor(minutes/1440)+'d ago';}
 function notify(text,undo){clearTimeout(toastTimer);undoAction=undo||null;$('toast').replaceChildren(document.createTextNode(text));if(undo){const button=document.createElement('button');button.textContent='Undo';button.id='undo';$('toast').append(button);}$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,undo?10000:6000);}
-async function post(action,data={}){const response=await fetch(action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw new Error(result.error||'The action failed.');return result;}
-function artifactLink(a,label){return a?`<a class="button ${label==='Open notes'?'primary':''}" href="${esc(artifactUrl(a.path))}" target="_blank" rel="noopener" title="${esc(when(a.created_at)+' · '+a.tool+' · '+(a.head_sha?.slice(0,8)||'commit not recorded'))}">${esc(label)}</a>`:'';}
+async function post(action,data={}){const response=await fetch(action,{method:'POST',keepalive:action==='/artifact-opened',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw new Error(result.error||'The action failed.');return result;}
+function artifactLink(a,label,pr){
+ if(!a)return '';
+ const freshness=a.freshness==='older'?'Older commit':a.freshness==='current'?'':'Commit unverified';
+ const title=[when(a.created_at),a.tool,'Created for commit '+(a.head_sha?.slice(0,12)||'not recorded'),
+  'Last fetched PR commit '+(pr?.head_sha?.slice(0,12)||'not recorded'),a.unread?'You have not opened this version.':'',
+  a.freshness==='older'?'The PR has changed; parts of this result may no longer apply.':''].filter(Boolean).join(' · ');
+ return `<a class="button artifact-link ${label==='Open notes'?'primary':''} ${a.unread?'artifact-unread':''}" data-artifact-run="${esc(a.run_id)}" data-artifact-name="${esc(a.name)}" data-artifact-version="${esc(a.version)}" href="${esc(artifactUrl(a.path))}" target="_blank" rel="noopener" title="${esc(title)}"><span>${esc(label)}</span>${a.unread?'<span class="artifact-new">New<span class="sr-only"> — unopened version</span></span>':''}${freshness?`<span class="artifact-freshness ${a.freshness==='older'?'warn':''}">${esc(freshness)}</span>`:''}</a>`;
+}
+function artifactWarning(pr){
+ const older=Object.entries(pr.artifacts).filter(([,a])=>a.freshness==='older').map(([name])=>name==='review-markdown'?'Notes':'Explainer');
+ return older.length?`<p class="artifact-warning">${esc(older.join(' and '))} ${older.length===1&&older[0]==='Explainer'?'was':'were'} created before the latest fetched PR commit. Some parts may no longer apply.</p>`:'';
+}
+async function acknowledgeArtifact(event){
+ if(event.defaultPrevented||(event.type==='click'?event.button!==0:event.button!==1))return;
+ const link=event.target.closest('[data-artifact-version]');if(!link)return;
+ const {artifactRun:run_id,artifactName:name,artifactVersion:version}=link.dataset;
+ // Leave native link navigation intact, including modifier and middle clicks.
+ try{
+  const result=await post('/artifact-opened',{run_id,name,version});
+  if(!result.opened)return;
+  const restoreFocus=document.activeElement===link, scope=link.closest('.queue-card')?'queue-view':'pr-list';
+  for(const pr of state?.prs||[])for(const artifacts of [pr.artifacts,...pr.history.map(run=>run.artifacts)]){
+   const a=artifacts[name];if(a?.run_id===run_id&&a.version===version)a.unread=false;
+  }
+  renderList();if(typeof renderQueue==='function')renderQueue();
+  if(restoreFocus)[...$(scope).querySelectorAll('[data-artifact-version]')].find(a=>a.dataset.artifactRun===run_id&&a.dataset.artifactName===name&&a.dataset.artifactVersion===version)?.focus({preventScroll:true});
+ }catch(error){notify('Could not save the opened indicator. '+error.message);}
+}
+document.addEventListener('click',acknowledgeArtifact);
+document.addEventListener('auxclick',acknowledgeArtifact);
 function copyPromptButton(pr,kind){return `<button class="button" data-copy-prompt="${kind}" data-url="${esc(pr.url)}" title="Copy the prompt to paste into an agent session of your choice">Copy ${kind} prompt</button>`;}
 async function copyPrompt(button){
  if(button.disabled)return;
@@ -45,7 +74,7 @@ async function copyPrompt(button){
   }
  }catch(error){notify(error.message);}finally{button.disabled=false;}
 }
-function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${Object.entries(run.artifacts).map(([name,a])=>`<a target="_blank" rel="noopener" href="${esc(artifactUrl(a.path))}">${name==='review-markdown'?'Notes':'Explainer'}</a>`).join('')}</div></div>`).join('');}
+function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,name==='review-markdown'?'Notes':'Explainer',pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';
@@ -85,24 +114,23 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const pi
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!arts['review-markdown'], hidden=!!pr.hidden;
  const buttons=hidden?`<button class="button" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
-  artifactLink(arts['review-markdown'],'Open notes')+artifactLink(arts['explanation-html'],'Explainer')+
+  artifactLink(arts['review-markdown'],'Open notes',pr)+artifactLink(arts['explanation-html'],'Explainer',pr)+
   (!hasNotes?copyPromptButton(pr,'review')+`<button class="button primary" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${isActive?'Run in progress':'Run review'}</button>`:'')+`<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}" aria-label="Hide PR ${esc(pr.number)}" title="Hide this PR — you can undo or restore it later">Hide</button>`+snoozeControl(pr);
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes)status+=`<span class="chip good">AI notes available</span>`;
- if(pr.artifact_freshness==='older')status+='<span class="chip warn">Older commit · rerun to update</span>';
- if(Object.keys(arts).length && pr.artifact_freshness==='unknown')status+='<span class="chip">Commit freshness unverified</span>';
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';
  const newestArtifact=Object.values(arts).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
  return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}${newestArtifact?`<span title="${esc(when(newestArtifact.created_at))}">Results ${esc(since(newestArtifact.created_at))}</span>`:''}</div>
+ ${artifactWarning(pr)}
  <details class="run-details"><summary>Review actions${run?' & history':''}</summary><div class="detail-content">
  ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button>${copyPromptButton(pr,'review')}<button class="button" data-action="/regenerate-explainer" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${arts['explanation-html']?'Regenerate explainer':'Generate explainer'}</button>${copyPromptButton(pr,'explainer')}</div>`:''}
  ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded activity ${esc(since(run.updated_at))}. ${isActive?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
  ${attention(run)||['starting','queued'].includes(run.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
  ${Object.keys(arts).length?`<section><p class="detail-heading">Results currently shown</p>${Object.entries(arts).map(([name,a])=>`<p class="muted">${name==='review-markdown'?'Notes':'Explainer'}: ${esc(when(a.created_at))} · ${esc(a.tool)} · commit ${esc(a.head_sha?.slice(0,12)||'not recorded')}${a.status!=='completed'?' · partial result':''}</p>`).join('')}</section>`:''}${history}</div></details></article>`;
 }
-const statusOptions={unreviewed:'No GitHub feedback yet',reviewed:'Reviewed or commented on GitHub',ready:'AI notes available',running:'AI run active',attention:'AI run needs attention',older:'Older AI results'};
+const statusOptions={unreviewed:'No GitHub feedback yet',reviewed:'Reviewed or commented on GitHub',ready:'AI notes available',unread:'New unopened AI results',running:'AI run active',attention:'AI run needs attention',older:'Older AI results'};
 const pickerConfig={reportrepository:{prefix:'reportRepositories',title:'Repositories',empty:'All report repositories'},author:{prefix:'authors',title:'Authors',empty:'All authors'},repository:{prefix:'repositories',title:'Repositories',empty:'All repositories'},status:{prefix:'statuses',title:'Statuses',empty:'Any review status'}};
 const pickerSignatures={};
 function filterOptions(id){
@@ -156,6 +184,7 @@ function matchesStatus(pr,status){
   case 'unreviewed':return !pr.my_review_at&&!pr.my_comment_at;
   case 'reviewed':return !!(pr.my_review_at||pr.my_comment_at);
   case 'ready':return !!pr.artifacts['review-markdown'];
+  case 'unread':return Object.values(pr.artifacts).some(a=>a.unread);
   case 'running':return !!active(pr.run);
   case 'attention':return !!attention(pr.run);
   case 'older':return pr.artifact_freshness==='older';

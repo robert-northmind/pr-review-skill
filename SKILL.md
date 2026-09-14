@@ -176,6 +176,9 @@ Use these stable names when applicable:
 Use `--managed` only for artifacts generated and owned by this review workflow.
 Omit it for user-provided or externally owned files. The tracker records
 whether the path existed at registration time; it does not copy or modify it.
+Each registration also pins the run's current base/head SHAs and creates a new
+artifact version. Set the verified revision before registering; register again
+after replacing a generated artifact so the dashboard can flag it as unread.
 
 ### Refresh PR state and retention
 

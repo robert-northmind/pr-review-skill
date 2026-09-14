@@ -270,6 +270,7 @@ def command_add_artifact(args: argparse.Namespace) -> None:
     directory = run_dir(args.run_id)
     name = validate_name(args.name, "artifact name")
     artifact_path = Path(args.path).expanduser().resolve(strict=False)
+    context = read_json(directory / "context.json", required=False)
     atomic_write(
         directory / "artifacts" / f"{name}.json",
         {
@@ -278,6 +279,9 @@ def command_add_artifact(args: argparse.Namespace) -> None:
             "path": str(artifact_path),
             "exists": artifact_path.exists(),
             "managed": args.managed,
+            "version": secrets.token_hex(16),
+            "base_sha": context.get("base_sha", ""),
+            "head_sha": context.get("head_sha", ""),
             "updated_at": utc_now(),
         },
     )

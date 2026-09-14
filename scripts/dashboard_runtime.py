@@ -3,6 +3,8 @@ from __future__ import annotations
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
+import hashlib
+import json
 import threading
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
@@ -21,19 +23,55 @@ def artifact_allowed(path):
         return False
 
 
-def collect_artifacts(runs):
-    """Keep last usable completed results while a new run is incomplete."""
-    chosen = {}
+def artifact_version(artifact):
+    # Legacy registrations have no version ID. Keep a stable identity until
+    # they are registered again, including replacements at the same path.
+    return artifact.get('version') or hashlib.sha256(
+        json.dumps(artifact, sort_keys=True).encode()).hexdigest()
+
+
+def mark_artifact_opened(run_id, name, version):
+    if name not in ARTIFACT_NAMES or not isinstance(version, str) or not version:
+        raise dashboard.DashboardError('Unknown artifact version.')
+    with dashboard.state_lock():
+        directory = tracker.run_dir(run_id)
+        tracker.read_json(directory / 'run.json')
+        artifact = tracker.read_json(directory / 'artifacts' / f'{name}.json', required=False)
+        if not artifact or artifact_version(artifact) != version or not artifact_allowed(artifact.get('path', '')):
+            # An old tab must never acknowledge a replacement it did not open.
+            return {'opened': False}
+        path = directory / 'artifact-views.json'
+        views = tracker.read_json(path, required=False)
+        views[name] = version
+        tracker.atomic_write(path, views)
+    return {'opened': True}
+
+
+def collect_artifacts(runs, checked_sha=''):
+    """Prefer completed artifacts, even while other tasks are still running."""
+    candidates = []
     ordered = sorted(runs, key=lambda r:r.get('created_at', ''), reverse=True)
-    # Completed results first; partial results only fill missing artifact types.
-    for run in sorted(ordered, key=lambda r: r.get('status') != 'completed'):
+    for run in ordered:
+        views = tracker.read_json(tracker.run_dir(run['run_id']) / 'artifact-views.json', required=False)
+        tasks = {task['task']: task['status'] for task in run.get('tasks', [])}
         for artifact in run.get('artifacts', []):
             name, path = artifact.get('name'), artifact.get('path', '')
-            if name not in ARTIFACT_NAMES or name in chosen or not artifact_allowed(path):
+            if name not in ARTIFACT_NAMES or not artifact_allowed(path):
                 continue
-            chosen[name] = {'path': path, 'run_id': run['run_id'],
-                'created_at': run.get('created_at', ''), 'head_sha': run.get('head_sha', ''),
-                'status': run.get('status'), 'tool': run.get('tool', '')}
+            task = 'explainer' if name == 'explanation-html' else 'drafts'
+            ready = run.get('status') == 'completed' or tasks.get(task) == 'completed'
+            head = artifact.get('head_sha', run.get('head_sha', ''))
+            version = artifact_version(artifact)
+            candidates.append((ready, {'name': name, 'path': path, 'run_id': run['run_id'],
+                'version': version, 'unread': views.get(name) != version,
+                'freshness': 'unknown' if not head or not checked_sha else ('current' if head == checked_sha else 'older'),
+                'created_at': artifact.get('updated_at') or run.get('created_at', ''), 'head_sha': head,
+                'status': 'completed' if ready else run.get('status'), 'tool': run.get('tool', '')}))
+    chosen = {}
+    # Partial results only fill missing artifact types. A new unfinished
+    # explainer must not hide the previous finished explanation.
+    for _, artifact in sorted(candidates, key=lambda item: not item[0]):
+        chosen.setdefault(artifact['name'], artifact)
     return chosen
 
 
@@ -48,7 +86,7 @@ def age_seconds(stamp):
         return 0
 
 
-def summarize_run(run):
+def summarize_run(run, checked_sha=''):
     launch = tracker.read_json(launch_path(run['run_id']), required=False)
     status = run['status']
     if launch.get('exit_code') is not None and status not in TERMINAL:
@@ -62,7 +100,7 @@ def summarize_run(run):
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
         'kind': launch.get('kind', 'review'), 'message': launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
-        'artifacts': collect_artifacts([run])}
+        'artifacts': collect_artifacts([run], checked_sha)}
 
 
 def snapshot():
@@ -78,7 +116,8 @@ def snapshot():
     prs = []
     for url, entry in entries.items():
         history = grouped.get(url, [])
-        artifacts = collect_artifacts(history)
+        checked_sha = entry.get('head_sha', '')
+        artifacts = collect_artifacts(history, checked_sha)
         reasons = entry.get('reasons', [])
         group = 'mine' if 'author' in reasons else ('requested' if any(r in reasons for r in ('review-requested', 'assignee')) else 'watching')
         state = entry.get('my_review_state', '')
@@ -87,7 +126,6 @@ def snapshot():
         if not participation:
             participation = 'Commented' if entry.get('my_comment_at') else (
                 'Previous activity · refresh to classify' if entry.get('reviewed_by_me_at') and 'my_review_state' not in entry else 'Not reviewed')
-        checked_sha = entry.get('head_sha', '')
         freshness = 'unknown'
         if artifacts and checked_sha:
             heads = [a['head_sha'] for a in artifacts.values()]
@@ -101,8 +139,8 @@ def snapshot():
         prs.append({**entry, 'author_login': login, 'author_name': profile.get('author_name', ''),
                     'author_avatar_url': profile.get('author_avatar_url', ''), 'url': url, 'group':group, 'participation':participation,
             'artifacts':artifacts, 'artifact_freshness':freshness, 'mixed_artifacts':mixed,
-            'run':summarize_run(history[0]) if history else None,
-            'history':[summarize_run(r) for r in history],
+            'run':summarize_run(history[0], checked_sha) if history else None,
+            'history':[summarize_run(r, checked_sha) for r in history],
             'history_total':len(history)})
     candidates = dict(personal.get('candidates', {}))
     for url, entry in data['prs'].items():

@@ -26,9 +26,29 @@ Review actions expand below their disclosure, keeping it in the same position.
 GitHub participation distinguishes comments, approvals, requested changes,
 and dismissed reviews. It is not inferred from an AI run finishing. Legacy
 participation needs a GitHub refresh to classify. Artifact dates and commit
-IDs remain visible; the dashboard flags results from different runs or older
-commits. “Current” only means matching the last fetched GitHub head, not a
-new live check of GitHub.
+IDs remain visible; the dashboard flags results from different runs. Each
+explainer and notes link has its own **New** badge until that version is opened
+from the dashboard, and an independent **Older commit** badge when its pinned
+head differs from the last fetched PR head. A visible warning names the affected
+results and explains that parts may no longer apply. Missing commit metadata
+shows **Commit unverified**. Freshness uses the last fetched GitHub head, not a
+new live check. The badges and result links also appear directly in My reviews.
+
+Opened versions are saved per run in `artifact-views.json`, shared across tabs
+and browsers. Opening one result leaves the other unread; replacing a result
+marks the new version unread, including re-registration at the same file path.
+Existing artifacts initially appear unread because earlier opens were not
+recorded. The **New unopened AI results** status filter finds unread results.
+Normal, keyboard, modifier and middle-click opens acknowledge only the version
+displayed through authenticated JSON POST `/artifact-opened`; merely polling or
+fetching an artifact does not mark it read. Open status does not acknowledge
+GitHub updates in My reviews or change the human review stage.
+
+Artifact dates use registration time. New registrations pin the current run's
+base/head SHAs and receive a distinct version ID; legacy artifacts use the run
+revision and a stable metadata identity. A completed explainer task can surface
+its result while the rest of the review runs. Notes use completion of the drafts
+task. Until a replacement is ready, previous completed results remain available.
 
 Refresh GitHub fetches sources and PR details with bounded concurrency. It
 runs in the background when started from the page. Incomplete or failed
@@ -197,7 +217,7 @@ GitHub to update its PR membership.
 
 When changing server Python modules, restart the launchd job after validation.
 Asset-only changes are picked up on page reload. Validate with the
-`test_snooze`, `test_dashboard`, `test_dashboard_launch`, and `test_review_notes` unittest
+`test_artifact_state`, `test_snooze`, `test_dashboard`, `test_dashboard_launch`, and `test_review_notes` unittest
 modules, plus browser interaction and responsive checks. HTTP tests use a
 random loopback port and disposable data; never point test mutations at the
 live tracker.
