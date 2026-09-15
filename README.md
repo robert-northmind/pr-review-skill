@@ -11,10 +11,25 @@ service to set up.
 ## A look around
 
 **Your review inbox, in light mode.** See authors, filter your queue, and open
-one combined review report from the PR card. The screenshot below predates
-the combined-report controls.
+one combined review report from the PR card. Snooze a PR or save it to My reviews.
 
 ![PR inbox in light mode with fictional pull requests and authors](docs/screenshots/inbox-light.jpg)
+
+**One report, starting with the explanation.** Follow a concrete before/after
+example and see the exact code behind the behavior.
+
+![Combined review report opening with a fictional parser change and before-and-after example](docs/screenshots/review-overview-light.jpg)
+
+**Findings you can explore one at a time.** Severity and titles stay visible.
+Open a finding for an example, the cause and consequence, a fix direction, a
+copyable comment, and its evidence. Expand all when you want the full review.
+
+![Two fictional findings, with one expanded to show an example, impact, fix direction and copyable comment](docs/screenshots/review-findings-light.jpg)
+
+**My reviews.** Keep a personal queue and pick up where you stopped. New commits
+and replies move saved PRs into Needs another look.
+
+![My reviews with fictional PRs, update indicators and a private reminder](docs/screenshots/my-reviews-light.jpg)
 
 **Reporting, in dark mode.** Compare completed weeks and select a day or week
 to see which PRs you reviewed and which of your own PRs were merged.
@@ -22,18 +37,27 @@ to see which PRs you reviewed and which of your own PRs were merged.
 ![Reporting in dark mode with fictional review and merge activity](docs/screenshots/reporting-dark.jpg)
 
 All screenshots use fictional PRs, people, repositories, and activity, with
-synthetic avatars. They were captured from an isolated demo of the dashboard.
+synthetic avatars. They were captured from the current dashboard and report
+renderer on September 15, 2026, using an isolated demo with mocked data.
+See [screenshot provenance](docs/screenshots/README.md).
 
 ## What it does
 
 - **Triage:** separate views for review requests, watched repositories, your
-  own PRs, and hidden PRs. Star a PR or hide it with an undo option.
+  own PRs, snoozed PRs, and hidden PRs. Snooze for one day, two days, or a
+  week; hide a PR with an undo option.
+- **Follow up:** save PRs in My reviews, keep private notes, and see new commits
+  and replies that need another look.
 - **Filter:** include or exclude multiple authors, repositories, and review
   statuses. There is a shortcut to exclude Renovate. Preferences are remembered
   in your browser.
 - **Review:** launch Claude Code or Codex CLI from the dashboard. Keep the
   combined HTML review notes and run history attached to the PR.
   Existing results remain available during a rerun; outdated results are marked.
+- **Understand and check:** one HTML contains the change explanation and
+  expandable, verified findings with examples and draft comments. The lead
+  assesses size, complexity, risk, and uncertainty before allocating reviewers;
+  the verification appendix records coverage, checks, limitations, and model choices.
 - **Report:** daily and weekly GitHub activity, completed-week comparisons,
   and a short list of yesterday's work. A PR counts once per day or week.
   AI runs, draft reviews, and ordinary PR comments do not count as submitted
@@ -57,18 +81,21 @@ The inbox and reporting can be used without running an AI agent.
 
 ### Full-review dependencies
 
-The explanation renderer is bundled. Draft comments also use this separate skill:
+The combined report renderer is bundled; no separate PR-explainer skill is
+needed. Draft comments use this additional skill:
 
 | Skill | Purpose |
 | --- | --- |
 | `my-feedback-voice` | Shape the draft review comments using your writing examples. |
 
-Install compatible versions in your agent's skill search path before running
-a full review. The default locations referenced here are
-`~/.agents/skills/my-feedback-voice/`.
+Install it in your agent's skill search path before running a full review.
+The default location referenced here is `~/.agents/skills/my-feedback-voice/`.
 The current voice instructions are written for Robert; adapt them for yourself.
 Read [SKILL.md](SKILL.md) for the complete review and sandboxed verification
 workflow. An agent needs a suitable disposable sandbox to execute PR code.
+Full report validation also needs Node.js, Playwright, and an available
+Chromium or Chrome browser. See [renderer and browser-check setup](references/authoring.md)
+for the commands and runtime-path overrides.
 
 ## Get started
 
@@ -82,17 +109,20 @@ gh auth login
 python3 scripts/pr_server.py
 ```
 
-The repository is currently private, so cloning requires repository access
-and GitHub SSH authentication. If you already have this checkout, use it
-instead of cloning over it.
+Cloning requires repository access and GitHub SSH authentication. If you
+already have this checkout, use it instead of cloning over it.
 
-Open **http://127.0.0.1:8765/** and click **Refresh GitHub**. Leave the server
-running in that terminal; Ctrl-C stops it. If the port is occupied, start with
+Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
+Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
 `python3 scripts/pr_server.py --port 8766` and open that port instead.
 
 In **Settings**, add watched repositories as `owner/repository`, then refresh
 GitHub. Choose the agent used for reviews; blank model and effort fields use
 its CLI defaults. Model and effort are saved separately for each agent.
+These settings select the lead session. The lead chooses reviewer subagent
+models and reasoning levels from the host's supported options, within your
+explicit constraints. If overrides are unavailable, reviewers inherit the
+session settings and the report records that limitation.
 
 ### Run a review
 
@@ -109,12 +139,41 @@ From the dashboard, click **Run review**, or expand **Review actions** to
 regenerate the combined review report. This opens an interactive
 CLI session in Terminal and passes it the skill prompt. It is not a headless
 background review service. The CLI's authentication and approval settings
-still apply.
+still apply. Use **Copy review prompt** to paste the same review instructions
+into an agent session of your choice without launching Terminal.
 
 The agent records progress and artifacts in the local tracker. When finished,
-click **Open notes** on the card. The one HTML starts with the change explanation,
-then contains the assessment, findings, copyable drafts and verification. Review comments are drafts;
-read and edit them before posting them yourself.
+click **Open notes** on the card. There is one report and one review skill:
+
+1. **Understand the change:** purpose, essential context, a concrete before/after
+   example, and exact source excerpts.
+2. **Read the assessment and findings:** each finding starts collapsed with its
+   severity and title visible. Open it for expected versus actual behavior, why
+   it happens, why it matters, the proposed fix, evidence, and a copyable comment.
+   Multiple findings have **Expand all / Collapse all** controls.
+3. **Check the verification appendix:** inspected scope, checks and outcomes,
+   unresolved gaps, and reviewer allocation with requested versus known effective
+   model and effort settings.
+
+The workflow covers the full diff with correctness, security, and contract
+review lenses, then verifies candidates before reporting them. Model selection
+is an adaptive policy, not a guarantee of review quality. See the
+[review approach](references/review-practices.md) and
+[allocation policy](references/reviewer-allocation.md).
+Review comments are drafts; read and edit them before posting them yourself.
+
+### Keep track of your reviews
+
+Click **Add to Up next** on a PR or paste its link into **My reviews**. Move it
+through **Up next**, **Reviewing**, and **Waiting**, and leave a private note
+about what to check next. New commits or relevant replies appear in
+**Needs another look**. **Mark updates checked** acknowledges the displayed
+updates; opening a PR alone does not clear them.
+
+**Done for now** moves a review to History. These stages track your own work;
+completing an AI run does not submit a GitHub review or mark your work done.
+Saved PRs are checked every five minutes while the dashboard is visible.
+There are no checks or notifications while the page is closed.
 
 ### See your activity
 
@@ -157,8 +216,8 @@ in this repository's Git backup. Keep those out of commits and screenshots.
 
 ## Development and recovery
 
-Run the existing checks from the repository root (Node.js is needed only for
-the JavaScript check):
+Run the existing checks from the repository root (the JavaScript check needs
+Node.js):
 
 ```sh
 python3 -m unittest discover -s scripts -p 'test_*.py'
