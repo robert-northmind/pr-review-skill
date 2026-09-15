@@ -185,7 +185,6 @@ def build_agent_argv(prompt: str) -> list[str]:
         argv = [
             "codex", "--approve-for-me",
             "--cd", str(tracker.tracker_root().resolve()),
-            "--add-dir", str(explainer_output_root()),
         ]
         if model:
             argv += ["-m", model]
@@ -698,15 +697,8 @@ LOCAL_CHECKOUT_HINT = (
 
 
 def explainer_prompt(pr_url: str) -> str:
-    return (
-        f"Follow the installed explain-diff-html skill to produce an HTML "
-        f"explainer for this pull request: {pr_url}\n\n"
-        f"{LOCAL_CHECKOUT_HINT}\n\n"
-        "Register the run with the pr-review-tracker (part of the pr-review "
-        "skill) the same way the pr-review skill normally does, so the "
-        "finished HTML shows up as this PR's 'explanation-html' artifact on "
-        "the PR inbox dashboard."
-    )
+    """Compatibility for old tabs/clients: all launches now run one review."""
+    return full_review_prompt(pr_url)
 
 
 def full_review_prompt(pr_url: str) -> str:
@@ -714,8 +706,11 @@ def full_review_prompt(pr_url: str) -> str:
         f"Follow the installed pr-review skill to fully review and explain "
         f"this pull request: {pr_url}\n\n"
         f"{LOCAL_CHECKOUT_HINT}\n\n"
-        "Register the run and its artifacts with the pr-review-tracker as "
-        "usual, so they show up on the PR inbox dashboard."
+        "Review every changed file and relevant callers/contracts. Produce one "
+        "self-contained review.html: explain the change at the top, then include "
+        "verified findings, copyable draft comments, and validation evidence. "
+        "Register it as review-html with the pr-review-tracker for the dashboard. "
+        "Do not produce a separate explainer HTML or publish to GitHub."
     )
 
 
@@ -723,8 +718,6 @@ def open_interactive_terminal(prompt: str, run_id: str | None = None) -> None:
     if sys.platform != "darwin":
         raise DashboardError("Opening an interactive terminal is only implemented for macOS.")
     argv = build_agent_argv(prompt)
-    if argv[0] == "codex":
-        explainer_output_root().mkdir(mode=0o700, parents=True, exist_ok=True)
     command_line = " ".join(shlex.quote(part) for part in argv)
     script_fd, script_name = tempfile.mkstemp(suffix=".command", prefix="pr-review-")
     os.close(script_fd)

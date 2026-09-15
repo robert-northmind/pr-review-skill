@@ -26,8 +26,8 @@ Review actions expand below their disclosure, keeping it in the same position.
 GitHub participation distinguishes comments, approvals, requested changes,
 and dismissed reviews. It is not inferred from an AI run finishing. Legacy
 participation needs a GitHub refresh to classify. Artifact dates and commit
-IDs remain visible; the dashboard flags results from different runs. Each
-explainer and notes link has its own **New** badge until that version is opened
+IDs remain visible; the dashboard flags results from different runs. The combined
+review notes link has a **New** badge until that version is opened
 from the dashboard, and an independent **Older commit** badge when its pinned
 head differs from the last fetched PR head. A visible warning names the affected
 results and explains that parts may no longer apply. Missing commit metadata
@@ -35,7 +35,7 @@ shows **Commit unverified**. Freshness uses the last fetched GitHub head, not a
 new live check. The badges and result links also appear directly in My reviews.
 
 Opened versions are saved per run in `artifact-views.json`, shared across tabs
-and browsers. Opening one result leaves the other unread; replacing a result
+and browsers. Legacy artifacts keep independent opened states; replacing a result
 marks the new version unread, including re-registration at the same file path.
 Existing artifacts initially appear unread because earlier opens were not
 recorded. The **New unopened AI results** status filter finds unread results.
@@ -46,9 +46,9 @@ GitHub updates in My reviews or change the human review stage.
 
 Artifact dates use registration time. New registrations pin the current run's
 base/head SHAs and receive a distinct version ID; legacy artifacts use the run
-revision and a stable metadata identity. A completed explainer task can surface
-its result while the rest of the review runs. Notes use completion of the drafts
-task. Until a replacement is ready, previous completed results remain available.
+revision and a stable metadata identity. The combined HTML becomes ready when
+its report task completes. Legacy explanation/Markdown artifacts retain their
+previous explainer/drafts readiness rules. Until a replacement is ready, previous completed results remain available.
 
 Refresh GitHub fetches sources and PR details with bounded concurrency. It
 runs in the background when started from the page. Incomplete or failed
@@ -146,7 +146,7 @@ The review buttons create a tracker run before opening Terminal, then pass
 that exact ID to the agent. Reuse it. The tracker ID is the launch identity;
 never attach whichever unrelated run happens to finish next.
 
-**Copy review prompt** and **Copy explainer prompt** are available beside the
+**Copy review prompt** is available beside the
 launch actions and in My reviews → Review tools. They copy the same workflow
 prompt for pasting into any agent session, without opening Terminal, creating
 a tracker run, or applying the saved agent settings. The receiving agent
@@ -154,21 +154,29 @@ registers its run and artifacts when it starts. If clipboard access fails, a
 dialog shows selected prompt text for manual copying. `/copy-prompt` validates
 the PR URL and prompt kind and returns the prompt without changing local state.
 
-Both Terminal launch actions use the saved agent settings:
+The Terminal launch action uses the saved agent settings and the entire
+pr-review workflow. Register one combined HTML as `review-html`; only completed
+`report` tasks surface as finished notes. Historical Markdown and explanation
+artifacts remain accessible in run history. Requests from an old explainer button
+or copied-prompt client now route to the full review.
 
-- Review: the entire pr-review workflow, including explanation and notes.
-- Explainer: explain-diff-html only; other review tasks are already skipped.
-
-Both prompts prefer a verified local clone under
+The prompt prefers a verified local clone under
 `/Users/example-user/Development`, using an isolated worktree. Follow the
 existing checkout and verification sandbox instructions.
 
 The launcher uses an interactive CLI. Claude uses `claude` with optional
 `--model` and `--effort`. Codex uses `codex --approve-for-me --cd
-<tracker-root> --add-dir <explainer-root>` with optional `-m` and
+<tracker-root>` with optional `-m` and
 `-c model_reasoning_effort=...`. Blank model/effort uses that CLI's default.
 Model and effort are stored independently per agent; changes must be saved
 before starting a run. These flags do not change global CLI configuration.
+
+These settings configure the lead session. The skill's
+[reviewer allocation policy](reviewer-allocation.md) lets that session assess
+the PR and select supported model/effort overrides for subagents, subject to
+explicit user constraints. Hosts without those controls inherit the session
+settings; the report records the limitation. No dashboard setting is rewritten
+by this allocation.
 
 Eligible Codex escalations go through automatic approval review; this does
 not guarantee every request succeeds. PR code still requires the isolated

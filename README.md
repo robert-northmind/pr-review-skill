@@ -11,7 +11,8 @@ service to set up.
 ## A look around
 
 **Your review inbox, in light mode.** See authors, filter your queue, and open
-review notes or an explainer from the PR card.
+one combined review report from the PR card. The screenshot below predates
+the combined-report controls.
 
 ![PR inbox in light mode with fictional pull requests and authors](docs/screenshots/inbox-light.jpg)
 
@@ -31,7 +32,7 @@ synthetic avatars. They were captured from an isolated demo of the dashboard.
   statuses. There is a shortcut to exclude Renovate. Preferences are remembered
   in your browser.
 - **Review:** launch Claude Code or Codex CLI from the dashboard. Keep the
-  resulting notes, HTML walkthrough, and run history attached to the PR.
+  combined HTML review notes and run history attached to the PR.
   Existing results remain available during a rerun; outdated results are marked.
 - **Report:** daily and weekly GitHub activity, completed-week comparisons,
   and a short list of yesterday's work. A PR counts once per day or week.
@@ -56,16 +57,15 @@ The inbox and reporting can be used without running an AI agent.
 
 ### Full-review dependencies
 
-The full workflow also expects these **separate skills, which are not bundled**:
+The explanation renderer is bundled. Draft comments also use this separate skill:
 
 | Skill | Purpose |
 | --- | --- |
-| `explain-diff-html` | Generate the HTML walkthrough of the change. |
 | `my-feedback-voice` | Shape the draft review comments using your writing examples. |
 
 Install compatible versions in your agent's skill search path before running
 a full review. The default locations referenced here are
-`~/.agents/skills/explain-diff-html/` and `~/.agents/skills/my-feedback-voice/`.
+`~/.agents/skills/my-feedback-voice/`.
 The current voice instructions are written for Robert; adapt them for yourself.
 Read [SKILL.md](SKILL.md) for the complete review and sandboxed verification
 workflow. An agent needs a suitable disposable sandbox to execute PR code.
@@ -106,13 +106,14 @@ https://github.com/OWNER/REPOSITORY/pull/123.
 ```
 
 From the dashboard, click **Run review**, or expand **Review actions** to
-regenerate a review or generate only the explainer. This opens an interactive
+regenerate the combined review report. This opens an interactive
 CLI session in Terminal and passes it the skill prompt. It is not a headless
 background review service. The CLI's authentication and approval settings
 still apply.
 
 The agent records progress and artifacts in the local tracker. When finished,
-open **Open notes** or **Explainer** on the card. Review comments are drafts;
+click **Open notes** on the card. The one HTML starts with the change explanation,
+then contains the assessment, findings, copyable drafts and verification. Review comments are drafts;
 read and edit them before posting them yourself.
 
 ### See your activity
@@ -139,7 +140,7 @@ filter; hiding an inbox PR does not remove it from your activity.
 ## Local data and privacy
 
 State and review runs live under `~/.local/share/pr-review-tracker/`; generated
-review and explainer files live separately from this Git repository. The
+review files live separately from this Git repository. The
 `PR_REVIEW_TRACKER_HOME` environment variable selects an alternate tracker
 home, which is useful for isolated testing. Use the provided commands instead
 of editing registry JSON by hand.
@@ -160,7 +161,7 @@ Run the existing checks from the repository root (Node.js is needed only for
 the JavaScript check):
 
 ```sh
-(cd scripts && python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes)
+python3 -m unittest discover -s scripts -p 'test_*.py'
 node scripts/test_reporting.cjs
 ```
 

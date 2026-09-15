@@ -4,6 +4,8 @@ import re
 
 START = '<!-- review-comment:start -->'
 END = '<!-- review-comment:end -->'
+FINDING = '<details class="review-finding">'
+DETAILS = ('<details>', FINDING)
 FENCE = re.compile(r'^\s*(`{3,}|~{3,})(.*)$')
 ITEM = re.compile(r'^(\s*)([-+*]|\d+[.)])\s+(.*)$')
 
@@ -23,7 +25,7 @@ def find_close(lines, start, end_marker):
             continue
         if fence:
             continue
-        if end_marker == '</details>' and s == '<details>':
+        if end_marker == '</details>' and s in DETAILS:
             depth += 1
         elif s == end_marker:
             if depth == 0:
@@ -70,7 +72,7 @@ def render(text, inline, escape, depth=0):
     def begins(index):
         s = lines[index].strip()
         return (not s or FENCE.match(lines[index]) or ITEM.match(lines[index])
-                or re.match(r'^(#{1,6})\s|^>', s) or s in (START, '<details>', '---', '***', '___')
+                or re.match(r'^(#{1,6})\s|^>', s) or s in (START, *DETAILS, '---', '***', '___')
                 or table_at(index))
     while i < len(lines):
         line, s = lines[i], lines[i].strip()
@@ -93,12 +95,12 @@ def render(text, inline, escape, depth=0):
                          + sub(body.split('\n')) + '</div><textarea class="comment-source" hidden readonly aria-label="Comment Markdown">'
                          + escape(body) + '</textarea></section>')
             i = end + 1
-        elif s == '<details>' and (end := find_close(lines, i + 1, '</details>')) is not None:
+        elif s in DETAILS and (end := find_close(lines, i + 1, '</details>')) is not None:
             start = i + 1
             while start < end and not lines[start].strip(): start += 1
             summary = re.fullmatch(r'<summary>(.*?)</summary>', lines[start].strip()) if start < end else None
             if summary:
-                parts.append('<details><summary>' + inline(summary[1]) + '</summary>' + sub(lines[start + 1:end]) + '</details>')
+                parts.append(s + '<summary>' + inline(summary[1]) + '</summary>' + sub(lines[start + 1:end]) + '</details>')
                 i = end + 1
             else:
                 parts.append('<p>' + escape(line) + '</p>'); i += 1

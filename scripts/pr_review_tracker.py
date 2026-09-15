@@ -21,13 +21,14 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 DEFAULT_TASKS = (
     "checkout",
-    "explainer",
+    "explanation",
     "correctness-review",
     "contracts-review",
     "security-review",
     "runtime-verification",
     "synthesis",
     "drafts",
+    "report",
 )
 TASK_STATUSES = (
     "queued",

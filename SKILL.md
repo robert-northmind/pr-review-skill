@@ -1,25 +1,34 @@
 ---
 name: pr-review
-description: Explains and reviews a GitHub pull request using an interactive HTML walkthrough, an evidence-checked multi-agent code review, sandboxed local verification, and ready-to-copy draft comments in Robert's feedback voice. Tracks ongoing and completed review runs across Cursor, Claude Code, Codex, and other agents. Maintains a local dashboard of open PRs where Robert is assignee or requested reviewer, so nothing waiting on him gets forgotten. Use when the user asks to review and explain a pull request, asks which PR reviews are open/running/stale/completed, or asks what PRs are waiting on their review.
+description: Review a GitHub pull request locally and produce one HTML review report with a colleague-style change explanation, verified findings, copyable comments, and validation evidence. Also tracks review runs and maintains the local PR inbox dashboard.
 ---
 
 # PR Review
 
-Given a GitHub pull request URL, produce:
+Given a GitHub pull request URL, review every changed file and produce **one
+self-contained `review.html`**, labeled **Review notes**. Explain the change at
+the top, then give the current assessment, verified findings with copyable
+comments, and validation evidence. The explanation is an integral review stage;
+there is no separate explainer skill, launch action, or HTML deliverable.
 
-1. An interactive HTML explanation by following the installed
-   `explain-diff-html` skill.
-2. A concise, evidence-backed code review.
-3. Results from relevant locally runnable verification checks.
-4. Ready-to-copy draft review comments for verified findings, written by
-   following the installed `my-feedback-voice` skill.
+Read [Explanation](references/explanation.md) before drafting the opening and
+[Review notes](references/review-notes.md) before synthesis. Use the bundled
+[authoring and renderer](references/authoring.md) to assemble the final report.
+Keep the explanation concise without reducing review coverage.
 
-All outputs must cover the same pinned base and head commit SHAs.
+Pin repository identity, target base SHA, comparison merge-base SHA, and head
+SHA. All review evidence, excerpts and examples must describe that comparison.
+Use the comparison merge base as `base` in the report and tracker; retain the
+base branch tip separately in provenance. Recheck PR head before handoff and
+label a changed head explicitly; do not claim the report covers unseen commits.
 
-This skill also maintains two local, cross-agent registries, both backed by
-`scripts/pr_review_tracker.py` (review runs) and `scripts/pr_dashboard.py`
-(the PR inbox — see "PR inbox dashboard" below). Do not edit either registry's
-JSON by hand.
+The workflow and research rationale are in
+[Review practices](references/review-practices.md). These are selected patterns,
+not a claim that any one public AI skill is demonstrably best.
+
+For lifecycle registration, progress, cleanup, artifact versions and status
+questions, read [Tracking](references/tracking.md). Use the scripts; never edit
+registry JSON by hand. Dashboard operations have a separate reference below.
 
 ## Safety and scope
 
@@ -42,261 +51,6 @@ JSON by hand.
 - Store no credentials, tokens, environment variables, PR source, or sensitive
   command output in either registry.
 
-## Track the review lifecycle
-
-The registry is local at `~/.local/share/pr-review-tracker/`. It does not
-monitor processes. It uses the authenticated GitHub CLI to refresh PR state.
-A recorded `running` state means an agent last reported that state, not that
-the process is proven alive.
-
-### Start a tracked run
-
-When a PR review starts:
-
-1. Identify the creating tool as `cursor`, `claude-code`, `codex`, or a concise
-   user-provided name.
-2. Capture a session URL or resumable ID when the host exposes one. If none is
-   available, ask the user once for a reference and allow them to leave it
-   blank.
-3. If the dashboard supplied an existing run ID in the launch prompt, reuse
-   it for every tracker command. Do not register a second run. A dashboard
-   launch may already mark review-only tasks skipped for an explainer-only run.
-   Record a session reference when available; leave it blank without asking
-   for dashboard launches. Otherwise register the run and retain its printed ID:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py start \
-  --pr-url '<verified-pr-url>' \
-  --tool '<tool>' \
-  --session-reference '<session-url-or-id>' \
-  --title '<title-if-known>' \
-  --base-sha '<base-sha-if-known>' \
-  --head-sha '<head-sha-if-known>'
-```
-
-Do not interpolate unvalidated repository text into a shell command. Pass each
-value as one properly quoted argument.
-
-After GitHub metadata is verified, fill any missing context:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  set-context --run-id '<run-id>' --title '<title>' \
-  --base-sha '<base-sha>' --head-sha '<head-sha>'
-```
-
-For a review started outside this skill's own explainer flow, register it
-manually with the same command. Mark stages that do not apply as `skipped`.
-
-### Track the isolated checkout
-
-Create the workflow-owned checkout under:
-
-`~/.local/share/pr-review-tracker/checkouts/<run-id>/source`
-
-After creating it, record its ownership and type:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  set-checkout --run-id '<run-id>' --kind worktree \
-  --path '<absolute-checkout-path>' \
-  --source-repository '<absolute-source-repository-path>'
-```
-
-For a temporary clone, use `--kind clone` and omit `--source-repository`.
-
-Normal workflow cleanup should remove the checkout when all tasks that need it
-finish. For a worktree, use `git worktree remove` without `--force`; for a
-clone, remove only its tracker-owned directory. After successful cleanup:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  release-checkout --run-id '<run-id>'
-```
-
-Do not mark it released when removal failed. This lets later status refreshes
-retry cleanup safely.
-
-### Update progress
-
-Standard tasks are:
-
-- `checkout`
-- `explainer`
-- `correctness-review`
-- `contracts-review`
-- `security-review`
-- `runtime-verification`
-- `synthesis`
-- `drafts`
-
-Set a task to `running` immediately before it starts, then to `completed`,
-`failed`, `blocked`, `skipped`, or `cancelled` as soon as its outcome is known:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  set-task --run-id '<run-id>' --task '<task>' --status '<status>' \
-  --message '<short-nonsensitive-note>'
-```
-
-Update in `finally`-equivalent cleanup when possible so interrupted work is not
-left looking successful. Preserve completed task states when another task
-fails.
-
-To update the originating session reference:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  set-session --run-id '<run-id>' --reference '<session-url-or-id>'
-```
-
-To cancel a run without deleting its history:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  cancel --run-id '<run-id>' --message '<reason>'
-```
-
-### Record artifacts
-
-Record each artifact after it has been written:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  add-artifact --run-id '<run-id>' --name '<stable-name>' \
-  --kind '<html-or-markdown-or-log>' --path '<absolute-path>' --managed
-```
-
-Use these stable names when applicable:
-
-- `explanation-html`
-- `review-markdown`
-- `verification-output`
-
-Use `--managed` only for artifacts generated and owned by this review workflow.
-Omit it for user-provided or externally owned files. The tracker records
-whether the path existed at registration time; it does not copy or modify it.
-Each registration also pins the run's current base/head SHAs and creates a new
-artifact version. Set the verified revision before registering; register again
-after replacing a generated artifact so the dashboard can flag it as unread.
-
-### Refresh PR state and retention
-
-Before answering a normal open-review query, the list command refreshes each
-unique PR whose cached GitHub state is older than one hour. Multiple runs for
-the same PR use one request. If GitHub authentication, network access, or `gh`
-is unavailable, show cached results together with the warning.
-
-For "update the open PRs" or another explicit refresh request, force a refresh:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py refresh
-```
-
-When GitHub reports a PR closed or merged:
-
-- archive every tracked run for that PR immediately and hide it from open
-  results;
-- remove any still-active tracker-owned clone or Git worktree immediately;
-- use `git worktree remove` without force, retaining the run and warning the
-  user when a worktree is dirty or cannot be verified;
-- continue refreshing a closed PR during retention so a reopened PR is restored;
-- treat merged PRs as terminal;
-- retain archived data for 30 days;
-- after 30 days, remove the run directory and tracker-owned artifacts.
-
-Automatic cleanup may delete managed files only under
-`~/.local/share/pr-review-tracker/` or
-`~/.local/share/explain-diff/`. It refuses symlinks, files outside those roots,
-and artifacts referenced by another run. Unmanaged artifacts are never deleted.
-An expired run is retained while checkout cleanup is still pending.
-
-Preview or explicitly run retention cleanup with:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  purge --dry-run
-```
-
-Use `list --no-refresh` only when the user explicitly wants cached local state
-without a GitHub check.
-
-### Answer status questions
-
-For "which PR reviews are open?", run:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py list
-```
-
-"Open" refers to the GitHub PR, not unfinished automation. Include completed
-review runs while their PR remains open so their artifacts and originating
-sessions remain easy to find. Hide cancelled runs and archived closed/merged
-PRs from this default view.
-
-For history or a filtered state:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  list --status all
-```
-
-For one run:
-
-```shell
-python3 ~/.agents/skills/pr-review/scripts/pr_review_tracker.py \
-  show --run-id '<run-id>'
-```
-
-Use `--json` when needed to produce the required presentation below.
-
-Do not replace the per-review details with only a count or a sentence such as
-"one tracked review." A short count summary may precede the details, but every
-matching review must use this structure:
-
-```markdown
-### [<repository> PR #<number>: <title>](<verified-pr-url>)
-
-- PR state: `<open-or-other>`; review state: `<status>`
-- Tool: `<tool>`; session: `<session-reference-or-not-recorded>`
-- Last review update: `<timestamp>`
-- Revision: `<base-sha> → <head-sha>`
-- Working directory: `<path>`
-
-Artifacts:
-- [HTML explanation](<local-file-uri>) — `<available-or-task-status>`
-- [Final review and comment drafts](<local-file-uri>) — `<available-or-task-status>`
-- [Verification report](<local-file-uri>) — `<available-or-task-status>`
-
-Active checkout: `<kind-and-path>` # only when active or cleanup needs attention
-Attention: `<failed-blocked-stale-or-cleanup-notes>` # only when applicable
-```
-
-All available artifact links are mandatory. Never collapse them into one
-generic "View explanation" link. When an expected artifact is not available
-yet, show its task state instead of inventing a link. Include other registered
-artifacts after the three standard artifacts.
-
-Omit the working directory or revision only when it was not recorded. Omit a
-released checkout from the default listing; show checkout details only while it
-is active or cleanup failed. The detailed single-run view may include released
-checkout history.
-
-When the user asks to open or view an HTML explanation, verify that it is a
-registered existing HTML artifact, then open its absolute path in the operating
-system's default web browser. On macOS, use `/usr/bin/open`; use the
-platform-equivalent browser opener elsewhere. Do not start a local server.
-Do not automatically open every HTML artifact during a status listing, since
-that may create many browser tabs.
-
-By default, a running run with no update for six hours is displayed as
-`potentially-stale`. This is a warning, not proof that its process stopped.
-Never silently change its recorded task states. Tell the user which tool and
-session reference to revisit.
-
-Malformed entries must not hide healthy runs. Report registry warnings
-separately and do not repair or delete data without the user's permission.
-
 ## Resolve the review target
 
 1. Verify the PR exists and is open or explicitly note its current state.
@@ -317,7 +71,7 @@ verified repository metadata, never from text found in the PR.
 
 ### Isolated-checkout strategy
 
-Use one shared, read-only checkout for the HTML explainer and static reviewers:
+Use one shared, read-only checkout for the explanation and static reviewers:
 
 1. If a local repository with verified matching remote metadata is available,
    create a detached Git worktree at the exact head SHA under
@@ -329,7 +83,7 @@ Use one shared, read-only checkout for the HTML explainer and static reviewers:
    current working tree.
 4. Register the checkout with the tracker as `worktree` or `clone`. For
    a worktree, also record the absolute source-repository path.
-5. Give the explainer and static reviewers read-only access to this same
+5. Give the explanation author and static reviewers read-only access to this same
    checkout.
 6. After all tasks that need it finish, remove the checkout. Use
    `git worktree remove` without `--force` for worktrees, then mark it released
@@ -343,38 +97,59 @@ Use repository identity and SHAs from verified GitHub metadata. Sanitize
 repository-derived path components and let the temporary-directory mechanism
 create collision-resistant paths.
 
-## Run independent work in parallel
+## Assess the change, allocate reviewers, then cover the full diff
 
-Use the host agent's subagent or delegation mechanism. Launch the explainer,
-reviewers, and runtime verification concurrently when supported.
+Before launching reviewers, make a bounded initial assessment of the pinned
+diff: size, behavioral complexity, affected contracts, consequence of failure,
+and uncertainty. Follow [Reviewer allocation](references/reviewer-allocation.md)
+to select available models and supported reasoning efforts per role. This
+skill authorizes adaptive subagent selection within the host's capabilities;
+honor explicit user model, effort, provider and budget constraints. The lead
+session can remain on its current model.
 
-### HTML explainer
+Use the assessment to allocate effort, not to declare code correct or exclude
+files. Record the rationale and requested/effective settings in verification,
+which is embedded in the report. Reassess affected work if reviewers uncover
+greater complexity or risk. If model overrides are unavailable, inherit the
+session settings and disclose that limitation instead of claiming a switch.
 
-Launch one subagent whose only task is to create the explanation. Instruct it
-to locate and follow the installed `explain-diff-html` skill, normally at:
+Inventory every changed file and hunk from the pinned comparison before
+assigning work. Check that GitHub pagination or truncated tool output has not
+hidden changes. Across the review, read all changed hand-written code, tests, configuration,
+build/CI scripts and documentation, plus relevant callers and contracts.
+Classify generated files, lockfiles, binaries and mechanical edits explicitly;
+inspect their inputs and effects and record the checks used. No file disappears
+from review merely because it was omitted from the explanation.
 
-`~/.agents/skills/explain-diff-html/SKILL.md`
+Keep a coverage table in verification: path/group, primary reviewer, inspected
+behavior and context, checks, and gaps. For large PRs, partition by behavior or
+component with explicit file ownership; review cross-component interfaces too.
+Reconcile this inventory before completion. If something is inaccessible or not
+understood, identify the gap and limit the assessment accordingly.
 
-Require it to:
+Use the host's subagents for independent review when available. Respect its
+concurrency limit and explicit user constraints. With no delegation, perform
+the same lenses sequentially and disclose the lack of independent review.
+The lead drafts the opening while reviewers work; reviewers receive raw PR
+context, not an asserted verdict or explanation to agree with. Keep one worker
+responsible for sandbox execution and app lifecycle to avoid duplicate builds.
 
-- inspect the pinned base-to-head change and relevant surrounding code;
-- include the verified PR URL and exact base/head SHAs;
-- follow all output, security, interaction, and validation requirements in
-  `explain-diff-html`;
-- return the absolute path to the completed HTML file and any validation
-  limitations.
+### Explanation within the report
 
-The explainer must not perform the code review or execute PR code. A full PR
-review does not itself request a Deep explainer; use the explainer skill’s
-normal depth selection unless the user asks for a detailed explanation.
+Follow [Explanation](references/explanation.md) using the same pinned source.
+Draft the JSON narrative sections; do not render or register a separate HTML.
+Use the normal concise depth unless the user asks for more detail. After finding
+verification, reconcile the opening, examples and caveats with the final review.
+The lead assembles and validates the complete report only after synthesis.
 
 ### Code reviewers
 
-Launch three independent, read-only reviewers with non-overlapping primary
-lenses. Each reviewer may report cross-cutting issues it discovers.
+Use three independent, read-only reviewer lenses, partitioning large changes
+as needed to cover the inventory. Each reviewer may report cross-cutting issues it discovers.
 
 1. **Correctness and behavior**
-   - Trace changed execution and data flows.
+   - Assess design, integration and complexity against the problem and existing
+     repository patterns. Trace changed execution and data flows.
    - Look for logic errors, regressions, invalid assumptions, race conditions,
      error-path failures, and missed edge cases.
 
@@ -408,49 +183,35 @@ plausible failure path, and pre-existing issues unrelated to the change.
 
 ### Runtime verification
 
-Launch a separate verification subagent in parallel with the explainer and
-static reviewers. Context isolation is not an execution sandbox; the worker
-must use an actual disposable container, VM, emulator environment, or
-equivalent sandbox before executing PR code. Create a disposable writable copy
-of the pinned checkout inside that sandbox. Do not give builds or tests write
-access to the checkout shared by the explainer and static reviewers.
+Read [Adaptive validation](references/validation.md) and give it to the
+verification worker together with the pinned review context. First inspect the
+change, repository tooling and CI definitions; choose checks by affected
+behavior, risk, environment availability and expected cost. Record a short
+plan and the reasons for selected and omitted checks before executing PR code.
+This is a working plan, not an extra approval checkpoint.
 
-Use this standard verification depth:
+Documentation-only changes normally need documentation checks, not app startup.
+Behavior changes need focused tests and relevant CI steps. Changes to user
+journeys should also be exercised in a local browser or mobile simulator when
+the environment permits: navigate to the affected view, interact with it,
+assert the outcome, and capture meaningful screenshots. Broaden validation
+when shared contracts, build changes or a concrete suspected failure justify it.
 
-1. Inspect remote CI status and discover the checks documented by the project.
-2. Run relevant formatting or lint checks, static analysis, and unit tests.
-3. Build the changed project or affected targets when practical.
-4. Run a documented smoke test when it provides meaningful additional
-   confidence. For a Flutter application, this may include one emulator launch
-   when the required SDK, emulator, and project-supported flow are available.
+Execute only in a disposable sandbox with a writable copy of the pinned
+checkout, no user secrets or privileged host access, and minimal filesystem
+and network access. Agent isolation, a Git worktree and a mobile simulator
+alone do not sandbox dependency installation or build scripts. Inspect changed
+execution machinery before running it. Continue within existing authorization;
+ask only when a necessary action exceeds it or the available execution boundary.
+Never run deployment, publication, release, production migration, destructive
+commands or mutations of shared infrastructure. If execution is blocked,
+continue static review and remote CI inspection and report the specific gap.
 
-Apply these constraints:
-
-- The sandbox must be disposable, contain no user credentials or secrets, have
-  no privileged host access, and restrict filesystem and network access to the
-  minimum required.
-- Use commands and project guidance from the trusted base revision. If the PR
-  changes a command, build script, dependency hook, CI definition, or test
-  harness that would be executed, inspect the change and ask the user before
-  running it.
-- If no suitable sandbox is available, ask the user before running any check on
-  the host. The default after no approval is to skip local execution and rely
-  on remote CI.
-- Never run deployment, publication, release, infrastructure mutation,
-  production migration, or destructive commands.
-- Apply reasonable time and resource limits. Do not turn unavailable tooling,
-  missing credentials, or an unsuitable environment into repeated retries.
-- Record each exact command, environment, exit status, and concise relevant
-  output. Distinguish product failures from infrastructure failures and flakes.
-
-When a check fails, establish whether the PR caused it before creating a
-finding. Prefer rerunning the same focused check against the pinned base and
-head revisions in separate disposable sandbox copies. A head failure that also
-occurs at base is normally pre-existing; an environment failure or unexplained
-flake is a verification limitation, not a review finding. Any PR-attributable
-failure becomes a candidate finding using the same severity, evidence,
-confidence, and remediation contract as the static reviewers, and receives a
-draft comment only if it survives findings verification.
+The worker returns the plan, actual check results, app journeys, artifact paths,
+limitations and any candidate defects under the same evidence contract as the
+static reviewers. Attribute failures to the PR before reporting them as defects;
+use focused base/head comparisons where useful. Successful checks and
+screenshots are validation evidence, not findings by themselves.
 
 ### Native reviewer adaptation
 
@@ -498,10 +259,11 @@ verification.
    serious failure warranting prompt correction; P2 a normal actionable defect;
    P3 a minor defect. Test absence or a changelog convention alone does not
    establish a P1/P2 production failure. Keep optional suggestions separate from
-   numbered defects. Keep numeric confidence internal to verification notes;
-   normally omit candidates below 80, except potentially critical concerns with
-   uncertainty made explicit. Use `needs-confirmation` for such exceptions
-   until enough evidence supports a defect comment.
+   numbered defects. Keep numeric confidence internal as a triage aid, not a calibrated probability
+   or substitute for evidence. Actively try to disprove each candidate: inspect
+   guards, callers, dependency versions, base behavior and counterexamples.
+   Use `needs-confirmation` when material assumptions remain unresolved; only
+   evidence-supported candidates receive defect comments.
 6. Verify the smallest honest changed-line attachment and head-SHA source link.
    If no such line exists, use a general PR comment. Do not guess approximate
    lines or attach to an unrelated change.
@@ -518,6 +280,15 @@ Read the installed `my-feedback-voice` skill and its verbatim examples, normally
 at `~/.agents/skills/my-feedback-voice/`, after synthesis. Then read
 [Review note format](references/review-notes.md) before writing the artifact.
 
+- Put each finding in a collapsible section with severity and a descriptive
+  title visible when closed. Keep the overall assessment outside these sections;
+  follow the review-note format for the wrapper and expand-all behavior.
+- Before each defect's copyable draft, add a colleague-style explanation
+  with a concrete example: trigger, expected versus actual behavior, why the
+  code produces it, practical consequence, and how the fix would help. Follow
+  the review-note reference for depth and evidence rules; keep this explanation
+  outside the comment body and nested evidence disclosure, visible when the
+  finding is opened.
 - Keep one concern per comment, with a concrete example or consequence and a
   focused question or suggestion. Often 40–100 words suffice; longer comments
   are useful when a reproduction or nuanced contract genuinely needs them.
@@ -535,49 +306,41 @@ at `~/.agents/skills/my-feedback-voice/`, after synthesis. Then read
 Drafting is not publishing. Never submit, post, or otherwise send a comment.
 Show drafts to the user first; publish only with separate explicit authorization.
 
-## Persist artifacts
+## Assemble, verify and hand off one report
 
-Use the linked review-note format to persist the current assessment, selected
-comment drafts, concise evidence and verification summary as Markdown at:
+Persist authoring JSON, `review.md`, and `verification.md` beneath
+`~/.local/share/pr-review-tracker/runs/<run-id>/`. Markdown is the authoring
+source for findings, not a second reader-facing review. Put the verified base,
+head and Markdown text in the input's `review` object; embed the verification
+summary in the same HTML. Preserve detailed logs and screenshots in the run,
+outside the disposable checkout.
 
-`~/.local/share/pr-review-tracker/runs/<run-id>/review.md`
+Use [Authoring](references/authoring.md) to render `review.html`. The renderer
+requires matching revisions, escapes repository text, extracts exact source,
+and embeds copy controls. Validate comment boundaries with
+`scripts/validate_review_notes.py`, then run `scripts/check_review.cjs` and
+inspect desktop/phone screenshots in light/dark modes. Check the HTML works
+without the authoring files, including comment-copy or its manual fallback.
+If browser checks are unavailable, report that specific limitation.
 
-Run `scripts/validate_review_notes.py <review.md>` before registering the final
-artifact. Resolve errors and assess warnings; this checks draft boundaries and
-metadata leakage, not technical correctness or authenticity of voice.
+Before handoff, reconcile the coverage inventory, current assessment, every
+draft, explanation examples and check results. Remove rejected hypotheses from
+the opening; keep them only in collapsed verification history when useful.
+Record limits honestly: tests read versus run, local versus remote CI, app
+journeys exercised, and uncovered files or behavior. Successful checks are
+validation evidence, not extra findings. No findings is a valid result.
 
-Keep detailed commands, candidate rejection reasons, confidence, superseded
-assessments, checkout cleanup and HTML validation in a concise, nonsensitive
-verification artifact, rather than duplicating them in review.md:
+Register the single HTML as `review-html` (kind `html`, managed), verification
+as `verification-output`, and screenshots as `screenshot-<journey>-<step>`.
+Mark `report` complete only after assembly and validation, recording any
+limitations. Follow tracking cleanup after all source-dependent checks finish.
+Registration failures must not discard a completed report.
 
-`~/.local/share/pr-review-tracker/runs/<run-id>/verification.md`
-
-Register the HTML explanation as `explanation-html`, the final Markdown as
-`review-markdown`, and optional verification output as `verification-output`.
-Register these generated artifacts as tracker-managed so retention cleanup may
-remove them after the PR has been closed or merged for 30 days.
-Artifact-write or registration failures are tracking limitations and must not
-discard an otherwise completed review.
-
-## Handoff
-
-Wait for the HTML explainer, verification, and synthesized review. Reconcile the
-explainer with the final synthesis before handoff: remove rejected warnings,
-preserve supported caveats, and check that examples and quiz answers still
-match the pinned behavior. Update the HTML when needed and link the final
-review notes from it, rather than keeping a competing defect list.
-
-Lead with the
-current recommendation and the few facts needed to decide what to do next.
-Link the final review notes, HTML explanation and verification report. Identify
-reviewed SHAs, supported defects, selected optional suggestions and material
-limitations. Let the artifact carry long evidence and copyable comments instead
-of repeating it all in chat.
-
-A clean review is a valid result. State that no actionable defects were found,
-what was reviewed and any important limitations. Do not claim universal
-correctness or manufacture comments. Never publish externally unless the user
-makes a separate explicit request.
+Open the final HTML in the OS default browser using its verified absolute path.
+Lead the chat handoff with the current assessment and link **Review notes**
+once. Briefly state reviewed revisions, key findings and material verification
+limits; let the one report carry the explanation, drafts and evidence.
+Never publish to GitHub without an explicit user request.
 
 ## PR inbox dashboard
 

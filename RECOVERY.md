@@ -72,8 +72,8 @@ Reload the browser after restoring frontend assets.
 
 Review runs and dashboard state live separately under
 `~/.local/share/pr-review-tracker/`. Git recovery here restores the skill's
-code, not that runtime data. The separate `explain-diff-html` and
-`my-feedback-voice` skills have their own folders and are not tracked here.
+code, not that runtime data. The separate
+`my-feedback-voice` skill has its own folder and is not tracked here.
 
 Commits pushed to the private GitHub remote can be recovered if this local
 folder is lost. Local commits and tags are backed up only after you push

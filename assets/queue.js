@@ -28,8 +28,8 @@ function queueCard(pr){
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
   <div class="queue-actions">${actions}</div>
-  ${Object.keys(pr.artifacts).length?`<div class="queue-artifacts">${artifactLink(pr.artifacts['review-markdown'],'Open notes',pr)}${artifactLink(pr.artifacts['explanation-html'],'Explainer',pr)}</div>${artifactWarning(pr)}`:''}
-  <details class="queue-tools"><summary>Review tools${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary><div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${active(run)?'disabled':''}>${active(run)?'AI run in progress':'Run AI review'}</button>${copyPromptButton(pr,'review')}${copyPromptButton(pr,'explainer')}</div></details>
+  ${Object.keys(pr.artifacts).length?`<div class="queue-artifacts">${artifactLink(notesArtifact(pr.artifacts),'Open notes',pr)}</div>${artifactWarning(pr)}`:''}
+  <details class="queue-tools"><summary>Review tools${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary><div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${active(run)?'disabled':''}>${active(run)?'AI run in progress':'Run AI review'}</button>${copyPromptButton(pr,'review')}</div></details>
  </article>`;
 }
 function renderQueue(force=false){

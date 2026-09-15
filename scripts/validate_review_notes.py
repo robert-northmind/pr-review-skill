@@ -26,7 +26,7 @@ def validate(text: str) -> tuple[list[str], list[str]]:
             elif token[0] == fence[0] and len(token) >= len(fence):
                 fence = None
         if fence is None and draft is None:
-            if re.match(r'^#{1,6}\s', stripped):
+            if re.match(r'^#{1,6}\s', stripped) or stripped == '<details class="review-finding">':
                 disposition = evidence = ""
             field = re.match(r'^\*\*(Disposition|Evidence):\*\*\s*(.*)', stripped)
             if field:

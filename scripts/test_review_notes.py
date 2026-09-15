@@ -67,6 +67,21 @@ class Rendering(unittest.TestCase):
         parsed = Parsed(rendered)
         self.assertEqual(parsed.sources, [body]); self.assertNotIn('script', parsed.tags)
 
+    def test_findings_keep_nested_evidence_and_separate_copy_payloads(self):
+        first = '<details class="review-finding">\n<summary>P1 · First finding</summary>\n\nExplanation.\n\n<!-- review-comment:start -->\nFirst draft.\n<!-- review-comment:end -->\n\n<details>\n<summary>Evidence</summary>\n\n```html\n</details>\n```\n\n</details>\n\n</details>'
+        second = '<details class="review-finding">\n<summary>P2 · Second finding</summary>\n\n<!-- review-comment:start -->\nSecond draft.\n<!-- review-comment:end -->\n\n</details>'
+        rendered = dashboard.markdown_to_html(first + '\n\n' + second + '\n\n## Validation\n\nChecked.')
+        parsed = Parsed(rendered)
+        self.assertEqual(parsed.sources, ['First draft.', 'Second draft.'])
+        self.assertEqual(parsed.tags.count('details'), 3)
+        self.assertEqual(rendered.count('<details class="review-finding">'), 2)
+        self.assertNotIn(' open', rendered)
+        self.assertIn('</details>\n<h2>Validation</h2>', rendered)
+
+    def test_finding_attributes_are_allowlisted(self):
+        rendered = dashboard.markdown_to_html('<details class="review-finding" ontoggle="alert(1)">\n<summary>Bad</summary>\n\n</details>')
+        self.assertNotIn('details', Parsed(rendered).tags)
+
     def test_nested_list_and_continuation(self):
         rendered = dashboard.markdown_to_html('- Parent\n  continuation\n  - Child\n- Sibling')
         parsed = Parsed(rendered)
@@ -105,6 +120,10 @@ class Validation(unittest.TestCase):
     def test_long_draft_warns_without_forcing_rejection(self):
         errors, warnings = validate('<!-- review-comment:start -->\n' + 'word ' * 151 + '\n<!-- review-comment:end -->')
         self.assertFalse(errors); self.assertTrue(warnings)
+
+    def test_new_finding_does_not_inherit_previous_disposition(self):
+        body = '<details class="review-finding">\n<summary>Needs confirmation · First</summary>\n\n**Disposition:** Needs confirmation\n\nUnresolved.\n\n</details>\n\n<details class="review-finding">\n<summary>P2 · Second</summary>\n\n<!-- review-comment:start -->\nVerified draft.\n<!-- review-comment:end -->\n\n</details>'
+        self.assertEqual(validate(body)[0], [])
 
 
 if __name__ == '__main__': unittest.main()

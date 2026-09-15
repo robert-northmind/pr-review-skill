@@ -38,10 +38,9 @@ class DashboardLaunch(unittest.TestCase):
                                env={**os.environ, 'PATH': str(root) + ':' + os.environ['PATH']})
                 args = json.loads(captured.read_text())
                 self.assertEqual(args, ['--approve-for-me', '--cd', str(tracker.resolve()),
-                                        '--add-dir', str(output), '-m', 'chosen-model',
+                                        '-m', 'chosen-model',
                                         '-c', 'model_reasoning_effort=high', prompt])
                 self.assertTrue((tracker / 'checkouts').is_dir())
-                self.assertTrue(output.is_dir())
                 self.assertFalse(sentinel.exists())
                 self.assertEqual(script.stat().st_mode & 0o777, 0o700)
             finally:

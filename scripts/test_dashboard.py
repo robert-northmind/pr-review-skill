@@ -152,9 +152,12 @@ class Launches(Isolated):
   finally:
    script.unlink(missing_ok=True)
 
- def test_explainer_only_can_complete_without_review_tasks(self):
-  with patch.object(d,'open_interactive_terminal'):run=r.start_launch(URL,'explainer')['run_id']
-  self.task(run,'checkout','completed');self.task(run,'explainer','completed');self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'completed')
+ def test_retired_explainer_launch_runs_complete_review(self):
+  with patch.object(d,'open_interactive_terminal') as launch:run=r.start_launch(URL,'explainer')['run_id']
+  self.task(run,'checkout','completed');self.task(run,'explanation','completed')
+  self.assertNotEqual(r.snapshot()['prs'][0]['run']['status'],'completed')
+  self.assertIn('review-html',launch.call_args.args[0])
+  self.assertEqual(r.snapshot()['prs'][0]['run']['kind'],'review')
 
 class HTTP(Isolated):
  def setUp(self):

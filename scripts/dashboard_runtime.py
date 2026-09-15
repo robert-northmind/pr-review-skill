@@ -10,7 +10,7 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_queue as queue
 
-ARTIFACT_NAMES = ('explanation-html', 'review-markdown')
+ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
 TERMINAL = {'completed', 'failed', 'blocked', 'cancelled'}
 
 
@@ -58,7 +58,7 @@ def collect_artifacts(runs, checked_sha=''):
             name, path = artifact.get('name'), artifact.get('path', '')
             if name not in ARTIFACT_NAMES or not artifact_allowed(path):
                 continue
-            task = 'explainer' if name == 'explanation-html' else 'drafts'
+            task = {'review-html':'report', 'explanation-html':'explainer', 'review-markdown':'drafts'}[name]
             ready = run.get('status') == 'completed' or tasks.get(task) == 'completed'
             head = artifact.get('head_sha', run.get('head_sha', ''))
             version = artifact_version(artifact)
@@ -72,6 +72,11 @@ def collect_artifacts(runs, checked_sha=''):
     # explainer must not hide the previous finished explanation.
     for _, artifact in sorted(candidates, key=lambda item: not item[0]):
         chosen.setdefault(artifact['name'], artifact)
+    if 'review-html' in chosen:
+        combined = chosen['review-html']
+        if combined['status'] == 'completed' or not any(a['status'] == 'completed' for name, a in chosen.items() if name != 'review-html'):
+            return {'review-html': combined}
+        del chosen['review-html']
     return chosen
 
 
@@ -164,6 +169,8 @@ def start_launch(url, kind, retry=False):
     canonical, *_ = tracker.canonical_pr_url(url)
     if kind not in ('review', 'explainer'):
         raise dashboard.DashboardError('Unknown review action.')
+    # Old open tabs may still send the retired action; perform a full review.
+    kind = 'review'
     with dashboard.state_lock():
         entry = queue.merged_entries(dashboard.load_dashboard()['prs']).get(canonical)
         if entry is None:
@@ -182,16 +189,11 @@ def start_launch(url, kind, retry=False):
             session_reference='', base_sha='', head_sha=''), emit=False)
         meta = {'kind':kind, 'agent':config['agent'], 'created_at':tracker.utc_now(), 'message':''}
         tracker.atomic_write(launch_path(run_id), meta)
-        if kind == 'explainer':
-            for task in tracker.DEFAULT_TASKS:
-                if task not in ('checkout', 'explainer'):
-                    tracker.command_set_task(Namespace(run_id=run_id, task=task, status='skipped', message='Explainer-only run.'))
-        prompt = (dashboard.full_review_prompt if kind=='review' else dashboard.explainer_prompt)(canonical)
+        prompt = dashboard.full_review_prompt(canonical)
         prompt += ('\n\nThe dashboard has already registered this exact run. '
             f'Use run ID {run_id} for every tracker command; do not create another run. '
             'Read the installed skill instructions before proceeding. '
-            'Update checkout/explainer and applicable review tasks as you work. '
-            'The dashboard already skipped tasks not needed by an explainer-only run. '
+            'Update checkout, explanation, review, and report tasks as you work. '
             'Record a session reference when available; otherwise leave it blank without asking. '
             'This request authorizes the complete local review workflow and its local artifacts, '
             'not posting anything to GitHub.')
