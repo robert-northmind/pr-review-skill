@@ -44,3 +44,29 @@
 
 /* Unopened and outdated are independent states on each result. */
 .artifact-link{border-radius:8px;flex-wrap:wrap;max-width:100%;gap:6px}.artifact-link.artifact-unread{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.artifact-new{border-radius:4px;background:var(--success-soft);color:var(--success);padding:2px 6px;font-size:10px;font-weight:700;line-height:1.4;white-space:nowrap}.artifact-freshness{background:var(--soft);color:var(--muted);border-radius:4px;padding:2px 6px;font-size:10px;line-height:1.4;white-space:nowrap}.artifact-freshness.warn{background:var(--warn-soft);color:var(--warn)}.artifact-warning{font-size:12px;line-height:1.5;color:var(--warn);margin:10px 0 0}.queue-artifacts{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.history-links{flex-wrap:wrap}
+
+/* Initial effort estimates stay separate from review completion and GitHub participation. */
+.triage-settings{border-top:1px solid var(--line);padding-top:1rem;grid-column:1/-1}
+.triage-summary{margin:12px 0 4px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;font-size:.85rem;overflow-wrap:anywhere}
+.triage-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.effort-badge{font-weight:650;padding:3px 9px;border-radius:6px;background:var(--bg);white-space:nowrap;border:1px solid var(--line)}
+.effort-quick{color:var(--accent)}
+.triage-context{margin:8px 0 0}
+.triage-details{margin-top:8px}
+.triage-details summary{font-size:.8rem;cursor:pointer}
+.triage-details p{margin:8px 0}
+.triage-feedback{display:flex;gap:8px;flex-wrap:wrap}
+.triage-feedback [aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+@media(max-width:480px){.triage-summary{padding:10px}.triage-feedback .button{flex:1 1 auto}.filter-bottom>label{flex:1 1 140px}}
+
+.triage-progress{padding:12px 0 0;margin:12px 0 0;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.triage-progress p{margin-top:7px}
+.triage-progress progress{display:block;width:100%;height:7px;margin:12px 0;accent-color:var(--accent)}
+.triage-activity{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;padding:10px 14px;margin:0 0 16px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:12px;overflow-wrap:anywhere}
+.triage-activity-text{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 180px}
+.triage-activity-actions{display:flex;gap:14px;flex-wrap:wrap}
+.triage-activity.is-blocked{border-color:var(--warn)}
+.triage-activity p{flex-basis:100%;margin:0}
+.triage-spinner{width:14px;height:14px;flex:0 0 14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:triage-spin 1s linear infinite}
+@keyframes triage-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.triage-spinner{animation:none}}

@@ -18,9 +18,10 @@ import pr_review_tracker as tracker
 import dashboard_runtime as runtime
 import dashboard_reporting as reporting
 import dashboard_queue as queue
+import dashboard_triage as triage
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
-MUTATIONS = {'/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
+MUTATIONS = {'/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
              '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt'}
 
 
@@ -105,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
-            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js'):
+            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')
             elif parsed.path in ('/api/state','/api/reporting','/status'):
@@ -152,10 +153,18 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Choose a review or explainer prompt.')
                 prompt = (dashboard.full_review_prompt if kind == 'review' else dashboard.explainer_prompt)(canonical)
                 self._send(200, {'prompt': prompt}); return
+            if path == '/triage-config':
+                self._send(200, triage.configure(data)); return
+            if path == '/triage-feedback':
+                self._send(200, triage.feedback(str(data.get('url', '')), data.get('estimate_id'), data.get('rating'))); return
+            if path == '/triage-reestimate':
+                self._send(202, {'started': triage.start(str(data.get('url', '')), data.get('estimate_id'))}); return
+            if path == '/triage-run':
+                self._send(202, {'started': triage.start()}); return
             if path == '/refresh-reporting':
                 self._send(202,{'started':reporting.start_refresh()}); return
             if path == '/refresh':
-                queue.start_refresh(force=True)
+                queue.start_refresh(force=True, triage_after=True)
                 self._send(202,{'started':runtime.start_refresh()}); return
             if path in ('/refresh-queue', '/recover-reviews'):
                 self._send(202, {'started':queue.start_refresh(force=data.get('force') is True or path == '/recover-reviews',

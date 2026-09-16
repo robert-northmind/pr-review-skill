@@ -46,6 +46,11 @@ See [screenshot provenance](docs/screenshots/README.md).
 - **Triage:** separate views for review requests, watched repositories, your
   own PRs, snoozed PRs, and hidden PRs. Snooze for one day, two days, or a
   week; hide a PR with an undo option.
+- **Estimate effort:** optional background AI estimates show Quick, Moderate,
+  Involved, or Uncertain with a short explanation. Filter for quick reviews or
+  sort by effort, and rate estimates after your normal reviews. A compact
+  indicator appears while estimating and hides when finished. Settings keeps
+  detailed progress and daily usage; failures and blocked work remain visible.
 - **Follow up:** save PRs in My reviews, keep private notes, and see new commits
   and replies that need another look.
 - **Filter:** include or exclude multiple authors, repositories, and review
@@ -75,6 +80,18 @@ See [screenshot provenance](docs/screenshots/README.md).
 - Claude Code or Codex CLI installed and authenticated if you want to launch
   AI reviews. The Codex launcher currently requires support for
   `--approve-for-me`.
+
+Background effort estimates use the optional Python dependencies in
+`requirements-triage.txt`. Install them into `.venv`, then configure Initial
+effort estimates in Settings. Codex Python SDK uses your existing login;
+OpenAI API uses `OPENAI_API_KEY` from the server environment and separate billing.
+Initial estimates run after GitHub refresh or Estimate all waiting, continuing
+through eligible inbox and active My reviews PRs until caught up or the daily
+limit is reached. Estimate effort on a card also supports an explicit draft
+estimate; automatic runs skip drafts. Hidden and snoozed PRs are excluded.
+Completed estimates are retained when a PR changes and marked Outdated; use
+Re-estimate on its card to update one manually. Incomplete
+diffs are marked Uncertain. See [effort configuration and limits](references/dashboard.md#initial-review-effort).
 
 This is a personal workflow shared for reuse, with some personal defaults
 still in the source. Before adopting it, review the customization notes below.

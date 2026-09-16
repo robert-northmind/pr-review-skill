@@ -7,6 +7,7 @@
 <title>PR inbox</title>
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/dashboard.css">
+<script src="/assets/triage.js" defer></script>
 <script src="/assets/dashboard.js" defer></script>
 <script src="/assets/reporting.js" defer></script>
 <script src="/assets/queue.js" defer></script>
@@ -32,11 +33,33 @@
         <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="CLI default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
         <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
       </form>
+      <form id="triage-form" class="triage-settings">
+        <h2 id="triage-settings-heading" tabindex="-1">Initial effort estimates</h2><p class="muted">Estimate ready PRs after GitHub refresh. Uses the selected AI provider; your review queue stays in your chosen order.</p>
+        <div class="fields"><label>Automatic estimates<select id="triage-enabled"><option value="false">Off</option><option value="true">After GitHub refresh</option></select></label>
+        <label>Provider<select id="triage-provider"><option value="codex">Codex Python SDK</option><option value="openai">OpenAI API</option></select></label>
+        <label>Model<input id="triage-model" required autocomplete="off" placeholder="Model ID"></label>
+        <label>Daily call limit<input id="triage-limit" type="number" min="1" max="100" required></label></div>
+        <p class="muted">Codex uses your existing login. OpenAI API uses OPENAI_API_KEY in the server environment and separate API billing. PR descriptions and diffs are sent to the selected provider.</p>
+        <div class="form-footer"><button class="button" type="submit">Save triage settings</button><button class="button" id="triage-run" type="button">Estimate all waiting</button><span id="triage-save-state" class="muted" role="status"></span></div>
+        <p id="triage-status" class="muted"></p>
+        <section id="triage-progress" class="triage-progress" aria-label="Review effort details">
+          <strong id="triage-progress-title"></strong>
+          <p id="triage-progress-current" class="muted"></p>
+          <progress id="triage-progress-bar" aria-label="PRs processed in this run" hidden></progress>
+          <p id="triage-progress-counts" class="muted"></p>
+          <p id="triage-progress-message" class="muted" hidden></p>
+        </section>
+      </form>
       <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
         <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
       </section>
     </div>
   </details>
+</section>
+<section id="triage-activity" class="triage-activity" aria-label="Review effort activity" hidden>
+  <div class="triage-activity-text"><span id="triage-spinner" class="triage-spinner" aria-hidden="true" hidden></span><span id="triage-activity-title" role="status" aria-live="polite"></span></div>
+  <div class="triage-activity-actions"><button id="triage-progress-run" class="text-button" type="button" hidden>Retry estimates</button><button id="triage-details-show" class="text-button" type="button" aria-label="Triage details">Details</button></div>
+  <p id="triage-activity-message" class="muted" hidden></p>
 </section>
 <nav id="views" class="views" aria-label="Inbox views">
 <button id="my-reviews-tab" aria-pressed="false">My reviews <span class="count">0</span></button>
@@ -80,7 +103,7 @@
 <div id="status-options" class="filter-options"></div>
 <p id="status-selection" class="muted" aria-live="polite"></p>
 </section></details>
-<div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
+<div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label>Review effort<select id="triage-filter"><option value="all">Any effort</option><option value="quick">Quick reviews</option><option value="moderate">Moderate</option><option value="involved">Involved</option><option value="uncertain">Uncertain / unavailable</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="effort">Review effort</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
 </section>
 <div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><p id="view-description" class="muted">PRs assigned to you or requesting your review.</p></div><span id="result-count" class="muted" aria-live="polite"></span></div>
 <section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>

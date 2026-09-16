@@ -18,6 +18,7 @@ STAGES = {'up_next', 'reviewing', 'waiting', 'done', 'removed'}
 ACTIVE = {'up_next', 'reviewing', 'waiting'}
 _guard = threading.Lock()
 _status = {'status': 'idle'}
+_triage_after_refresh = False
 
 
 def load():
@@ -221,8 +222,11 @@ def classify(url, login, pr, comments, discussion, requests, reviews):
     metadata.update(title=pr.get('title') or metadata['title'], author_login=author,
                     author_avatar_url=(pr.get('user') or {}).get('avatar_url', ''),
                     is_draft=bool(pr.get('draft')), head_sha=pr.get('head', {}).get('sha', ''),
+                    base_sha=pr.get('base', {}).get('sha', ''),
                     pr_updated_at=pr.get('updated_at', ''), pr_created_at=pr.get('created_at', ''),
                     pr_state='merged' if pr.get('merged_at') else pr.get('state', ''))
+    import dashboard_triage
+    metadata['triage_context_hash'] = dashboard_triage.context_hash(pr.get('title') or metadata['title'], pr.get('body') or '')
     mine = lambda item: (item.get('user') or {}).get('login', '').lower() == login.lower()
     my_reviews = [r for r in reviews if mine(r) and r.get('submitted_at') and r.get('state') != 'PENDING']
     latest = max(my_reviews, key=lambda r: epoch(r['submitted_at']), default={})
@@ -356,8 +360,10 @@ def recover():
         save(data)
 
 
-def start_refresh(force=False, recovery=False):
-    global _status
+def start_refresh(force=False, recovery=False, triage_after=False):
+    global _status, _triage_after_refresh
+    if triage_after:
+        _triage_after_refresh = True
     if not _guard.acquire(blocking=False):
         return False
     last = epoch(_status.get('started_at'))
@@ -366,7 +372,7 @@ def start_refresh(force=False, recovery=False):
         return False
     _status = {'status': 'running', 'started_at': tracker.utc_now()}
     def worker():
-        global _status
+        global _status, _triage_after_refresh
         try:
             if recovery:
                 recover()
@@ -375,7 +381,15 @@ def start_refresh(force=False, recovery=False):
         except Exception as error:
             _status = {**_status, 'status': 'failed', 'message': str(error)}
         finally:
+            follow_up = _triage_after_refresh
+            _triage_after_refresh = False
             _guard.release()
+            if follow_up:
+                import dashboard_triage
+                try:
+                    dashboard_triage.start()
+                except ValueError:
+                    pass  # Triage start records its own visible failure state.
     threading.Thread(target=worker, daemon=True).start()
     return True
 

@@ -10,11 +10,12 @@ const descriptions={requested:'PRs assigned to you or requesting your review.',w
 const statusLabels={starting:'Starting',queued:'Starting',running:'Reviewing',completed:'Completed',blocked:'Needs input',failed:'Run failed',cancelled:'Tracking stopped','no-activity':'No recent activity'};
 const active = run => run && ['starting','queued','running','no-activity'].includes(run.status);
 const attention = run => run && ['blocked','failed','no-activity'].includes(run.status);
-const defaults={view:'requested',search:'',reportRepositoriesOnly:[],reportRepositoriesExcluded:[],repositoriesOnly:[],repositoriesExcluded:[],authorsOnly:[],authorsExcluded:[],statusesOnly:[],statusesExcluded:[],drafts:'all',sort:'updated'};
+const defaults={view:'requested',search:'',reportRepositoriesOnly:[],reportRepositoriesExcluded:[],repositoriesOnly:[],repositoriesExcluded:[],authorsOnly:[],authorsExcluded:[],statusesOnly:[],statusesExcluded:[],drafts:'all',triageEffort:'all',sort:'updated'};
 let filters={...defaults};
 try {filters={...defaults,...JSON.parse(localStorage.getItem('pr-inbox-filters')||'{}')};}catch{}
 delete filters.starred;
-if(!['updated','oldest'].includes(filters.sort))filters.sort='updated';
+if(!['all','quick','moderate','involved','uncertain'].includes(filters.triageEffort))filters.triageEffort='all';
+if(!['updated','oldest','effort'].includes(filters.sort))filters.sort='updated';
 // Preserve selections saved by the earlier single-author filter.
 const authorLogins = values => [...new Set((Array.isArray(values)?values:[]).filter(value=>typeof value==='string'&&value).map(value=>value.startsWith('app/')?value.slice(4)+'[bot]':value))];
 filters.authorsOnly=authorLogins(Array.isArray(filters.authorsOnly)&&filters.authorsOnly.length?filters.authorsOnly:filters.author?[filters.author]:[]);
@@ -125,6 +126,7 @@ function card(pr){
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
  return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><div class="pr-actions">${buttons}${queueCaptureButton(pr)}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}${newestArtifact?`<span title="${esc(when(newestArtifact.created_at))}">Results ${esc(since(newestArtifact.created_at))}</span>`:''}</div>
+ ${triageCard(pr)}
  ${artifactWarning(pr)}
  <details class="run-details"><summary>Review actions${run?' & history':''}</summary><div class="detail-content">
  ${!hidden?`<div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${isActive?'disabled':''}>${hasNotes?'Regenerate review':'Run full review'}</button>${copyPromptButton(pr,'review')}</div>`:''}
@@ -200,10 +202,12 @@ function visiblePrs(){
   if(text&&!`${pr.title} ${pr.owner}/${pr.repository} ${pr.number} ${pr.author_login} ${pr.author_name||''}`.toLowerCase().includes(text))return false;
   if(!matchesSelection(filters.repositoriesOnly,filters.repositoriesExcluded,value=>value===pr.owner+'/'+pr.repository))return false;
   if(!matchesSelection(filters.authorsOnly,filters.authorsExcluded,value=>value===pr.author_login))return false;
+  if(!matchesTriage(pr,filters.triageEffort))return false;
   if(filters.drafts==='ready'&&pr.is_draft || filters.drafts==='only'&&!pr.is_draft)return false;
   if(!matchesSelection(filters.statusesOnly,filters.statusesExcluded,value=>matchesStatus(pr,value)))return false;
   return true;
  }).sort((a,b)=>{
+  if(filters.sort==='effort')return compareTriage(a,b);
   const field=filters.sort==='oldest'?'first_seen_at':'pr_updated_at';
   const left=a[field]||a.first_seen_at||'',right=b[field]||b.first_seen_at||'';
   return (filters.sort==='oldest'?left.localeCompare(right):right.localeCompare(left)) || a.url.localeCompare(b.url);
@@ -214,10 +218,10 @@ function renderList(force=false){if(!state)return;const prs=visiblePrs();const s
  $('view-heading').textContent=labels[filters.view];$('view-description').textContent=descriptions[filters.view];
  document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>inView(pr,view)).length;});
  if(!force&&signature===listSignature)return;listSignature=signature;
- const expanded=new Set([...document.querySelectorAll('.pr-card:has(.run-details[open])')].map(el=>el.dataset.pr));
+ const expanded=new Map([...document.querySelectorAll('.pr-card')].map(el=>[el.dataset.pr,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
  const focused=document.activeElement,focusUrl=focused?.dataset?.url,focusAction=focused?.dataset?.action;
- $('pr-list').innerHTML=prs.map(card).join('')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.drafts!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or refresh GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
- document.querySelectorAll('.pr-card').forEach(el=>{if(expanded.has(el.dataset.pr))el.querySelector('.run-details').open=true;});
+ $('pr-list').innerHTML=prs.map(card).join('')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.drafts!=='all'||filters.triageEffort!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or refresh GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
+ document.querySelectorAll('.pr-card').forEach(el=>{for(const d of el.querySelectorAll('details'))if(expanded.get(el.dataset.pr)?.includes(d.className))d.open=true;});
  if(focusUrl&&focusAction){const replacement=[...document.querySelectorAll('[data-action]')].find(el=>el.dataset.url===focusUrl&&el.dataset.action===focusAction);replacement?.focus({preventScroll:true});}
  for(const button of document.querySelectorAll('[data-action]'))if(busy.has(button.dataset.url))button.disabled=true;
 }
@@ -234,13 +238,14 @@ function renderState(){
  const warnings=[...state.warnings];if(refresh.status==='failed')warnings.unshift(refresh.message||'The refresh failed. Please retry.');
  $('warnings').hidden=!warnings.length;$('warnings').innerHTML=warnings.length?`<details><summary>${warnings.length} refresh ${warnings.length===1?'issue':'issues'} · previous data kept where a source was incomplete</summary><ul>${warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:'';
  if(!settingsDirty&&JSON.stringify(config)!==configSignature)showConfig(config);
+ renderTriageSettings();
  renderPickers();
  $('watched-repos').innerHTML=config.watched_repos.map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-repo="${esc(repo)}" aria-label="Stop watching ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No watched repositories yet.</li>';
  renderList();
  if(typeof renderQueue==='function')renderQueue();
 }
 async function loadState(){if(loading)return;loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();refreshExpiredSnoozes();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;}}
-function syncFilterControls(){ $('search').value=filters.search;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;}
+function syncFilterControls(){ $('search').value=filters.search;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;$('triage-filter').value=filters.triageEffort;}
 function clearFilters(){for(const id of Object.keys(pickerConfig))$(id+'-search').value='';filters={...defaults,view:filters.view,reportRepositoriesOnly:filters.reportRepositoriesOnly,reportRepositoriesExcluded:filters.reportRepositoriesExcluded};syncFilterControls();saveFilters();renderList();}
 document.addEventListener('click',async event=>{
  const view=event.target.closest('[data-view]');if(view){if(typeof showQueue==='function')showQueue(false);showReporting(false);filters.view=view.dataset.view;saveFilters();renderList();return;}
@@ -263,7 +268,7 @@ document.addEventListener('click',async event=>{
   await loadState();
  }catch(error){notify(error.message);}finally{busy.delete(url);renderList(true);}
 });
-for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort']])$(id).addEventListener(id==='search'?'input':'change',()=>{filters[key]=$(id).value;saveFilters();renderList();});
+for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort'],['triage-filter','triageEffort']])$(id).addEventListener(id==='search'?'input':'change',()=>{filters[key]=$(id).value;saveFilters();renderList();});
 
 // Keep a legible avatar fallback if a profile image is missing or unavailable.
 document.addEventListener('error',event=>{if(event.target.matches?.('.author-avatar'))event.target.hidden=true;},true);

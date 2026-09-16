@@ -1,0 +1,3 @@
+# Optional background triage runtime; install into .venv.
+openai-codex==0.154.0
+openai==3.14.1

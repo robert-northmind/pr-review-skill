@@ -25,6 +25,7 @@ function queueCard(pr){
   <div class="queue-card-heading"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><span class="muted" title="${esc(when(w.checked_at))}">${w.checked_at?'Checked '+esc(since(w.checked_at)):'Awaiting first check'}</span></div>
   ${reasons.length?`<div class="queue-reasons">${reasons.map(reason=>`<a target="_blank" rel="noopener" class="chip warn" href="${esc(safeUrl(reason.url))}">${esc(reason.label)} ↗</a>`).join('')}</div>`:''}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
+  ${triageCard(pr)}
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
   <div class="queue-actions">${actions}</div>
@@ -43,7 +44,7 @@ function renderQueue(force=false){
  $('queue-error').hidden=refresh.status!=='failed';$('queue-error').textContent=refresh.message||'';
  const signature=JSON.stringify([prs,state.queue_candidates,[...queueBusy],Math.floor(Date.now()/60000)]);
  if(!force&&signature===queueSignature)return;queueSignature=signature;
- const open=new Set([...$('queue-view').querySelectorAll('.queue-card:has(details[open])')].map(el=>el.dataset.queuePr));
+ const open=new Map([...$('queue-view').querySelectorAll('.queue-card')].map(el=>[el.dataset.queuePr,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
  const focused=document.activeElement;const focusUrl=focused?.dataset?.url, focusAction=focused?.dataset?.queueAction;
  const compare=(a,b)=>a.workflow.position-b.workflow.position||a.url.localeCompare(b.url);
  const sections=[['attention','Needs another look','Updates and replies since your last check.'],['up_next','Up next','PRs you chose to review next.'],['reviewing','Reviewing','Reviews you have started.'],['waiting','Waiting','Kept here until something needs another look.']];
@@ -54,7 +55,7 @@ function renderQueue(force=false){
  const history=prs.filter(pr=>pr.workflow.bucket==='history').sort(compare);
  $('queue-history-count').textContent='('+history.length+')';$('queue-history-list').innerHTML=history.map(queueCard).join('')||'<p class="muted">Completed and removed reviews will appear here.</p>';
  $('queue-candidates').innerHTML=(state.queue_candidates||[]).map(pr=>`<div class="queue-candidate"><div><a target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><p class="muted">${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</p></div>${queueButton(pr,'recover','Follow this review')}</div>`).join('')||'<p class="muted">No unsaved reviews found in the local history. Search GitHub for earlier participation.</p>';
- for(const el of $('queue-view').querySelectorAll('.queue-card'))if(open.has(el.dataset.queuePr))el.querySelector('details').open=true;
+ for(const el of $('queue-view').querySelectorAll('.queue-card'))for(const d of el.querySelectorAll('details'))if(open.get(el.dataset.queuePr)?.includes(d.className))d.open=true;
  if(focusUrl&&focusAction){const replacement=[...$('queue-view').querySelectorAll('[data-queue-action]')].find(b=>b.dataset.url===focusUrl&&b.dataset.queueAction===focusAction);replacement?.focus({preventScroll:true});}
 }
 function showQueue(value){

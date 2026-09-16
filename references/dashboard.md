@@ -240,3 +240,146 @@ The Reporting view shows submitted GitHub reviews of other authors' PRs and merg
 Reporting has independent repository include/exclude selections. Inbox hiding, authors, statuses and repository filters do not change Reporting totals. Current-week data is marked in progress; comparisons use completed weeks. Click a chart period for linked PR titles, or Yesterday for the daily recap.
 
 Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes` and `node test_reporting.cjs` from `scripts/`. Browser checks cover chart drill-down, repository filtering, refresh, and responsive layout.
+
+## Initial review effort
+
+Effort estimates are separate from full AI review runs, GitHub participation,
+severity and the human review queue. Cards show **Quick**, **Moderate**,
+**Involved**, or **Uncertain**, plus a short reason and context notes. These
+estimate reading effort, not correctness or readiness to approve. Use the
+Review effort filter or sort; the saved order in My reviews stays unchanged.
+About this estimate contains provider/revision details and optional feedback:
+About right, Took more effort, or Took less effort. Rate a handful of PRs after
+normal reviews; a separate manual evaluation exercise is unnecessary.
+
+A compact activity strip above the tabs appears during startup and estimation,
+showing a spinner and processed PR count across inbox, My reviews and Reporting.
+It disappears after successful completion. With automatic estimates enabled,
+failures and interruptions remain as small notices; the daily-limit notice is
+shown only when estimates are waiting. Retry estimates appears when work can
+actually be retried. Details opens Settings at Initial effort estimates.
+
+Settings retains the current PR and stage, progress bar, estimated/waiting totals,
+UTC daily usage, last-run summary, failure details, and Estimate all waiting.
+Counts cover eligible inbox and active My reviews PRs and ignore browser filters.
+Uncertain counts as a completed assessment, not unfinished work. Duplicate starts
+are rejected while a worker is starting or running. Updates use the normal
+five-second state polling and do not cause additional model calls.
+
+Install the optional runtime from the skill directory:
+
+```shell
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-triage.txt
+```
+
+Settings → Initial effort estimates selects Codex Python SDK or OpenAI API,
+a model ID, automatic operation and a daily call limit. The shipped default is
+off; enabling it authorizes sending bounded PR descriptions and patches to the
+selected provider. Codex reuses the existing local login and runs through its
+bundled runtime with no Terminal window. OpenAI API requires OPENAI_API_KEY in
+the **server process environment**, uses separate API billing and never reads a
+key from dashboard JSON or the browser. There is no automatic provider fallback.
+The SDK runs ephemeral, read-only classification with inherited MCP servers,
+apps, shell tools, hooks and plugins disabled. PR text is untrusted input.
+
+After GitHub refresh commits its metadata, `dashboard_triage.py` starts a
+separate worker using the skill's `.venv/bin/python` when present. The worker
+process survives an HTTP-server restart and a cross-process lock prevents
+concurrent runs. Requested PRs are considered first, oldest first. Active My reviews
+entries (Up next, Reviewing, and Waiting) are also eligible even when no longer
+in the discovery inbox. When both sources contain a PR, the latest checked
+metadata is used and current inbox hide/snooze preferences take precedence.
+Drafts, hidden/snoozed PRs, authored PRs, closed PRs, and entries without verified
+base/head revisions are skipped automatically. Personal history alone does not
+qualify a PR. Browser-only filters do not control background triage.
+
+Refresh GitHub and **Estimate all waiting** each start one serial worker that
+continues through all eligible unestimated PRs, including newly eligible entries
+observed during the run. A full GitHub refresh also checks for waiting work
+after its personal-queue fetch completes, so slower My reviews updates are
+included. It stops when caught up, the daily limit is reached,
+settings change, or an estimate fails. Each PR is attempted at most once per run.
+Completed estimates, including Uncertain and outdated ones, are never rerun by
+these actions. The legacy `batch_limit` setting/CLI flag remains accepted for
+compatibility but no longer caps a run.
+
+A daily limit of 30 model attempts (UTC) is the shipped default; failed calls
+count. Settings can change the daily limit. For example:
+
+```shell
+python3 scripts/dashboard_triage.py configure --enabled true --provider codex --model gpt-5.6-luna --daily-limit 60
+python3 scripts/dashboard_triage.py status
+```
+
+**Estimate effort** on an eligible card starts an initial estimate for just that
+PR. It also permits an explicit draft estimate, while drafts remain excluded
+from automatic runs. **Re-estimate** updates a completed estimate. Both actions
+respect hidden/snoozed exclusions, saved provider settings, worker exclusivity,
+and the daily limit. Newly pasted My reviews PRs need a successful Check for
+updates to populate their verified revision metadata first.
+
+Choose model IDs available to the selected provider. The Codex default is
+`gpt-5.6-luna`; switching to OpenAI API may require a different API model ID.
+The worker stops its run on failure and backs off the same comparison for an
+hour. There is no independent polling schedule: new PRs are discovered by
+Refresh GitHub, not simply by the page's saved-state polling. A running batch
+continues if the tab closes while the machine stays awake.
+
+GitHub context uses paginated REST file metadata and patches. The initial
+limits are 300 files, 24,000 characters per patch, 100,000 patch characters total,
+and a 12,000-character description. Missing/binary patches, exceeded limits,
+and incomplete inventories produce Uncertain without a model request. Generated
+and lockfile paths are hints, never automatic exemptions. This first version
+uses the supplied diff context; it does not clone repositories, run tests, or
+retrieve arbitrary additional files. A model that needs more context returns
+Uncertain only when that gap prevents judging the likely review effort. Missing
+callers, upstream implementations, or validation results can remain context notes
+alongside Quick, Moderate, or Involved; the estimate includes the work to inspect
+those areas. The full review workflow remains available for that deeper work.
+
+`triage.json` stores config, UTC usage counters and per-PR results under the
+existing dashboard transaction lock. Never edit it manually. It contains no
+raw descriptions or patches. Cache identity includes provider/model, rubric
+version, base/head revisions and a digest of title/body. GitHub is rechecked
+before accepting results; local changes during a request also invalidate them.
+Completed estimates keep their original effort, reason, and revision when the PR
+or triage settings change. An **Outdated** badge identifies these estimates;
+filters and sorting still use their original effort. Refresh GitHub and Estimate
+all waiting only schedule PRs without a completed estimate (including eligible
+failed initial attempts). Outdated estimates are counted separately from waiting
+PRs. **Re-estimate** on a card processes only that PR, even when its estimate is
+still current, using the saved provider and daily limit. Hidden/snoozed and other
+ineligible PRs remain excluded. A busy worker prevents duplicate starts. The
+previous estimate stays visible during a rerun and is retained on failure or
+interruption; retrying that rerun is manual. Feedback is disabled for outdated
+estimates. Freshness uses the last GitHub refresh; refresh before re-estimating
+when new commits have arrived.
+`/triage-config`, `/triage-run`, `/triage-reestimate`, and `/triage-feedback` require the existing
+Host/Origin/CSRF-checked JSON POST. Feedback includes the displayed estimate ID
+and cannot silently attach to a replacement estimate. Rated estimates remain in
+the private feedback history when a newer estimate replaces the visible result.
+
+Temporary working directories are removed after each provider call, including
+handled failures and timeouts. No repository is checked out; patches travel in
+memory through stdin. Codex requests ephemeral threads with history disabled.
+A forcibly killed worker or machine crash can leave a temporary directory; this
+path does not contain a checkout or saved diff. Shared SDK caches/logs are owned
+by the SDK and are not deleted by dashboard retention.
+
+Metadata is pruned on triage writes and GitHub refresh, including when AI triage
+is disabled. Current inbox and active saved-review estimates are retained. Other
+estimates expire 90 days after their last result, with at most 500 retained.
+Calibration feedback expires after 180 days and is capped at 1,000 ratings; old
+embedded feedback is removed too. Cleanup touches triage metadata only, never
+full review reports, checkouts or private review notes. The installed `.venv`
+and bundled SDK runtime are reusable dependencies, not per-PR copies.
+
+Validate with `test_triage` plus the existing dashboard/queue suites. The
+`test_triage_browser.cjs` check starts an offline fixture with disposable state,
+covering filters, sorting, feedback, settings, persistence, queue order, escaping
+and light/dark 320px/390px/desktop layouts. It uses Playwright and installed Chrome
+by default; PR_REVIEW_PLAYWRIGHT_MODULE and PR_REVIEW_BROWSER_CHANNEL override
+those runtime choices. `evaluate_triage.py --output /tmp/triage-evaluation.json`
+explicitly runs six small synthetic model examples. This uses provider quota;
+it checks rubric behavior, not calibrated review times or broad model accuracy.

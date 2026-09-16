@@ -114,6 +114,8 @@ def snapshot():
         config = dashboard.load_config()
         personal = queue.load()
         entries = queue.merged_entries(data['prs'], personal)
+    import dashboard_triage
+    triage = dashboard_triage.snapshot(entries)
     runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
     grouped = {}
     for run in runs:
@@ -143,7 +145,7 @@ def snapshot():
         profile = data.get('author_profiles', {}).get(login, {})
         prs.append({**entry, 'author_login': login, 'author_name': profile.get('author_name', ''),
                     'author_avatar_url': profile.get('author_avatar_url', ''), 'url': url, 'group':group, 'participation':participation,
-            'artifacts':artifacts, 'artifact_freshness':freshness, 'mixed_artifacts':mixed,
+            'triage':triage['prs'].get(url, {}), 'artifacts':artifacts, 'artifact_freshness':freshness, 'mixed_artifacts':mixed,
             'run':summarize_run(history[0], checked_sha) if history else None,
             'history':[summarize_run(r, checked_sha) for r in history],
             'history_total':len(history)})
@@ -156,7 +158,7 @@ def snapshot():
             _, fallback = queue.identity(url)
             candidates[url] = {**fallback, 'title': history[0].get('title') or fallback['title']}
     candidates = [{'url':url, **entry} for url, entry in candidates.items() if url not in personal['prs']]
-    return {'prs':prs, 'config':config, 'queue_refresh':queue.status(), 'queue_candidates':candidates,
+    return {'prs':prs, 'config':config, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(), 'queue_candidates':candidates,
         'last_github_refresh_at':data.get('last_github_refresh_at', ''),
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,

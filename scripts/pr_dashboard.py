@@ -359,7 +359,7 @@ def fetch_pr_details(canonical: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [gh_executable(), "pr", "view", canonical, "--json",
-             "reviews,comments,createdAt,updatedAt,headRefOid"],
+             "reviews,comments,createdAt,updatedAt,headRefOid,baseRefOid,title,body"],
             capture_output=True, text=True, timeout=30, check=False)
         if result.returncode:
             raise DashboardError(f"Could not refresh details for {canonical}")
@@ -376,6 +376,9 @@ def command_refresh(_args: argparse.Namespace) -> None:
         except BlockingIOError:
             raise DashboardError("A GitHub refresh is already running.")
         _refresh_sources()
+    import dashboard_triage
+    dashboard_triage.maintain()
+    dashboard_triage.start()
 
 
 def normalize_author_login(login: str) -> str:
@@ -508,6 +511,9 @@ def _refresh_sources() -> None:
                     entry["pr_created_at"] = payload["createdAt"]
                 entry["pr_updated_at"] = payload.get("updatedAt", "")
                 entry["head_sha"] = payload.get("headRefOid", "")
+                entry["base_sha"] = payload.get("baseRefOid", "")
+                import dashboard_triage
+                entry["triage_context_hash"] = dashboard_triage.context_hash(payload.get("title", entry.get("title", "")), payload.get("body") or "")
                 entry["details_checked_at"] = now
                 if my_login:
                     reviews = [r for r in payload.get("reviews", [])

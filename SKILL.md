@@ -351,7 +351,9 @@ Never publish to GitHub without an explicit user request.
 The local inbox is served at `http://127.0.0.1:8765/` by `scripts/pr_server.py`.
 It separates requests from watched-repository PRs and PRs Robert created,
 with search, repository/review/draft filters, PR age, snoozing, hiding, and run history.
-GitHub participation and AI review progress are separate states.
+GitHub participation and AI review progress are separate states. Optional background
+effort estimates help choose a PR; they do not replace review coverage or establish
+that a change is safe to approve.
 
 Read [references/dashboard.md](references/dashboard.md) when operating or
 changing the dashboard, its configuration, or its terminal launcher.
