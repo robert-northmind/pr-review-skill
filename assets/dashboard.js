@@ -291,11 +291,44 @@ document.addEventListener('DOMContentLoaded',()=>{(async function poll(){await P
 let lastInboxView=filters.view==='mine'?'requested':filters.view;
 let syncStarting=false;
 const syncRequestErrors={};
+const dialogAnimations=new WeakMap();
+function animateDialog(dialog,closing=false){
+ // Start from the current position if Close interrupts the entrance animation.
+ const from=getComputedStyle(dialog).transform;
+ dialogAnimations.get(dialog)?.cancel();
+ dialog.classList.toggle('is-closing',closing);
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+  dialogAnimations.delete(dialog);dialog.classList.remove('is-closing');
+  if(closing)dialog.close();
+  return;
+ }
+ const animation=dialog.animate(
+  [{transform:closing?from:'translateX(100%)'},{transform:closing?'translateX(100%)':'translateX(0)'}],
+  {duration:closing?180:220,easing:closing?'cubic-bezier(.4,0,1,1)':'cubic-bezier(.16,1,.3,1)',fill:'both'}
+ );
+ dialogAnimations.set(dialog,animation);
+ animation.finished.then(()=>{
+  if(dialogAnimations.get(dialog)!==animation)return;
+  if(closing)dialog.close();
+  dialogAnimations.delete(dialog);dialog.classList.remove('is-closing');animation.cancel();
+ },()=>{}); // Replacing a panel or reversing its entrance cancels that animation.
+}
+function closeDialog(dialog){
+ if(!dialog.open||dialog.classList.contains('is-closing'))return;
+ if(dialog.classList.contains('workspace-dialog'))animateDialog(dialog,true);
+ else dialog.close();
+}
 function showDialog(id){
  const dialog=$(id);
- for(const open of document.querySelectorAll('dialog[open]'))if(open!==dialog)open.close();
- if(!dialog.open)dialog.showModal();
+ for(const open of document.querySelectorAll('dialog[open]'))if(open!==dialog){
+  dialogAnimations.get(open)?.cancel();dialogAnimations.delete(open);
+  open.classList.remove('is-closing');open.close();
+ }
+ if(!dialog.open){dialog.showModal();if(dialog.classList.contains('workspace-dialog'))animateDialog(dialog);}
 }
+for(const dialog of document.querySelectorAll('.workspace-dialog'))dialog.addEventListener('cancel',event=>{
+ event.preventDefault();closeDialog(dialog);
+});
 function showSettings(section='agent-settings'){
  showDialog('settings');
  document.querySelectorAll('[data-settings-section]').forEach(el=>el.hidden=el.id!==section);
@@ -360,7 +393,7 @@ $('views').addEventListener('click',()=>queueMicrotask(renderWorkspaceNavigation
 document.addEventListener('click',event=>{
  const settings=event.target.closest('[data-settings-panel]');if(settings){showSettings(settings.dataset.settingsPanel);return;}
  const open=event.target.closest('[data-dialog]');if(open){open.dataset.dialog==='settings'?showSettings():showDialog(open.dataset.dialog);return;}
- const close=event.target.closest('[data-close-dialog]');if(close)close.closest('dialog').close();
+ const close=event.target.closest('[data-close-dialog]');if(close)closeDialog(close.closest('dialog'));
  for(const disclosure of document.querySelectorAll('.action-disclosure[open]'))if(!disclosure.contains(event.target))disclosure.open=false;
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const disclosure of document.querySelectorAll('.action-disclosure[open]')){disclosure.open=false;disclosure.querySelector('summary').focus();}});

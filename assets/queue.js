@@ -95,7 +95,7 @@ $('my-reviews-tab').addEventListener('click',()=>showQueue(true));
 $('reporting-tab').addEventListener('click',()=>showQueue(false));
 $('queue-add').addEventListener('submit',async event=>{
  event.preventDefault();const input=event.target.elements.url;const button=event.target.querySelector('button');button.disabled=true;
- try{await queueAction(input.value.trim(),'enqueue');input.value='';$('queue-add-dialog').close();}catch(error){notify(error.message);}finally{button.disabled=false;}
+ try{await queueAction(input.value.trim(),'enqueue');input.value='';closeDialog($('queue-add-dialog'));}catch(error){notify(error.message);}finally{button.disabled=false;}
 });
 $('queue-note-cancel').addEventListener('click',()=>$('queue-note-dialog').close());
 $('queue-note-form').addEventListener('submit',async event=>{
