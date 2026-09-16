@@ -7,30 +7,32 @@ function queueButton(pr,action,label,primary=false){
  return `<button type="button" class="button ${primary?'primary':''}" data-queue-action="${action}" data-url="${esc(pr.url)}" ${queueBusy.has(pr.url)?'disabled':''}>${label}</button>`;
 }
 function queueCard(pr){
- const w=pr.workflow, reasons=w.reasons||[], history=w.bucket==='history';
- let actions='';
- if(history){if(!w.closed)actions+=queueButton(pr,'restore','Restore to Up next');}
+ const w=pr.workflow, reasons=w.reasons||[], history=w.bucket==='history',run=pr.run;
+ let primary='',secondary='';
+ if(history){if(!w.closed)primary=queueButton(pr,'restore','Restore to Up next',true);}
  else {
-  if(w.stage==='up_next')actions+=queueButton(pr,'start','Start reviewing',true)+queueButton(pr,'move_up','Move up');
-  else if(w.stage==='reviewing')actions+=queueButton(pr,'wait','Waiting for author',true);
-  else actions+=queueButton(pr,'start','Resume reviewing',true);
-  if(reasons.length)actions+=queueButton(pr,'acknowledge','Mark updates checked');
-  actions+=queueButton(pr,'done','Done for now')+queueButton(pr,'remove','Remove');
+  primary=w.stage==='up_next'?queueButton(pr,'start','Start reviewing',true):w.stage==='reviewing'?queueButton(pr,'wait','Waiting for author',true):queueButton(pr,'start','Resume reviewing',true);
+  if(w.stage==='up_next')secondary+=queueButton(pr,'move_up','Move up');
+  if(reasons.length)secondary+=queueButton(pr,'acknowledge','Mark updates checked');
+  secondary+=queueButton(pr,'done','Done for now');
  }
- actions+=queueButton(pr,'note',w.note?'Edit note':'Add note');
- const run=pr.run;
+ secondary+=queueButton(pr,'note',w.note?'Edit note':'Add note');
+ const menu='<p class="detail-heading">Organize review</p>'+secondary+'<p class="detail-heading">AI tools</p>'+aiReviewActions(pr)+(!history?'<p class="detail-heading">Tracking</p>'+queueButton(pr,'remove','Remove from My reviews'):'');
  const reviewed=w.review_observation?.head_sha;
  const stateLabel=w.closed?(pr.pr_state==='merged'?'Merged':'Closed'):queueLabels[w.stage];
  return `<article class="pr-card queue-card" data-queue-pr="${esc(pr.url)}">
-  <div class="queue-card-heading"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}</div></div><span class="muted" title="${esc(when(w.checked_at))}">${w.checked_at?'Checked '+esc(since(w.checked_at)):'Awaiting first check'}</span></div>
+  <div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}</div></div><div class="pr-actions">${primary}${artifactLink(notesArtifact(pr.artifacts),'Open AI notes',pr)}${actionDisclosure(pr,'•••',menu)}</div></div>
   ${reasons.length?`<div class="queue-reasons">${reasons.map(reason=>`<a target="_blank" rel="noopener" class="chip warn" href="${esc(safeUrl(reason.url))}">${esc(reason.label)} ↗</a>`).join('')}</div>`:''}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
-  ${triageCard(pr)}
+  ${artifactWarning(pr)}${triageCard(pr)}
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
-  ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
-  <div class="queue-actions">${actions}</div>
-  ${Object.keys(pr.artifacts).length?`<div class="queue-artifacts">${artifactLink(notesArtifact(pr.artifacts),'Open notes',pr)}</div>${artifactWarning(pr)}`:''}
-  <details class="queue-tools"><summary>Review tools${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary><div class="action-bar"><button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${active(run)?'disabled':''}>${active(run)?'AI run in progress':'Run AI review'}</button>${copyPromptButton(pr,'review')}</div></details>
+  <details class="queue-tools"><summary>Review details${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary>
+   <p class="muted">${w.checked_at?'GitHub checked '+esc(since(w.checked_at)):'Awaiting first GitHub check'}</p>
+   ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
+   ${run?`<p class="muted">AI activity recorded ${esc(since(run.updated_at))}${run.message?' · '+esc(run.message):''}</p>`:''}
+   ${attention(run)||['starting','queued'].includes(run?.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}
+   ${pr.history?.length?renderHistory(pr):''}
+  </details>
  </article>`;
 }
 function renderQueue(force=false){
@@ -39,29 +41,32 @@ function renderQueue(force=false){
  const count=prs.filter(pr=>pr.workflow.bucket!=='history').length;
  $('my-reviews-tab').querySelector('.count').textContent=count;
  const refresh=state.queue_refresh||{};
- $('queue-refresh').disabled=refresh.status==='running';$('queue-recover').disabled=refresh.status==='running';
- $('queue-freshness').textContent=refresh.status==='running'?'Checking saved PRs on GitHub…':'Saved PRs are checked every five minutes while the dashboard is visible.';
+ $('queue-recover').disabled=refresh.status==='running';
  $('queue-error').hidden=refresh.status!=='failed';$('queue-error').textContent=refresh.message||'';
  const signature=JSON.stringify([prs,state.queue_candidates,[...queueBusy],Math.floor(Date.now()/60000)]);
  if(!force&&signature===queueSignature)return;queueSignature=signature;
+ const restoreFocus=rememberCardFocus($('queue-view'));
  const open=new Map([...$('queue-view').querySelectorAll('.queue-card')].map(el=>[el.dataset.queuePr,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
  const focused=document.activeElement;const focusUrl=focused?.dataset?.url, focusAction=focused?.dataset?.queueAction;
  const compare=(a,b)=>a.workflow.position-b.workflow.position||a.url.localeCompare(b.url);
  const sections=[['attention','Needs another look','Updates and replies since your last check.'],['up_next','Up next','PRs you chose to review next.'],['reviewing','Reviewing','Reviews you have started.'],['waiting','Waiting','Kept here until something needs another look.']];
  $('queue-list').innerHTML=sections.map(([key,title,description])=>{
   const group=prs.filter(pr=>pr.workflow.bucket===key).sort(compare);
-  return `<section class="queue-section" aria-label="${title}"><div class="list-heading"><div><h3>${title} <span class="count">${group.length}</span></h3><p class="muted">${description}</p></div></div>${group.map(queueCard).join('')||'<p class="queue-empty muted">Nothing here right now.</p>'}</section>`;
+  if(!group.length)return `<details class="queue-section queue-empty-group"><summary>${title} <span class="count">0</span></summary><p class="muted">Nothing here right now.</p></details>`;
+  return `<section class="queue-section" aria-label="${title}"><div class="list-heading"><div><h3>${title} <span class="count">${group.length}</span></h3></div></div>${group.map(queueCard).join('')||'<p class="queue-empty muted">Nothing here right now.</p>'}</section>`;
  }).join('');
  const history=prs.filter(pr=>pr.workflow.bucket==='history').sort(compare);
  $('queue-history-count').textContent='('+history.length+')';$('queue-history-list').innerHTML=history.map(queueCard).join('')||'<p class="muted">Completed and removed reviews will appear here.</p>';
  $('queue-candidates').innerHTML=(state.queue_candidates||[]).map(pr=>`<div class="queue-candidate"><div><a target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><p class="muted">${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</p></div>${queueButton(pr,'recover','Follow this review')}</div>`).join('')||'<p class="muted">No unsaved reviews found in the local history. Search GitHub for earlier participation.</p>';
  for(const el of $('queue-view').querySelectorAll('.queue-card'))for(const d of el.querySelectorAll('details'))if(open.get(el.dataset.queuePr)?.includes(d.className))d.open=true;
+ restoreFocus();
  if(focusUrl&&focusAction){const replacement=[...$('queue-view').querySelectorAll('[data-queue-action]')].find(b=>b.dataset.url===focusUrl&&b.dataset.queueAction===focusAction);replacement?.focus({preventScroll:true});}
 }
 function showQueue(value){
  queueActive=value;$('queue-view').hidden=!value;$('my-reviews-tab').setAttribute('aria-pressed',value);
  if(value){showReporting(false);$('inbox-content').hidden=true;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));$('reporting-tab').setAttribute('aria-pressed','false');document.querySelector('.skip').textContent='Skip to my reviews';document.querySelector('.skip').href='#queue-view';renderQueue();}
  else $('inbox-content').hidden=reportingActive;
+ renderWorkspaceNavigation();
  try{localStorage.setItem('pr-personal-view',value?'queue':'inbox');}catch{}
 }
 function findQueuePr(url){return state?.prs.find(pr=>pr.url===url);}
@@ -90,7 +95,7 @@ $('my-reviews-tab').addEventListener('click',()=>showQueue(true));
 $('reporting-tab').addEventListener('click',()=>showQueue(false));
 $('queue-add').addEventListener('submit',async event=>{
  event.preventDefault();const input=event.target.elements.url;const button=event.target.querySelector('button');button.disabled=true;
- try{await queueAction(input.value.trim(),'enqueue');input.value='';}catch(error){notify(error.message);}finally{button.disabled=false;}
+ try{await queueAction(input.value.trim(),'enqueue');input.value='';$('queue-add-dialog').close();}catch(error){notify(error.message);}finally{button.disabled=false;}
 });
 $('queue-note-cancel').addEventListener('click',()=>$('queue-note-dialog').close());
 $('queue-note-form').addEventListener('submit',async event=>{
@@ -102,7 +107,6 @@ $('queue-note-form').addEventListener('submit',async event=>{
 async function refreshQueue(force=false,recovery=false){
  try{await post(recovery?'/recover-reviews':'/refresh-queue',{force});queueAutoAt=Date.now();await loadState();}catch(error){notify(error.message);}
 }
-$('queue-refresh').addEventListener('click',()=>refreshQueue(true));
 $('queue-recover').addEventListener('click',()=>refreshQueue(true,true));
 function queueAutoRefresh(){
  if(document.hidden||!state)return;

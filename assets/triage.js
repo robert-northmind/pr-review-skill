@@ -6,15 +6,29 @@ function compareTriage(a,b){
  const rank={quick:0,moderate:1,involved:2,uncertain:3};
  return rank[triageEffort(a)]-rank[triageEffort(b)]||(a.pr_created_at||'9999').localeCompare(b.pr_created_at||'9999')||a.url.localeCompare(b.url);
 }
+function triageBadge(pr){
+ const t=pr.triage,done=t?.status==='completed';
+ const label=done?effortLabels[t.effort]:({running:'Estimating…',failed:'Unavailable',stale:'Outdated'}[t?.status]||'Not estimated');
+ return `<span class="effort-badge"><span class="effort-label">Effort</span> ${esc(label)}</span>${t?.outdated?'<span class="chip warn">Estimate outdated</span>':''}`;
+}
 function triageCard(pr){
  const t=pr.triage;if(!t)return '';
- const action=t.can_reestimate?`<button type="button" class="button subtle" data-triage-reestimate data-estimate-id="${esc(t.id||'')}" data-url="${esc(pr.url)}" ${triageRunDisabled({...state.triage,counts:{waiting:1}})?'disabled':''}>${t.status==='completed'?'Re-estimate':'Estimate effort'}</button>`:'';
- if(t.status==='not_estimated')return action?`<section class="triage-summary" aria-label="Estimated review effort">${action}${pr.is_draft?' <span class="muted">Draft — estimated only on request.</span>':''}</section>`:'';
- const done=t.status==='completed',effort=triageEffort(pr);
- const label=done?effortLabels[effort]:({running:'Estimating…',stale:'Estimate outdated',failed:'Estimate unavailable'}[t.status]||'Uncertain');
- const reestimate=action;
- const detail=[...(t.attention||[]),...(t.missing_context||[])];
- return `<section class="triage-summary" aria-label="Estimated review effort"><div class="triage-line"><span class="effort-badge effort-${effort}">${esc(label)}</span>${t.outdated?'<span class="effort-badge effort-uncertain">Outdated</span>':''}${reestimate}<span>${esc(t.reason||'Reading the PR diff to estimate review effort.')}</span></div>${t.outdated?'<p class="muted triage-context">The PR or triage settings changed since this estimate. It is kept until you choose Re-estimate.</p>':''}${t.rerun_status?`<p class="muted triage-context">${t.rerun_status==='running'&&state.triage.status?.state==='running'&&state.triage.status?.current_url===pr.url?'Re-estimating… Previous estimate shown.':'Re-estimate did not finish. Previous estimate kept; choose Re-estimate to retry.'}</p>`:''}${done&&detail.length?`<p class="muted triage-context">${detail.map(esc).join(' · ')}</p>`:''}${done?`<details class="triage-details"><summary>About this estimate</summary><p class="muted">Initial estimate, not an approval. ${esc(t.provider)} · ${esc(t.model)} · ${esc(when(t.finished_at))} · commit ${esc(t.head_sha?.slice(0,12))}</p><p class="muted">After your normal review, did the effort feel about right?</p><div class="triage-feedback" role="group" aria-label="Rate review effort estimate">${[['about_right','About right'],['too_low','Took more effort'],['too_high','Took less effort']].map(([rating,text])=>`<button type="button" class="button subtle" data-triage-rating="${rating}" data-estimate-id="${esc(t.id)}" data-url="${esc(pr.url)}" ${t.outdated||t.rerun_status?'disabled':''} aria-pressed="${t.feedback?.rating===rating}">${text}</button>`).join('')}</div></details>`:''}</section>`;
+ const done=t.status==='completed';
+ const action=t.can_reestimate?`<button type="button" class="button subtle" data-triage-reestimate data-estimate-id="${esc(t.id||'')}" data-url="${esc(pr.url)}" ${triageRunDisabled({...state.triage,counts:{waiting:1}})?'disabled':''}>${done?'Re-estimate':'Estimate effort'}</button>`:'';
+ const context=[...(t.attention||[]),...(t.missing_context||[])];
+ const rerun=t.rerun_status?(t.rerun_status==='running'&&state.triage.status?.state==='running'&&state.triage.status?.current_url===pr.url?'Re-estimating… Previous estimate shown.':'Re-estimate did not finish. Previous estimate kept; retry from Estimate details.'):'';
+ return `<section class="triage-summary" aria-label="Estimated review effort">
+ ${t.reason?`<p class="triage-reason muted">${esc(t.reason)}</p>`:''}
+ ${rerun?`<p class="triage-rerun muted">${esc(rerun)}</p>`:''}
+ <details class="triage-details"><summary>Estimate details</summary>
+ ${t.reason?`<p>${esc(t.reason)}</p>`:''}
+ ${pr.is_draft?'<p class="muted">Draft — estimated only on request.</p>':''}
+ ${t.outdated?'<p class="muted">This estimate covers an older PR revision or different settings. Re-estimate to update it.</p>':''}
+ ${context.length?`<ul class="triage-context">${context.map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`:''}
+ ${done?`<p class="muted">Initial estimate, not an approval. ${esc(t.provider)} · ${esc(t.model)} · ${esc(when(t.finished_at))} · commit ${esc(t.head_sha?.slice(0,12))}</p>`:''}
+ <div class="action-bar">${action}</div>
+ ${done?`<p class="muted">After your review, did the effort feel about right?</p><div class="triage-feedback" role="group" aria-label="Rate review effort estimate">${[['about_right','About right'],['too_low','Took more effort'],['too_high','Took less effort']].map(([rating,text])=>`<button type="button" class="button subtle" data-triage-rating="${rating}" data-estimate-id="${esc(t.id)}" data-url="${esc(pr.url)}" ${t.outdated||t.rerun_status?'disabled':''} aria-pressed="${t.feedback?.rating===rating}">${text}</button>`).join('')}</div>`:''}
+ </details></section>`;
 }
 let triageDirty=false,triageConfigSignature='',triageStarting=false;
 function renderTriageSettings(){
@@ -81,10 +95,10 @@ document.addEventListener('DOMContentLoaded',()=>{
  $('triage-form').addEventListener('submit',async event=>{
   event.preventDefault();try{
    await post('/triage-config',{enabled:$('triage-enabled').value==='true',provider:$('triage-provider').value,model:$('triage-model').value.trim(),daily_limit:Number($('triage-limit').value)});
-   triageDirty=false;triageConfigSignature='';$('triage-save-state').textContent='Saved';await loadState();notify('Triage settings saved. Refresh GitHub to estimate new PRs. Existing estimates are kept until you choose Re-estimate.');
+   triageDirty=false;triageConfigSignature='';$('triage-save-state').textContent='Saved';await loadState();notify('Triage settings saved. Sync GitHub to estimate new PRs. Existing estimates are kept until you choose Re-estimate.');
   }catch(error){notify(error.message);}
  });
- $('triage-details-show').addEventListener('click',()=>{$('settings').open=true;$('triage-settings-heading').focus();$('triage-form').scrollIntoView({block:'nearest'});});
+ $('triage-details-show').addEventListener('click',()=>{showDialog('activity-dialog');$('triage-progress-title').focus();});
  for(const id of ['triage-run','triage-progress-run'])$(id).addEventListener('click',()=>startTriageBatch());
  document.addEventListener('click',async event=>{
   const rerun=event.target.closest('[data-triage-reestimate]');

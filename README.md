@@ -37,7 +37,7 @@ to see which PRs you reviewed and which of your own PRs were merged.
 ![Reporting in dark mode with fictional review and merge activity](docs/screenshots/reporting-dark.jpg)
 
 All screenshots use fictional PRs, people, repositories, and activity, with
-synthetic avatars. They were captured from the current dashboard and report
+synthetic avatars. They were captured from the dashboard and report
 renderer on September 15, 2026, using an isolated demo with mocked data.
 See [screenshot provenance](docs/screenshots/README.md).
 
@@ -49,7 +49,7 @@ See [screenshot provenance](docs/screenshots/README.md).
 - **Estimate effort:** optional background AI estimates show Quick, Moderate,
   Involved, or Uncertain with a short explanation. Filter for quick reviews or
   sort by effort, and rate estimates after your normal reviews. A compact
-  indicator appears while estimating and hides when finished. Settings keeps
+  indicator appears while estimating and hides when finished. AI activity keeps
   detailed progress and daily usage; failures and blocked work remain visible.
 - **Follow up:** save PRs in My reviews, keep private notes, and see new commits
   and replies that need another look.
@@ -68,7 +68,10 @@ See [screenshot provenance](docs/screenshots/README.md).
   and a short list of yesterday's work. A PR counts once per day or week.
   AI runs, draft reviews, and ordinary PR comments do not count as submitted
   GitHub reviews.
-- **Theme:** choose light, dark, or your system preference.
+- **Sync:** one Sync GitHub action updates discovery, saved reviews and reporting.
+  Open the sync status for source timestamps and any failures. Cached results stay available.
+- **Settings:** review agents, effort estimates, watched repositories and appearance
+  are available from every view. Choose light, dark, or your system theme.
 
 ## Requirements and current scope
 
@@ -82,8 +85,8 @@ See [screenshot provenance](docs/screenshots/README.md).
   `--approve-for-me`.
 
 Background effort estimates use the optional Python dependencies in
-`requirements-triage.txt`. Install them into `.venv`, then configure Initial
-effort estimates in Settings. Codex Python SDK uses your existing login;
+`requirements-triage.txt`. Install them into `.venv`, then configure
+Settings → Effort estimates. Codex Python SDK uses your existing login;
 OpenAI API uses `OPENAI_API_KEY` from the server environment and separate billing.
 Initial estimates run after GitHub refresh or Estimate all waiting, continuing
 through eligible inbox and active My reviews PRs until caught up or the daily
@@ -134,7 +137,7 @@ Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
 Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
 `python3 scripts/pr_server.py --port 8766` and open that port instead.
 
-In **Settings**, add watched repositories as `owner/repository`, then refresh
+In **Settings**, add watched repositories as `owner/repository`, then select Sync GitHub
 GitHub. Choose the agent used for reviews; blank model and effort fields use
 its CLI defaults. Model and effort are saved separately for each agent.
 These settings select the lead session. The lead chooses reviewer subagent

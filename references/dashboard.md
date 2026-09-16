@@ -12,16 +12,34 @@ reads local tracker state through `/api/state`, including newly registered
 artifacts. Saved personal reviews are refreshed on opening/refocusing the page
 and every five minutes while it is visible; no retention cleanup runs on page load.
 
+## Workspace navigation
+
+My reviews, Inbox, Your PRs and Reporting are the main views. Inbox groups
+Requested, Watching, Snoozed and Hidden. Filters opens a drawer; active filters
+remain visible above the cards. Cards keep author avatars, usernames and effort
+badges visible. The primary action advances the personal review workflow; AI
+notes and the action menu sit together on the right (below the title on mobile).
+
+Settings is a persistent drawer with Review agent, Effort estimates, Repositories
+and Appearance sections. AI activity contains running reviews and estimate progress.
+
+**Sync GitHub** updates inbox discovery, saved reviews and reporting history.
+Open the adjacent sync status for each source's last successful update and errors.
+Sources can fail independently; cached data remains available. Sync does not rerun
+completed AI reviews or estimates. Enabled initial estimates can start after discovery.
+The page polls cached state and reporting every five seconds; polling does not fetch
+GitHub history or run models. Existing automatic saved-review checks still apply.
+
 ## Triage and freshness
 
 Requested from you includes direct reviewer requests and assignments.
 Watching includes open PRs from watched repositories. Your PRs includes
 Robert's authored PRs. Hidden PRs can be restored. Filters are saved in the
 browser, independently from the registry. Legacy star filters are ignored.
-Cards show a prominent repository and PR number, plus the age since GitHub
+Cards emphasize the PR title with repository and PR number above it, plus age since GitHub
 creation alongside recent activity. Missing opening dates show “Age unknown”
 until a GitHub refresh; first-seen time is never used as PR age.
-Review actions expand below their disclosure, keeping it in the same position.
+Secondary actions appear in a grouped menu beside each card’s primary action.
 
 GitHub participation distinguishes comments, approvals, requested changes,
 and dismissed reviews. It is not inferred from an AI run finishing. Legacy
@@ -235,11 +253,11 @@ live tracker.
 
 The Reporting view shows submitted GitHub reviews of other authors' PRs and merged PRs authored by the authenticated user. It covers four complete Monday–Sunday weeks plus the current week. Days use Europe/Berlin, including daylight-saving transitions. Repeated reviews count once per PR per displayed day or week; daily counts need not sum to weekly distinct-PR totals. Comment-only submitted reviews count; pending reviews, ordinary comments and AI runs do not. Merge activity uses mergedAt, regardless of who merged the PR.
 
-`dashboard_reporting.py` fetches history read-only through the existing GitHub CLI, paginates searches and review histories, and writes a complete snapshot to `reporting.json` under the tracker root. Search updatedAt is only a candidate-discovery bound; review dates come from submittedAt. An incomplete/failed fetch keeps the previous cache. A search exceeding GitHub's 1,000-result cap is reported as an error rather than silently truncated. History refresh is on demand via the authenticated `/refresh-reporting` action; `/api/reporting` reads cached data. Loading Reporting does not run AI reviews. Missing days in an old snapshot are not rendered as zero activity.
+`dashboard_reporting.py` fetches history read-only through the existing GitHub CLI, paginates searches and review histories, and writes a complete snapshot to `reporting.json` under the tracker root. Search updatedAt is only a candidate-discovery bound; review dates come from submittedAt. An incomplete/failed fetch keeps the previous cache. A search exceeding GitHub's 1,000-result cap is reported as an error rather than silently truncated. Sync GitHub starts history refresh via the authenticated `/refresh-reporting` action; `/api/reporting` reads cached data. Loading Reporting does not run AI reviews. Missing days in an old snapshot are not rendered as zero activity.
 
 Reporting has independent repository include/exclude selections. Inbox hiding, authors, statuses and repository filters do not change Reporting totals. Current-week data is marked in progress; comparisons use completed weeks. Click a chart period for linked PR titles, or Yesterday for the daily recap.
 
-Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes` and `node test_reporting.cjs` from `scripts/`. Browser checks cover chart drill-down, repository filtering, refresh, and responsive layout.
+Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes` and `node test_reporting.cjs` and `node test_workspace.cjs` from `scripts/`. Browser checks cover chart drill-down, repository filtering, refresh, and responsive layout.
 
 ## Initial review effort
 
@@ -248,7 +266,7 @@ severity and the human review queue. Cards show **Quick**, **Moderate**,
 **Involved**, or **Uncertain**, plus a short reason and context notes. These
 estimate reading effort, not correctness or readiness to approve. Use the
 Review effort filter or sort; the saved order in My reviews stays unchanged.
-About this estimate contains provider/revision details and optional feedback:
+Estimate details contains provider/revision details and optional feedback:
 About right, Took more effort, or Took less effort. Rate a handful of PRs after
 normal reviews; a separate manual evaluation exercise is unnecessary.
 
@@ -257,9 +275,9 @@ showing a spinner and processed PR count across inbox, My reviews and Reporting.
 It disappears after successful completion. With automatic estimates enabled,
 failures and interruptions remain as small notices; the daily-limit notice is
 shown only when estimates are waiting. Retry estimates appears when work can
-actually be retried. Details opens Settings at Initial effort estimates.
+actually be retried. Details opens AI activity at the effort estimate progress.
 
-Settings retains the current PR and stage, progress bar, estimated/waiting totals,
+AI activity retains the current PR and stage, progress bar, estimated/waiting totals,
 UTC daily usage, last-run summary, failure details, and Estimate all waiting.
 Counts cover eligible inbox and active My reviews PRs and ignore browser filters.
 Uncertain counts as a completed assessment, not unfinished work. Duplicate starts
@@ -273,7 +291,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-triage.txt
 ```
 
-Settings → Initial effort estimates selects Codex Python SDK or OpenAI API,
+Settings → Effort estimates selects Codex Python SDK or OpenAI API,
 a model ID, automatic operation and a daily call limit. The shipped default is
 off; enabling it authorizes sending bounded PR descriptions and patches to the
 selected provider. Codex reuses the existing local login and runs through its
@@ -383,3 +401,7 @@ by default; PR_REVIEW_PLAYWRIGHT_MODULE and PR_REVIEW_BROWSER_CHANNEL override
 those runtime choices. `evaluate_triage.py --output /tmp/triage-evaluation.json`
 explicitly runs six small synthetic model examples. This uses provider quota;
 it checks rubric behavior, not calibrated review times or broad model accuracy.
+
+For an isolated UI session, run `python3 scripts/workspace_browser_fixture.py`
+from the skill directory. Add `--report-failure` to exercise partial sync failures.
+The fixture uses disposable state and blocks GitHub, provider and terminal work.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="__CSRF_TOKEN__">
-<title>PR inbox</title>
+<title>PR reviews</title>
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/dashboard.css">
 <script src="/assets/triage.js" defer></script>
@@ -16,62 +16,128 @@
 <a class="skip" href="#pr-list">Skip to pull requests</a>
 <main>
 <header class="page-header">
-  <div><p class="eyebrow">REVIEW WORKSPACE</p><h1>PR inbox<span class="brand-dot" aria-hidden="true"></span></h1><p class="intro">Your requests, your watchlist, and the work behind each review.</p></div>
-  <div class="header-actions"><label class="theme-control">Theme<select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-  <div class="sync-controls"><button id="refresh" class="button">↻ <span>Refresh GitHub</span></button><p id="freshness" class="muted">Checking saved state…</p></div></div>
+  <h1>PR reviews</h1>
+  <div class="header-actions">
+    <button id="freshness" class="text-button" data-dialog="sync-dialog" aria-label="GitHub sync status">Checking saved state…</button>
+    <button id="refresh" class="button">↻ <span>Sync GitHub</span></button>
+    <button id="activity-show" class="button subtle" data-dialog="activity-dialog">AI activity <span id="active-runs"></span></button>
+    <button id="settings-show" class="button subtle" data-dialog="settings">Settings</button>
+  </div>
 </header>
 <div id="connection" class="notice" role="status" hidden></div>
 <div id="warnings" class="notice warning" hidden></div>
-<section class="workspace-controls" aria-label="Review settings">
-  <div class="settings-summary"><span class="status-dot" aria-hidden="true"></span><span id="effective-agent">Loading review settings…</span><span id="active-runs" class="muted"></span></div>
-  <details id="settings"><summary>Settings</summary>
-    <div class="settings-content">
-      <form id="agent-form">
-        <h2>Review agent</h2><p class="muted">Used when you start a review. Model and effort are remembered for each agent.</p>
-        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code</option><option value="codex">Codex CLI</option></select></label>
-        <label>Model<input id="model" name="model" list="model-options" placeholder="CLI default" autocomplete="off"><datalist id="model-options"></datalist></label>
-        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="CLI default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
-        <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
-      </form>
-      <form id="triage-form" class="triage-settings">
-        <h2 id="triage-settings-heading" tabindex="-1">Initial effort estimates</h2><p class="muted">Estimate ready PRs after GitHub refresh. Uses the selected AI provider; your review queue stays in your chosen order.</p>
-        <div class="fields"><label>Automatic estimates<select id="triage-enabled"><option value="false">Off</option><option value="true">After GitHub refresh</option></select></label>
-        <label>Provider<select id="triage-provider"><option value="codex">Codex Python SDK</option><option value="openai">OpenAI API</option></select></label>
-        <label>Model<input id="triage-model" required autocomplete="off" placeholder="Model ID"></label>
-        <label>Daily call limit<input id="triage-limit" type="number" min="1" max="100" required></label></div>
-        <p class="muted">Codex uses your existing login. OpenAI API uses OPENAI_API_KEY in the server environment and separate API billing. PR descriptions and diffs are sent to the selected provider.</p>
-        <div class="form-footer"><button class="button" type="submit">Save triage settings</button><button class="button" id="triage-run" type="button">Estimate all waiting</button><span id="triage-save-state" class="muted" role="status"></span></div>
-        <p id="triage-status" class="muted"></p>
-        <section id="triage-progress" class="triage-progress" aria-label="Review effort details">
-          <strong id="triage-progress-title"></strong>
-          <p id="triage-progress-current" class="muted"></p>
-          <progress id="triage-progress-bar" aria-label="PRs processed in this run" hidden></progress>
-          <p id="triage-progress-counts" class="muted"></p>
-          <p id="triage-progress-message" class="muted" hidden></p>
-        </section>
-      </form>
-      <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
-        <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
-      </section>
-    </div>
-  </details>
-</section>
 <section id="triage-activity" class="triage-activity" aria-label="Review effort activity" hidden>
   <div class="triage-activity-text"><span id="triage-spinner" class="triage-spinner" aria-hidden="true" hidden></span><span id="triage-activity-title" role="status" aria-live="polite"></span></div>
   <div class="triage-activity-actions"><button id="triage-progress-run" class="text-button" type="button" hidden>Retry estimates</button><button id="triage-details-show" class="text-button" type="button" aria-label="Triage details">Details</button></div>
   <p id="triage-activity-message" class="muted" hidden></p>
 </section>
-<nav id="views" class="views" aria-label="Inbox views">
+<nav id="views" class="views" aria-label="Workspace views">
 <button id="my-reviews-tab" aria-pressed="false">My reviews <span class="count">0</span></button>
-<button data-view="requested" aria-pressed="true">Requested from you <span class="count">0</span></button>
-<button data-view="watching" aria-pressed="false">Watching <span class="count">0</span></button>
+<button id="inbox-tab" aria-pressed="true">Inbox</button>
 <button data-view="mine" aria-pressed="false">Your PRs <span class="count">0</span></button>
-<button data-view="snoozed" aria-pressed="false">Snoozed <span class="count">0</span></button>
-<button data-view="hidden" aria-pressed="false">Hidden <span class="count">0</span></button>
 <button id="reporting-tab" aria-pressed="false">Reporting</button>
 </nav>
 <div id="inbox-content">
-<section class="filters" aria-label="Filter pull requests">
+<div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><span id="result-count" class="muted" aria-live="polite"></span></div><button class="button" id="filters-show" data-dialog="filters-dialog">Filters <span id="filter-count"></span></button></div>
+<nav id="inbox-sources" class="inbox-sources" aria-label="Inbox sources">
+<button data-view="requested" aria-pressed="true">Requested <span class="count">0</span></button>
+<button data-view="watching" aria-pressed="false">Watching <span class="count">0</span></button>
+<button data-view="snoozed" aria-pressed="false">Snoozed <span class="count">0</span></button>
+<button data-view="hidden" aria-pressed="false">Hidden <span class="count">0</span></button>
+</nav>
+<p id="view-description" class="muted view-description"></p>
+<div id="active-filters" class="active-filters" hidden><span id="active-filter-description"></span><button class="text-button" data-clear>Clear filters</button></div>
+
+
+<section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>
+</div>
+<section id="queue-view" aria-label="My reviews" hidden>
+<div class="queue-heading"><h2>My reviews</h2><button class="button" data-dialog="queue-add-dialog">Add PR</button></div>
+
+
+<p id="queue-error" class="notice warning" role="status" hidden></p>
+<div id="queue-list"></div>
+<details id="queue-history"><summary>History <span id="queue-history-count"></span></summary><div id="queue-history-list"></div></details>
+<details id="queue-recovery"><summary>Find reviews you already started</summary><p class="muted">Choose PRs from your GitHub participation or local review runs to follow. Nothing is added automatically.</p><button id="queue-recover" class="button">Find on GitHub</button><div id="queue-candidates"></div></details>
+</section>
+<dialog id="queue-note-dialog"><form id="queue-note-form"><h2>Private review note</h2><p id="queue-note-title" class="muted"></p><label>Where you stopped or what to check next<textarea id="queue-note" rows="5" maxlength="4000"></textarea></label><p id="queue-note-error" class="notice warning" role="alert" hidden></p><div class="action-bar"><button class="button primary" type="submit">Save note</button><button class="button" type="button" id="queue-note-cancel">Cancel</button></div></form></dialog>
+<section id="reporting-view" aria-label="Reporting" hidden>
+<div class="report-header"><h2>Reporting</h2><span class="muted">Europe/Berlin</span></div>
+<p id="report-freshness" class="muted" role="status"></p>
+<p id="report-error" class="notice warning" role="status" hidden></p>
+<div class="report-toolbar">
+<details id="reportrepository-picker" class="filter-picker">
+<summary id="reportrepository-summary">All report repositories</summary>
+<section class="filter-panel" aria-label="Choose reporting repositories">
+<div class="filter-panel-heading"><strong>Repositories</strong><button class="text-button" type="button" id="reportrepository-done">Done</button></div>
+<p class="muted">Show PRs from any selected repository, or leave “Show only” empty for all repositories. Exclusions always take priority.</p>
+<label class="sr-only" for="reportrepository-search">Search repositories</label><input id="reportrepository-search" type="search" placeholder="Find a repository" autocomplete="off">
+<div class="filter-shortcuts"><button type="button" class="text-button" id="reportrepository-clear">Reset repositories</button></div>
+<div id="reportrepository-options" class="filter-options"></div>
+<p id="reportrepository-selection" class="muted" aria-live="polite"></p>
+</section></details>
+<div class="report-modes" role="group" aria-label="Chart interval"><button class="button" id="report-daily" aria-pressed="true">Daily</button><button class="button" id="report-weekly" aria-pressed="false">Weekly</button></div>
+<button class="button" id="report-yesterday">Yesterday</button></div>
+<div id="report-content"></div>
+<details class="report-rules"><summary>How counts work</summary><p class="muted">A PR counts once per day or week, even if you review it again. Weekly totals count distinct PRs, so they can be lower than the sum of the days. Submitted GitHub reviews include comment-only reviews; draft reviews, ordinary comments and AI runs are excluded. Hidden inbox PRs still count here. History covers repositories your GitHub login can access.</p></details>
+</section>
+<footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
+</main>
+
+<dialog id="settings" class="workspace-dialog" aria-labelledby="settings-heading">
+  <div class="dialog-heading"><h2 id="settings-heading">Settings</h2><button class="button subtle" data-close-dialog>Close</button></div>
+  <nav class="settings-tabs" aria-label="Settings sections">
+    <button class="button" data-settings-panel="agent-settings" aria-pressed="true">Review agent</button>
+    <button class="button" data-settings-panel="estimate-settings" aria-pressed="false">Effort estimates</button>
+    <button class="button" data-settings-panel="repository-settings" aria-pressed="false">Repositories</button>
+    <button class="button" data-settings-panel="appearance-settings" aria-pressed="false">Appearance</button>
+  </nav>
+  <section id="agent-settings" data-settings-section>      <form id="agent-form">
+        <h2>Review agent</h2><p class="muted">Used when you start a review. Model and effort are remembered for each agent.</p>
+        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code</option><option value="codex">Codex CLI</option></select></label>
+        <label>Model<input id="model" name="model" list="model-options" placeholder="CLI default" autocomplete="off"><datalist id="model-options"></datalist></label>
+        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="CLI default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
+        <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
+      </form></section>
+  <section id="estimate-settings" data-settings-section hidden>      <form id="triage-form" class="triage-settings">
+        <h2 id="triage-settings-heading" tabindex="-1">Effort estimates</h2><p class="muted">Estimate ready PRs after GitHub sync. Uses the selected AI provider; your review queue stays in your chosen order.</p>
+        <div class="fields"><label>Automatic estimates<select id="triage-enabled"><option value="false">Off</option><option value="true">After GitHub sync</option></select></label>
+        <label>Provider<select id="triage-provider"><option value="codex">Codex Python SDK</option><option value="openai">OpenAI API</option></select></label>
+        <label>Model<input id="triage-model" required autocomplete="off" placeholder="Model ID"></label>
+        <label>Daily call limit<input id="triage-limit" type="number" min="1" max="100" required></label></div>
+        <p class="muted">Codex uses your existing login. OpenAI API uses OPENAI_API_KEY in the server environment and separate API billing. PR descriptions and diffs are sent to the selected provider.</p>
+        <div class="form-footer"><button class="button" type="submit">Save triage settings</button><span id="triage-save-state" class="muted" role="status"></span></div>
+
+
+      </form></section>
+  <section id="repository-settings" data-settings-section hidden>      <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
+        <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
+      </section></section>
+  <section id="appearance-settings" data-settings-section hidden><h2>Appearance</h2><label class="theme-control">Theme<select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></section>
+</dialog>
+<dialog id="activity-dialog" class="workspace-dialog" aria-labelledby="activity-heading">
+  <div class="dialog-heading"><h2 id="activity-heading">AI activity</h2><button class="button subtle" data-close-dialog>Close</button></div>
+  <p id="effective-agent" class="muted"></p><div id="active-run-list"></div>
+          <section id="triage-progress" class="triage-progress" aria-label="Review effort details">
+          <strong id="triage-progress-title" tabindex="-1"></strong>
+          <p id="triage-progress-current" class="muted"></p>
+          <progress id="triage-progress-bar" aria-label="PRs processed in this run" hidden></progress>
+          <p id="triage-progress-counts" class="muted"></p>
+          <p id="triage-progress-message" class="muted" hidden></p>
+        </section>
+  <div class="action-bar"><button class="button" id="triage-run" type="button">Estimate all waiting</button><button class="text-button" data-settings-panel="estimate-settings">Estimate settings</button></div>
+  <p id="triage-status" class="muted"></p>
+</dialog>
+<dialog id="sync-dialog" class="workspace-dialog" aria-labelledby="sync-heading">
+  <div class="dialog-heading"><h2 id="sync-heading">GitHub sync</h2><button class="button subtle" data-close-dialog>Close</button></div>
+  <dl id="sync-sources" class="sync-sources"></dl>
+  <p class="muted">Saved reviews are also checked every five minutes while the dashboard is visible.</p>
+  <p id="sync-estimates" class="muted"></p>
+  <p class="muted">AI notes keep their reviewed commit. Run another AI review to cover new commits.</p>
+</dialog>
+<dialog id="filters-dialog" class="workspace-dialog" aria-labelledby="filters-heading">
+  <div class="dialog-heading"><h2 id="filters-heading">Inbox filters</h2><button class="button subtle" data-close-dialog>Done</button></div>
+  <section class="filters" aria-label="Filter pull requests">
 <label class="search-field"><span class="sr-only">Search pull requests</span><input id="search" type="search" placeholder="Search title, repository, author, or #number" autocomplete="off"></label>
 <details id="repository-picker" class="filter-picker">
 <summary id="repository-summary">All repositories</summary>
@@ -105,41 +171,11 @@
 </section></details>
 <div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label>Review effort<select id="triage-filter"><option value="all">Any effort</option><option value="quick">Quick reviews</option><option value="moderate">Moderate</option><option value="involved">Involved</option><option value="uncertain">Uncertain / unavailable</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="effort">Review effort</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
 </section>
-<div class="list-heading"><div><h2 id="view-heading">Requested from you</h2><p id="view-description" class="muted">PRs assigned to you or requesting your review.</p></div><span id="result-count" class="muted" aria-live="polite"></span></div>
-<section id="pr-list" aria-label="Pull requests" tabindex="-1"><div class="empty"><h3>Loading your inbox…</h3><p class="muted">Reading saved PRs and local review results.</p></div></section>
-</div>
-<section id="queue-view" aria-label="My reviews" hidden>
-<div class="queue-heading"><div><h2>My reviews</h2><p class="muted">Your saved reviews across all repositories. Inbox filters do not hide items here.</p></div><button class="button" id="queue-refresh">Check for updates</button></div>
-<p class="muted" id="queue-freshness" role="status"></p>
-<form id="queue-add" class="queue-add"><label>Save a PR link<input name="url" type="url" placeholder="https://github.com/owner/repo/pull/123" required></label><button class="button primary" type="submit">Add to Up next</button></form>
-<p id="queue-error" class="notice warning" role="status" hidden></p>
-<div id="queue-list"></div>
-<details id="queue-history"><summary>History <span id="queue-history-count"></span></summary><div id="queue-history-list"></div></details>
-<details id="queue-recovery"><summary>Find reviews you already started</summary><p class="muted">Choose PRs from your GitHub participation or local review runs to follow. Nothing is added automatically.</p><button id="queue-recover" class="button">Find on GitHub</button><div id="queue-candidates"></div></details>
-</section>
-<dialog id="queue-note-dialog"><form id="queue-note-form"><h2>Private review note</h2><p id="queue-note-title" class="muted"></p><label>Where you stopped or what to check next<textarea id="queue-note" rows="5" maxlength="4000"></textarea></label><p id="queue-note-error" class="notice warning" role="alert" hidden></p><div class="action-bar"><button class="button primary" type="submit">Save note</button><button class="button" type="button" id="queue-note-cancel">Cancel</button></div></form></dialog>
-<section id="reporting-view" aria-label="Reporting" hidden>
-<div class="report-header"><div><h2>Reporting</h2><p class="muted">Your GitHub reviews and your merged PRs. Days use Europe/Berlin time.</p></div><button id="report-refresh" class="button">Refresh history</button></div>
-<p id="report-freshness" class="muted" role="status"></p>
-<p id="report-error" class="notice warning" role="status" hidden></p>
-<div class="report-toolbar">
-<details id="reportrepository-picker" class="filter-picker">
-<summary id="reportrepository-summary">All report repositories</summary>
-<section class="filter-panel" aria-label="Choose reporting repositories">
-<div class="filter-panel-heading"><strong>Repositories</strong><button class="text-button" type="button" id="reportrepository-done">Done</button></div>
-<p class="muted">Show PRs from any selected repository, or leave “Show only” empty for all repositories. Exclusions always take priority.</p>
-<label class="sr-only" for="reportrepository-search">Search repositories</label><input id="reportrepository-search" type="search" placeholder="Find a repository" autocomplete="off">
-<div class="filter-shortcuts"><button type="button" class="text-button" id="reportrepository-clear">Reset repositories</button></div>
-<div id="reportrepository-options" class="filter-options"></div>
-<p id="reportrepository-selection" class="muted" aria-live="polite"></p>
-</section></details>
-<div class="report-modes" role="group" aria-label="Chart interval"><button class="button" id="report-daily" aria-pressed="true">Daily</button><button class="button" id="report-weekly" aria-pressed="false">Weekly</button></div>
-<button class="button" id="report-yesterday">Yesterday</button></div>
-<div id="report-content"></div>
-<p class="report-rules muted">A PR counts once per day or week, even if you review it again. Weekly totals count distinct PRs, so they can be lower than the sum of the days. Submitted GitHub reviews include comment-only reviews; draft reviews, ordinary comments and AI runs are excluded. Hidden inbox PRs still count here. History covers repositories your GitHub login can access.</p>
-</section>
-<footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
-</main>
+</dialog>
+<dialog id="queue-add-dialog" class="workspace-dialog" aria-labelledby="queue-add-heading">
+  <div class="dialog-heading"><h2 id="queue-add-heading">Add PR</h2><button class="button subtle" data-close-dialog>Close</button></div>
+  <form id="queue-add" class="queue-add"><label>Save a PR link<input name="url" type="url" placeholder="https://github.com/owner/repo/pull/123" required></label><button class="button primary" type="submit">Add to Up next</button></form>
+</dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <dialog id="prompt-dialog" aria-labelledby="prompt-heading" aria-describedby="prompt-help">
 <h2 id="prompt-heading">Copy prompt</h2>
