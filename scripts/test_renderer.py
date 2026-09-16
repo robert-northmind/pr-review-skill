@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from render_review import render, attachment_urls
+from render_review import render, attachment_urls, OverviewWords
 from unittest.mock import patch
 
 class SourceText(HTMLParser):
@@ -86,5 +86,74 @@ class RendererTests(unittest.TestCase):
         for start,end in [(0,2),(2,99),(3,2)]:
             d=copy.deepcopy(self.data);d['sections'][0]['blocks'][0].update(start=start,end=end)
             with self.assertRaises(ValueError):render(d)
+
+    def test_assessment_is_visible_once_before_walkthrough_with_drafts_still_in_findings(self):
+        d=copy.deepcopy(self.data)
+        d['review']['assessment']='Request changes: **one contract defect**. Runtime not exercised.'
+        d['review']['markdown']='<!-- review-comment:start -->\nCould we retain the valid items?\n<!-- review-comment:end -->'
+        output=render(d)
+        self.assertLess(output.index('id="review-assessment"'),output.index('id="code"'))
+        self.assertLess(output.index('id="review-findings"'),output.index('class="review-comment"'))
+        self.assertEqual(output.count('Request changes:'),1)
+        self.assertIn('<strong>one contract defect</strong>',output)
+        self.assertIn('href="#review-findings">Jump to findings and checks',output)
+
+    def test_assessment_rejects_hidden_verdicts_drafts_and_unsafe_links(self):
+        for assessment in ['', None, '<details>\n<summary>Verdict</summary>\nHidden verdict\n</details>',
+                           '<!-- review-comment:start -->\nDraft\n<!-- review-comment:end -->',
+                           '> <details>\n> <summary>Hidden verdict</summary>\n> Do not merge\n> </details>',
+                           '> <!-- review-comment:start -->\n> Draft\n> <!-- review-comment:end -->',
+                           '[Bad](https://user:password@example.com)']:
+            d=copy.deepcopy(self.data);d['review']['assessment']=assessment
+            with self.assertRaises(ValueError):render(d)
+        d=copy.deepcopy(self.data);d['review']['assessment']='<script>alert(1)</script>'
+        output=render(d)
+        self.assertEqual(output.count('<script>'),1)
+        self.assertIn('&lt;script&gt;',output)
+
+    def test_legacy_input_still_has_one_visible_assessment_in_findings(self):
+        output=render(self.data)
+        self.assertNotIn('id="review-assessment"',output)
+        self.assertEqual(output.count('No actionable defects found.'),1)
+
+    def test_reading_estimate_excludes_nested_optional_evidence_and_code(self):
+        self.assertEqual(OverviewWords().count('<p>Visible &amp; relevant.</p><details><summary>Optional</summary><p>Hidden</p><details><summary>More</summary>Hidden too</details></details><pre>code code</pre><p>Still visible.</p>'),5)
+        d=copy.deepcopy(self.data)
+        before=render(d)
+        d['verification']='Lengthy evidence. '*1000
+        d['review']['markdown']='Lengthy legacy finding. '*1000
+        after=render(d)
+        import re
+        estimate=r'approximately (\d+) min overview'
+        self.assertEqual(re.search(estimate,before)[1],re.search(estimate,after)[1])
+
+    def test_diagrams_escape_authored_labels_and_keep_all_scenario_states_without_js(self):
+        d=copy.deepcopy(self.data)
+        flow={'type':'flow','title':'A batch','caption':'Illustration','steps':[{'icon':'storage','label':'<script>bad</script>','detail':'On disk','state':'active'}]}
+        d['sections'].append({'id':'flush','title':'Flushing','blocks':[{'type':'scenario','title':'Trace a batch','caption':'Source-traced','frames':[{'label':'Pending','blocks':[flow]},{'label':'Flushed','blocks':[{'type':'paragraph','text':'Export attempted'}]}]}]})
+        output=render(d)
+        self.assertIn('&lt;script&gt;bad&lt;/script&gt;',output)
+        self.assertEqual(output.count('<script>'),1)
+        self.assertIn('class="scenario-controls" hidden',output)
+        self.assertNotIn('class="scenario-frame" hidden',output)
+        self.assertIn('Export attempted',output)
+        self.assertIn('<h4 class="scenario-frame-label">Pending</h4>',output)
+        self.assertIn('<h4 class="scenario-frame-label">Flushed</h4>',output)
+        d['review']['visuals']={'status':d['sections'][-1]['blocks'][0]}
+        d['review']['assessment']='<!-- review-visual:status -->'
+        with self.assertRaises(ValueError):render(d)
+
+    def test_finding_visual_renders_outside_copy_and_fenced_markers_stay_literal(self):
+        d=copy.deepcopy(self.data)
+        d['review']['visuals']={'timeout':{'type':'sequence','title':'Timeout path','caption':'Source trace','steps':[{'from':'Caller','to':'Exporter','message':'Argument omitted','state':'blocked'}]}}
+        d['review']['markdown']='<!-- review-visual:timeout -->\n\n<!-- review-comment:start -->\nCould we forward the timeout?\n<!-- review-comment:end -->\n\n```text\n<!-- review-visual:timeout -->\n```'
+        output=render(d)
+        self.assertEqual(output.count('<figure class="sequence">'),1)
+        self.assertLess(output.index('<figure class="sequence">'),output.index('class="review-comment"'))
+        self.assertIn('&lt;!-- review-visual:timeout --&gt;',output)
+        d['review']['markdown']='<!-- review-comment:start -->\n<!-- review-visual:timeout -->\n<!-- review-comment:end -->'
+        with self.assertRaises(ValueError):render(d)
+        d['review']['markdown']='<!-- review-visual:missing -->'
+        with self.assertRaises(ValueError):render(d)
 
 if __name__=='__main__':unittest.main()

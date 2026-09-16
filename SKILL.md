@@ -6,15 +6,19 @@ description: Review a GitHub pull request locally and produce one HTML review re
 # PR Review
 
 Given a GitHub pull request URL, review every changed file and produce **one
-self-contained `review.html`**, labeled **Review notes**. Explain the change at
-the top, then give the current assessment, verified findings with copyable
-comments, and validation evidence. The explanation is an integral review stage;
+self-contained `review.html`**, labeled **Review notes**. Put the changed outcome
+and current assessment at the top, then explain the mechanism and give verified
+findings with copyable comments and validation evidence. The explanation is an integral review stage;
 there is no separate explainer skill, launch action, or HTML deliverable.
 
 Read [Explanation](references/explanation.md) before drafting the opening and
 [Review notes](references/review-notes.md) before synthesis. Use the bundled
 [authoring and renderer](references/authoring.md) to assemble the final report.
-Keep the explanation concise without reducing review coverage.
+Optimize the whole report for a colleague reviewing many PRs in a day: make
+the changed behavior, current assessment and next action easy to find, with
+enough context to understand them. Scale detail to the difficulty of the change
+and findings; preserve full review coverage. Use the existing sections and
+disclosures, and remove repetition before shortening essential explanations.
 
 Pin repository identity, target base SHA, comparison merge-base SHA, and head
 SHA. All review evidence, excerpts and examples must describe that comparison.

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import html
+from html.parser import HTMLParser
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,37 @@ CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'
 
 def esc(value):
     return html.escape(str(value), quote=True)
+
+class OverviewWords(HTMLParser):
+    """Estimate prose outside optional disclosures and code, not review duration."""
+    excluded = {'details', 'pre', 'textarea', 'script', 'style'}
+
+    def __init__(self):
+        super().__init__()
+        self.hidden_depth = 0
+        self.sections = []
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'section':
+            self.sections.append(dict(attrs).get('id') == 'review-findings')
+            self.hidden_depth += self.sections[-1]
+        if tag in self.excluded:
+            self.hidden_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag == 'section':
+            self.hidden_depth -= self.sections.pop()
+        if tag in self.excluded:
+            self.hidden_depth -= 1
+
+    def handle_data(self, data):
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+    def count(self, content):
+        self.feed(content)
+        return len(' '.join(self.parts).split())
 
 def url(value):
     parsed = urlsplit(value)
@@ -54,7 +86,12 @@ def review_markdown(text, data):
                 target = url(target)
             return f'<a href="{esc(target)}" target="_blank" rel="noopener noreferrer">{match[2]}</a>'
         return re.sub(r'<a href="([^"<>]*)"[^>]*>(.*?)</a>', link, rendered)
-    return render_markdown(text, inline, esc)
+    def visual(key):
+        value = data.get('review', {}).get('visuals', {}).get(key)
+        if not isinstance(value, dict) or value.get('type') not in {'flow', 'sequence', 'scenario'}:
+            raise ValueError('Review visual must reference a defined flow, sequence or scenario')
+        return blocks([value], data)
+    return render_markdown(text, inline, esc, visual=visual)
 
 def git(repository, *args):
     return subprocess.check_output(['git', '-C', str(repository), *args], text=True)
@@ -130,6 +167,13 @@ def source(block, data):
     title = f'{language} · {side} · lines {start}–{end}'
     return f'<figure class="source" data-path="{esc(path)}" data-revision="{esc(revision)}" data-side="{side}"><div class="source-meta"><span class="path">{esc(path)}</span><span>{esc(title)}</span>{links}</div><pre><code>{"".join(rows)}</code></pre><figcaption class="caption">{esc(block["caption"])}</figcaption></figure>'
 
+ICONS = {
+    'app': '<rect x="5" y="3" width="22" height="26" rx="4"/><path d="M12 24h8"/>',
+    'memory': '<rect x="5" y="7" width="22" height="18" rx="2"/><path d="M10 3v4m6-4v4m6-4v4M10 25v4m6-4v4m6-4v4M10 12h12m-12 5h12"/>',
+    'storage': '<ellipse cx="16" cy="7" rx="11" ry="4"/><path d="M5 7v18c0 5 22 5 22 0V7M5 16c0 5 22 5 22 0"/>',
+    'network': '<path d="M9 25h15a6 6 0 0 0 1-12 9 9 0 0 0-17-2 7 7 0 0 0 1 14"/>',
+}
+
 def blocks(items, data):
     output = []
     for block in items:
@@ -155,6 +199,37 @@ def blocks(items, data):
             output.append(f'<figure><div class="source-meta">Illustrative {esc(block.get("language","pseudocode"))} · not an exact source excerpt</div><pre class="example"><code>{esc(block["code"])}</code></pre><figcaption class="caption">{esc(block["caption"])}</figcaption></figure>')
         elif kind == 'details':
             output.append(f'<details><summary>{esc(block["title"])}</summary>{blocks(block["blocks"],data)}</details>')
+        elif kind == 'flow':
+            steps = []
+            for step in block['steps']:
+                state = step.get('state', 'normal')
+                if state not in {'normal', 'active', 'muted', 'blocked'}:
+                    raise ValueError('Unsupported flow state')
+                icon = step.get('icon')
+                if icon is not None and icon not in ICONS:
+                    raise ValueError('Unsupported flow icon')
+                graphic = ('<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">' + ICONS[icon] + '</svg>') if icon else ''
+                steps.append(f'<li class="flow-step {state}"><div class="flow-symbol">{graphic}</div><strong>{esc(step["label"])}</strong><span>{esc(step["detail"])}</span></li>')
+            output.append(f'<figure class="flow"><figcaption>{esc(block["title"])}</figcaption><ol>{"".join(steps)}</ol><p class="caption">{esc(block["caption"])}</p></figure>')
+        elif kind == 'sequence':
+            steps = []
+            for step in block['steps']:
+                state = step.get('state', 'normal')
+                if state not in {'normal', 'blocked'}:
+                    raise ValueError('Unsupported sequence state')
+                steps.append(f'<li class="sequence-step {state}"><div class="sequence-route"><strong>{esc(step["from"])}</strong><span class="sequence-arrow" aria-hidden="true">→</span><strong>{esc(step["to"])}</strong></div><p>{esc(step["message"])}</p></li>')
+            output.append(f'<figure class="sequence"><figcaption>{esc(block["title"])}</figcaption><ol>{"".join(steps)}</ol><p class="caption">{esc(block["caption"])}</p></figure>')
+        elif kind == 'scenario':
+            frames = block['frames']
+            if not 2 <= len(frames) <= 5:
+                raise ValueError('A scenario needs two to five meaningful states')
+            controls, panels = [], []
+            for i, frame in enumerate(frames):
+                if any(b.get('type') not in {'flow', 'sequence', 'paragraph'} for b in frame['blocks']):
+                    raise ValueError('Scenario states support flow, sequence and paragraph blocks')
+                controls.append(f'<button type="button" data-frame="{i}" aria-pressed="false">{esc(frame["label"])}</button>')
+                panels.append(f'<div class="scenario-frame" data-frame="{i}" role="region" aria-label="{esc(frame["label"])}"><h4 class="scenario-frame-label">{esc(frame["label"])}</h4>{blocks(frame["blocks"], data)}</div>')
+            output.append(f'<div class="scenario" role="group" aria-label="{esc(block["title"])}"><h3>{esc(block["title"])}</h3><div class="scenario-controls" hidden>{"".join(controls)}</div>{"".join(panels)}<p class="caption">{esc(block["caption"])}</p></div>')
         else: raise ValueError(f'Unsupported block type: {kind}')
     return ''.join(output)
 
@@ -177,10 +252,22 @@ def render(data):
     errors, _ = validate(review['markdown'])
     if errors:
         raise ValueError('; '.join(errors))
+    assessment = ''
+    if 'assessment' in review:
+        text = review['assessment']
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError('Assessment must be non-empty Markdown')
+        assessment_html = review_markdown(text, data)
+        if re.search(r'<details\b|class="(?:review-comment|scenario|flow|sequence)"', assessment_html):
+            raise ValueError('Keep assessment visible and copyable comments in findings')
+        assessment = ('<div class="review-assessment" id="review-assessment" '
+                      'aria-labelledby="assessment-title"><h2 id="assessment-title">Current assessment</h2>'
+                      + assessment_html
+                      + '<a class="findings-link" href="#review-findings">Jump to findings and checks</a></div>')
     sections=[]; nav=[]; seen=set()
     for section in data.get('sections',[]):
         ident=section['id']
-        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification'}: raise ValueError('Use unique section IDs')
+        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification','review-assessment','assessment-title'}: raise ValueError('Use unique section IDs')
         seen.add(ident);nav.append(f'<a href="#{ident}">{esc(section["title"])}</a>')
         sections.append(f'<section id="{ident}" data-section="{esc(section["title"])}"><h2>{esc(section["title"])}</h2>{blocks(section["blocks"],data)}</section>')
     sections.append('<section id="review-findings" data-section="Review findings"><h2>Review findings</h2>' + review_markdown(review['markdown'], data) + '</section>')
@@ -203,10 +290,9 @@ def render(data):
     if refs:sections.append(f'<details class="references" id="references"><summary>Sources and related review</summary><ul>{refs}</ul></details>')
     provenance=''.join(f'<dt>{esc(k)}</dt><dd>{esc(v)}</dd>' for k,v in [('Repository',data.get('repo_url',data['repository'])),('Comparison base',data['base']),('Reviewed head',data['head']),('Context',data.get('context','Pinned source comparison'))])
     pr=anchor('Open pull request',data['pr_url']) if data.get('pr_url') else ''
-    content=f'<main><header data-section="Overview"><div class="topbar"><span class="badge">Review notes</span><button id="theme" type="button">Theme: System</button></div><h1>{esc(data["title"])}</h1><p class="outcome">{esc(data["outcome"])}</p><div class="actions"><span class="meta">{esc(data["stack"])} · approximately READING_MINUTES min read</span><span class="pr-link">{pr}</span></div><details class="provenance" id="provenance"><summary>Reviewed revision and context</summary><dl>{provenance}</dl></details></header><nav aria-label="On this page">{"".join(nav)}</nav>{"".join(sections)}</main>'
-    prose=re.sub(r'<(?:pre|textarea)\b[^>]*>.*?</(?:pre|textarea)>','',content,flags=re.S)
-    words=len(html.unescape(re.sub('<[^>]*>',' ',prose)).split())
-    content=content.replace('READING_MINUTES',str(max(1,math.ceil(words/180))))
+    content=f'<main><header data-section="Overview"><div class="topbar"><span class="badge">Review notes</span><button id="theme" type="button">Theme: System</button></div><h1>{esc(data["title"])}</h1><p class="outcome">{esc(data["outcome"])}</p>{assessment}<div class="actions"><span class="meta">{esc(data["stack"])} · approximately READING_MINUTES min read</span><span class="pr-link">{pr}</span></div><details class="provenance" id="provenance"><summary>Reviewed revision and context</summary><dl>{provenance}</dl></details></header><nav aria-label="On this page">{"".join(nav)}</nav>{"".join(sections)}</main>'
+    words=OverviewWords().count(content)
+    content=content.replace('READING_MINUTES min read',f'{max(1,math.ceil(words/180))} min overview · findings and evidence extra')
     css=(ASSETS/'review.css').read_text();js=(ASSETS/'review.js').read_text()
     return f'<!doctype html><html lang="en" data-mode="{esc(mode)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{esc(CSP)}"><title>{esc(data["title"])}</title><style>{css}</style></head><body>{content}<script>{js}</script></body></html>'
 

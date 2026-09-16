@@ -58,6 +58,8 @@ def validate(text: str) -> tuple[list[str], list[str]]:
             draft = None
             continue
         if draft is not None:
+            if fence is None and re.fullmatch(r'<!-- review-visual:[a-z][a-z0-9-]* -->', stripped):
+                errors.append(f'Line {number}: review visuals belong outside copyable comments.')
             draft.append(line)
     if draft is not None:
         errors.append(f'Line {start_line}: unclosed comment block.')

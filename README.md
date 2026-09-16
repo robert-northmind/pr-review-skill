@@ -54,7 +54,8 @@ See [screenshot provenance](docs/screenshots/README.md).
 - **Review:** launch Claude Code or Codex CLI from the dashboard. Keep the
   combined HTML review notes and run history attached to the PR.
   Existing results remain available during a rerun; outdated results are marked.
-- **Understand and check:** one HTML contains the change explanation and
+- **Understand and check:** the opening shows the changed outcome and current
+  assessment, with a shortcut to findings. One HTML contains the explanation and
   expandable, verified findings with examples and draft comments. The lead
   assesses size, complexity, risk, and uncertainty before allocating reviewers;
   the verification appendix records coverage, checks, limitations, and model choices.

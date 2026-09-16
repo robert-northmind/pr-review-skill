@@ -17,7 +17,7 @@ function check(ok,message){if(!ok)result.errors.push(message);}
   await page.setViewportSize({width:1280,height:900});await page.goto(pathToFileURL(file).href);
   const inventory=await page.evaluate(()=>{
    const count=root=>{const it=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node,parts=[];while(node=it.nextNode())if(!node.parentElement.closest('pre,textarea,script,style,[data-exclude-count]'))parts.push(node.textContent);return parts.join(' ').trim().split(/\s+/).filter(Boolean).length;};
-   return {words:count(document.body),explanationWords:[...document.querySelectorAll('header[data-section],main > section')].filter(e=>!['review-findings','verification','self-check'].includes(e.id)).reduce((n,e)=>n+count(e),0),mode:document.documentElement.dataset.mode,sections:[...document.querySelectorAll('[data-section]')].map(e=>({section:e.dataset.section,words:count(e)})),csp:document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content,assets:[...document.querySelectorAll('script[src],link[rel=stylesheet],iframe,form,img[src]')].map(e=>e.outerHTML),links:[...document.querySelectorAll('a')].map(a=>({href:a.getAttribute('href'),target:a.target,rel:a.rel,reviewNotes:a.classList.contains('review-notes-link')})),long:[...document.querySelectorAll('p,li')].filter(e=>!e.closest('pre')).flatMap(e=>e.textContent.trim().split(/(?<=[.!?])\s+/).filter(s=>s.split(/\s+/).length>30)),whitespace:[...document.querySelectorAll('pre')].every(p=>['pre','pre-wrap'].includes(getComputedStyle(p).whiteSpace)),rows:[...document.querySelectorAll('.code-line')].map(e=>({height:e.getBoundingClientRect().height,lineHeight:parseFloat(getComputedStyle(e).lineHeight)})),sources:[...document.querySelectorAll('.source')].map(s=>({path:s.dataset.path,revision:s.dataset.revision,side:s.dataset.side,lines:[...s.querySelectorAll('.code-line')].map(l=>({number:Number(l.dataset.line),text:l.querySelector('.source-text').textContent}))}))};
+   return {words:count(document.body),explanationWords:[...document.querySelectorAll('header[data-section],main > section')].filter(e=>!['review-findings','verification','self-check'].includes(e.id)).reduce((n,e)=>n+count(e),0)-(document.getElementById('review-assessment')?count(document.getElementById('review-assessment')):0),mode:document.documentElement.dataset.mode,sections:[...document.querySelectorAll('[data-section]')].map(e=>({section:e.dataset.section,words:count(e)})),csp:document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content,assets:[...document.querySelectorAll('script[src],link[rel=stylesheet],iframe,form,img[src]')].map(e=>e.outerHTML),links:[...document.querySelectorAll('a')].map(a=>({href:a.getAttribute('href'),target:a.target,rel:a.rel,reviewNotes:a.classList.contains('review-notes-link')})),long:[...document.querySelectorAll('p,li')].filter(e=>!e.closest('pre')).flatMap(e=>e.textContent.trim().split(/(?<=[.!?])\s+/).filter(s=>s.split(/\s+/).length>30)),whitespace:[...document.querySelectorAll('pre')].every(p=>['pre','pre-wrap'].includes(getComputedStyle(p).whiteSpace)),rows:[...document.querySelectorAll('.code-line')].map(e=>({height:e.getBoundingClientRect().height,lineHeight:parseFloat(getComputedStyle(e).lineHeight)})),sources:[...document.querySelectorAll('.source')].map(s=>({path:s.dataset.path,revision:s.dataset.revision,side:s.dataset.side,lines:[...s.querySelectorAll('.code-line')].map(l=>({number:Number(l.dataset.line),text:l.querySelector('.source-text').textContent}))}))};
   });
   result.words=inventory.words;result.sections=inventory.sections;result.mode=inventory.mode;
   const ceiling={'Brief · Small':800,'Brief · Standard':1200,Deep:3000}[inventory.mode];check(!!ceiling,'Missing/invalid mode');check(inventory.explanationWords<=ceiling,'Explanation prose exceeds mode ceiling: '+inventory.explanationWords+' > '+ceiling);result.explanationWords=inventory.explanationWords;
@@ -27,6 +27,16 @@ function check(ok,message){if(!ok)result.errors.push(message);}
   const attachments=inputArg?(JSON.parse(fs.readFileSync(inputArg,'utf8')).attachments||[]).map(p=>pathToFileURL(fs.realpathSync(p)).href):[];
   for(const link of inventory.links){if(link.href.startsWith('#'))check(await page.locator('[id="'+link.href.slice(1)+'"]').count()===1,'Unresolved section link: '+link.href);else{check(link.href.startsWith('https://')||attachments.includes(link.href),'Unapproved source/artifact navigation');check(link.target==='_blank'&&link.rel.includes('noopener')&&link.rel.includes('noreferrer'),'Missing safe navigation attributes');}}
   const sourceInput=inputArg?JSON.parse(fs.readFileSync(inputArg,'utf8')):null;
+  if(sourceInput?.review?.assessment){
+   const assessment=page.locator('#review-assessment');
+   check(await assessment.count()===1&&await assessment.isVisible(),'Missing visible overview assessment');
+   check(await assessment.locator('details,.review-comment,.scenario,.flow,.sequence').count()===0,'Overview assessment hides caveats or contains drafts');
+   const box=await assessment.boundingBox();
+   check(box&&box.y+box.height<=900,'Assessment extends below first desktop viewport; inspect overview length');
+   await assessment.locator('.findings-link').click();
+   check(await page.locator('#review-findings').evaluate(e=>e.getBoundingClientRect().top>=-1&&e.getBoundingClientRect().top<innerHeight),'Overview shortcut does not reach findings');
+   await page.evaluate(()=>scrollTo(0,0));
+  }
   if(sourceInput){for(const source of inventory.sources){
    const raw=source.revision==='working-tree'?fs.readFileSync(path.resolve(sourceInput.repository,source.path),'utf8'):execFileSync('git',['-C',sourceInput.repository,'show',source.revision+':'+source.path],{encoding:'utf8'});
    const lines=raw.split(/\r?\n/);for(const line of source.lines)check(lines[line.number-1]===line.text,'Source mismatch: '+source.path+':'+line.number);result.sourceExcerpts++;
@@ -73,6 +83,29 @@ function check(ok,message){if(!ok)result.errors.push(message);}
    await comment.locator('.comment-source').evaluate(e=>{e.hidden=true;});
    await comment.locator('.copy-status').evaluate(e=>{e.textContent='';});
   }
+  const scenarios=page.locator('.scenario');result.scenarios=await scenarios.count();
+  for(let i=0;i<result.scenarios;i++){
+   const scenario=scenarios.nth(i),buttons=scenario.locator('.scenario-controls button'),frames=scenario.locator(':scope > .scenario-frame');
+   const n=await buttons.count();check(n>=2&&n<=5,'Scenario needs meaningful alternatives');
+   check(await frames.count()===n,'Scenario controls and states differ');
+   for(let j=0;j<n;j++){
+    await buttons.nth(j).focus();await page.keyboard.press('Enter');
+    for(let k=0;k<n;k++){
+     check(await frames.nth(k).isVisible()===(j===k),'Scenario exposes the wrong state');
+     check(await buttons.nth(k).getAttribute('aria-pressed')===String(j===k),'Scenario selection is not announced');
+    }
+   }
+   await buttons.first().click();
+  }
+  if(result.scenarios){
+   const fallbackContext=await browser.newContext({javaScriptEnabled:false});
+   const fallback=await fallbackContext.newPage();await fallback.goto(pathToFileURL(file).href);
+   await fallback.locator('details').evaluateAll(items=>items.forEach(e=>e.open=true));
+   check(await fallback.locator('.scenario-frame-label').evaluateAll(items=>items.every(e=>e.getBoundingClientRect().height>0)),'Scenario labels disappear without JavaScript');
+   check(await fallback.locator('.scenario-frame').evaluateAll(items=>items.every(e=>e.getBoundingClientRect().height>0)),'Scenario content disappears without JavaScript');
+   check(await fallback.locator('.scenario-controls').evaluateAll(items=>items.every(e=>e.hidden)),'Inactive scenario controls shown without JavaScript');
+   await fallbackContext.close();
+  }
   const quiz=page.locator('.question');const count=await quiz.count();
   check(count<=(inventory.mode==='Deep'?5:3),'Too many self-checks');
   if(count){
@@ -93,6 +126,7 @@ function check(ok,message){if(!ok)result.errors.push(message);}
   result.themes=[];
   for(const width of [1280,390])for(const scheme of ['light','dark']){
    await page.emulateMedia({colorScheme:scheme});await page.setViewportSize({width,height:width===390?844:900});
+   await page.evaluate(()=>scrollTo(0,0));
    const geometry=await page.evaluate(()=>({viewport:innerWidth,width:document.documentElement.scrollWidth,background:getComputedStyle(document.body).backgroundColor,overviewBottom:document.querySelector('.outcome')?.getBoundingClientRect().bottom}));
    check(geometry.width<=width,'Document overflow at '+width+'px ('+scheme+'): '+geometry.width+'px');if(width===1280)check(geometry.overviewBottom<900,'Outcome is below the first desktop viewport');result.themes.push({scheme,...geometry});
    const screenshot=path.join(output,(width===390?'phone':'desktop')+'-'+scheme+'.png');await page.screenshot({path:screenshot,fullPage:true});result.screenshots.push(screenshot);

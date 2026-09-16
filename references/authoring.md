@@ -39,7 +39,8 @@ block types that explain this particular change.
   "review": {
     "base": "FULL_COMPARISON_BASE_SHA",
     "head": "FULL_REVIEWED_HEAD_SHA",
-    "markdown": "## Current assessment\n\nNo actionable defects found. Source reviewed; runtime was not exercised."
+    "assessment": "No actionable defects found. Source reviewed; runtime was not exercised.",
+    "markdown": "## Validation\n\nThe changed call path and test assertions were inspected at the pinned head."
   },
   "verification": "## Coverage and checks\n\nRecord the actual inspected files, checks, outcomes and gaps.",
   "attachments": [],
@@ -63,7 +64,12 @@ added-line metadata; identify them in the caption.
 The `review` object is required. Its `base` and `head` must exactly match the
 explanation revisions; the renderer rejects a mismatch. Read `review.md` as a
 string into `review.markdown`, using the comment boundaries in
-[Review notes](review-notes.md). The renderer embeds findings after the narrative
+[Review notes](review-notes.md). Put the short current assessment in
+`review.assessment` as Markdown without a heading, disclosures or copyable drafts.
+It appears once beside the opening outcome, with a direct jump to findings.
+Keep it out of `review.markdown`; retain detailed findings and a short validation
+summary there. Older inputs without `assessment` still render their assessment
+in the findings section. The renderer embeds findings after the narrative
 sections and adds Copy comment controls. It preserves the original Markdown
 payload; when clipboard access is unavailable, it shows a selected manual-copy
 field. No iframe, second HTML, or runtime Markdown fetch is used.
@@ -93,9 +99,15 @@ are supplementary evidence, not required narrative. The dashboard rewrites these
 links through its evidence route. Files must remain outside disposable checkouts.
 HTTPS source links are allowed; raw HTML and other URL schemes are not active.
 
-Report order: opening/context, before/after and mechanism, assessment/findings,
+Report order: outcome and assessment, context, before/after and mechanism, findings,
 optional self-check, expandable verification and provenance. Explanation depth
 and prose ceilings apply to the opening; never cut valid findings to meet them.
+The reading estimate covers the opening and walkthrough prose, excluding code,
+findings and disclosures. Findings and evidence take additional time; this does
+not estimate how long a review should take.
+Keep a coherent reading path with descriptive headings. Group related code and
+explanation together; avoid making readers open several disclosures to understand
+one concern. A small report can use only a comparison and one source excerpt.
 
 Additional block shapes:
 
@@ -104,6 +116,45 @@ Additional block shapes:
 - Table: `{"type":"table","headers":["Input","Result"],"rows":[["x","y"]]}`
 - Background: `{"type":"details","title":"New to this component?","blocks":[...]}`
 - Authored code: `{"type":"example","language":"Dart","code":"...","caption":"Illustrative caller example."}`
+
+### Diagrams and optional interaction
+
+Choose the representation using [Explanation](explanation.md); reuse a block
+only when it fits the concept. The shared renderer also supports:
+
+- `flow`: `title`, `caption`, and `steps` with `label`, `detail`, optional `icon`
+  (`app`, `memory`, `storage`, `network`) and `state` (`normal`, `active`, `muted`,
+  `blocked`). A connected path becomes vertical on phones. Put the meaning in
+  labels as well as color; use icons only when they represent the real role.
+- `sequence`: `title`, `caption`, and ordered `steps` with `from`, `to`, `message`
+  and optional `state` (`normal` or `blocked`). This is call/event order, not a
+  time-scaled chart.
+- `scenario`: `title`, `caption`, and two to five `frames`, each with `label` and
+  `blocks` (`flow`, `sequence`, `paragraph`). Buttons select a state; without
+  JavaScript all states remain readable. Verify every state and explain the
+  central condition outside the control. This illustrates source behavior, not
+  execution of PR code.
+
+For a graphic inside a finding, define it in `review.visuals`, keyed by a short
+identifier, and place `<!-- review-visual:timeout -->` on its own line where it
+belongs. For example:
+
+```json
+"visuals": {
+  "timeout": {
+    "type": "sequence", "title": "Where the timeout stops", "caption": "Source-traced call order.",
+    "steps": [
+      {"from": "Runtime", "to": "Disk buffer", "message": "Pass timeout = 1"},
+      {"from": "Persistence", "to": "Exporter", "message": "Replay omits timeout", "state": "blocked"}
+    ]
+  }
+}
+```
+
+Place review visuals outside comment-copy markers. The draft must remain
+self-contained text. Raw HTML and authored scripts remain unsupported. When a
+different kind of diagram is materially clearer, extend the shared assets and
+validation rather than forcing the change into a flow or comparison.
 
 For the visible quick context, use an ordinary first section with `paragraph`
 blocks and, when useful, a `comparison` or `table`. No new schema field is needed.

@@ -25,7 +25,10 @@ Use **Deep** when the user asks for an in-depth explanation. “Full PR review�
 selects the review pipeline; it does not by itself request a Deep explainer.
 
 Prose ceilings: Small 800 words, Standard 1,200, Deep 3,000, including collapsed
-background. Optional self-checks remain short; findings have no word ceiling. These are ceilings, not targets.
+background. Optional self-checks remain short; findings have no word ceiling.
+These are ceilings, not targets. Stop when the reader can explain the changed
+behavior, its mechanism and the consequential condition. Add detail when it
+resolves a real difficulty; do not fill the budget or compress away needed context.
 Use short sentences as a guideline; retain essential conditions and caveats
 instead of cutting them merely to satisfy a sentence-length limit.
 
@@ -60,7 +63,7 @@ Carry the same scenario into the later code explanation instead of repeating it.
 
 When explaining a verified review concern, describe the observable consequence
 in terms of that scenario before naming the offending line. Keep the current
-verdict and copyable comments in the findings section below. Use neutral reader-facing
+verdict in the overview assessment and copyable comments with the findings. Use neutral reader-facing
 labels such as “Quick context”; never label the reader or section “dumbed down.”
 
 ## Establish the explanation before rendering
@@ -95,26 +98,54 @@ warnings, retain material supported caveats, and reconcile with the findings bel
 Lead with a concrete title and a short outcome paragraph: the problem, new
 behavior, and essential condition or trade-off. Put this before navigation and
 long metadata. Show the PR link and mode near the top; retain full SHAs in
-expandable provenance. Give an approximate reading time, not a timing claim.
+expandable provenance. The renderer estimates overview reading time separately
+from optional findings and evidence; this is not a promise about review duration.
 
 Use only sections that add understanding, usually:
 
-1. **Before and after:** one concrete example carried through the page. A
-   comparison, decision table or short flow is often enough. Add a stepper only
-   when changing state makes a difficult idea clearer than a static view.
-2. **How it works:** the mechanism in data/control-flow order. Show the few
-   source excerpts that explain causality, not one excerpt for every file.
+1. **Concrete example:** carry one scenario through the page. Show the changed
+   outcome in the form that best explains it; before/after cards are one option.
+2. **How it works:** the mechanism in data/control-flow order. Where relevant,
+   connect the caller, the component responsible for the behavior and the downstream
+   effect; explain why that boundary matters. Show only source excerpts that help
+   explain the mechanism, with captions connecting each to the scenario. Beside
+   the main example or excerpt, briefly identify the supporting test or check when
+   useful, distinguishing source inspection from execution. Keep commands and logs
+   in verification.
 3. **What deserves attention:** usually one to three specific conditions and
-   consequences. Omit filler about hypothetical consumers or generic edge cases.
+   consequences that guide the reader to the relevant behavior or source. Include
+   a consequential trade-off at any depth, distinguishing documented decisions
+   from inference. Omit generic edge cases and concerns already explained in findings.
 4. **Optional background/self-check:** add when useful. Explain general stack
    concepts beyond the quick context in collapsed “New to …?” blocks; prerequisites
    for understanding the change and essential caveats remain visible.
 
 A tiny change may need only an outcome, one comparison, and one excerpt.
 Avoid repeating the summary in background, captions, and closing paragraphs.
+Fold context, rationale and evidence into the existing narrative; they do not
+each need a section. Prefer one clear example or visual over several views
+teaching the same thing.
 Give tests, docs and mechanical changes a short explanation unless a test itself
 is necessary to understand the changed contract. Deep mode can add alternatives;
 distinguish inferred trade-offs from documented author decisions.
+
+## Choose a visual for the idea
+
+Decide what the reader needs to see before choosing a block. For example, use
+a value transformation for parsing or serialization, an ownership map for
+responsibility changes, a call sequence for propagation, a timeline for races
+or windows, a decision tree for branching, or a state diagram for lifecycle.
+Use before/after columns when comparing two outcomes is the actual teaching task.
+These are possibilities, not a checklist or rotation: meaningful variety follows
+the change, not a requirement to make every report look different.
+
+Use more than one graphic when each explains a different difficult relationship.
+Replace the prose it makes redundant. Interaction should expose a meaningful
+choice or state transition; keep the central takeaway visible and the controls
+optional. Label authored traces as source-based illustrations, and check every
+state against evidence. Do not animate invented timings or imply delivery from
+an export attempt. The same approach applies inside a finding when a diagram
+makes its failure path easier to understand.
 
 ## Exact source and authored examples
 

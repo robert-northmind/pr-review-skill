@@ -58,13 +58,13 @@ def cells(line):
     return result
 
 
-def render(text, inline, escape, depth=0):
+def render(text, inline, escape, depth=0, visual=None):
     if depth > 24:
         return '<pre>' + escape(text) + '</pre>'
     lines = text.replace('\r\n', '\n').split('\n')
     parts, i = [], 0
-    def sub(body):
-        return render('\n'.join(body), inline, escape, depth + 1)
+    def sub(body, allow_visual=True):
+        return render('\n'.join(body), inline, escape, depth + 1, visual if allow_visual else None)
     def table_at(index):
         if index + 1 >= len(lines) or '|' not in lines[index]: return False
         cols, delimiters = cells(lines[index]), cells(lines[index + 1])
@@ -73,7 +73,7 @@ def render(text, inline, escape, depth=0):
         s = lines[index].strip()
         return (not s or FENCE.match(lines[index]) or ITEM.match(lines[index])
                 or re.match(r'^(#{1,6})\s|^>', s) or s in (START, *DETAILS, '---', '***', '___')
-                or table_at(index))
+                or re.fullmatch(r'<!-- review-visual:[a-z][a-z0-9-]* -->', s) or table_at(index))
     while i < len(lines):
         line, s = lines[i], lines[i].strip()
         if not s:
@@ -92,9 +92,11 @@ def render(text, inline, escape, depth=0):
             body = '\n'.join(lines[i + 1:end]).strip('\n')
             parts.append('<section class="review-comment"><button type="button" class="copy-comment">Copy comment</button>'
                          '<span class="copy-status" role="status"></span><div class="comment-body">'
-                         + sub(body.split('\n')) + '</div><textarea class="comment-source" hidden readonly aria-label="Comment Markdown">'
+                         + sub(body.split('\n'), allow_visual=False) + '</div><textarea class="comment-source" hidden readonly aria-label="Comment Markdown">'
                          + escape(body) + '</textarea></section>')
             i = end + 1
+        elif visual and (marker := re.fullmatch(r'<!-- review-visual:([a-z][a-z0-9-]*) -->', s)):
+            parts.append(visual(marker[1])); i += 1
         elif s in DETAILS and (end := find_close(lines, i + 1, '</details>')) is not None:
             start = i + 1
             while start < end and not lines[start].strip(): start += 1

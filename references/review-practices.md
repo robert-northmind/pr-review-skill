@@ -48,3 +48,39 @@ those guidelines, not a proven optimal teaching method. Use a comparison or flow
 only when it clarifies the behavior. Keep the current assessment and drafts in
 the same document so explanation and review cannot silently describe different
 revisions or conclusions.
+
+## Evidence for a consumable report
+
+These studies guide presentation choices; none establishes an optimal word count
+or proves this HTML layout increases daily PR throughput. Keep this rationale
+out of generated reports.
+
+- [Code Review Comprehension (2025)](https://arxiv.org/abs/2503.21455)
+  observed ten experienced reviewers across 25 real reviews. Reviewers built
+  context before inspecting code and moved opportunistically among activities.
+  This supports a short orientation and flexible navigation; it does not establish
+  one mandatory reading sequence.
+- [Working memory and change ordering (2019)](https://tobiasbaum.github.io/rp/memoryCodeOrderAndReview.pdf)
+  studied 50 participants, mostly professionals. Working memory was associated
+  with finding defects involving separated code locations; evidence for an effect
+  of presentation order was inconclusive. Keeping related claims and excerpts
+  together is a reasonable design inference, not a proven speed improvement.
+- [Signaling meta-analysis (2018)](https://www.sciencedirect.com/science/article/pii/S1747938X17300581)
+  synthesized 103 studies with 12,201 participants and found benefits for retention
+  and transfer from cues highlighting relevant structure. Apply cautiously to
+  descriptive headings, focused highlighting and consistent labels: these were
+  learning studies, not PR-report trials.
+- [Segmenting meta-analysis (2019)](https://doi.org/10.1007/s10648-018-9456-4)
+  synthesized 56 investigations: meaningful segments improved retention and
+  transfer but increased learning time. This motivates coherent sections and
+  optional detail, not fragmenting every paragraph into a separate disclosure
+  or promising faster reading.
+- [Explicit review strategies (2022)](https://doi.org/10.1007/s10664-022-10123-8)
+  tested 70 developers, mostly novice reviewers. Checklist benefits depended on
+  the task; no strong overall guidance-performance relationship emerged. Keep
+  review hints specific and optional. Ease of reading alone is not review quality.
+
+Judge refinements on real use: can the reader explain the behavior, assess a
+finding and locate its support without repeated searching? Consider time together
+with misunderstandings and missed caveats. Preserve useful thinking time while
+reducing repetition, navigation and unnecessary background.

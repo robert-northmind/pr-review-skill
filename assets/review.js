@@ -31,3 +31,15 @@ document.addEventListener('click', async event => {
  try{await navigator.clipboard.writeText(source.value);status.textContent='Copied';}
  catch{source.hidden=false;source.focus();source.select();status.textContent='Select and copy the Markdown below.';}
 });
+
+for(const scenario of document.querySelectorAll('.scenario')){
+ const controls=scenario.querySelector('.scenario-controls');
+ const buttons=[...controls.querySelectorAll('button')];
+ const frames=[...scenario.querySelectorAll(':scope > .scenario-frame')];
+ const select=index=>{
+  buttons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===index)));
+  frames.forEach((frame,i)=>frame.hidden=i!==index);
+ };
+ controls.hidden=false;scenario.dataset.enhanced='true';select(0);
+ buttons.forEach((button,index)=>button.addEventListener('click',()=>select(index)));
+}
