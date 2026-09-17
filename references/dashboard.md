@@ -257,7 +257,11 @@ The Reporting view shows submitted GitHub reviews of other authors' PRs and merg
 
 Reporting has independent repository include/exclude selections. Inbox hiding, authors, statuses and repository filters do not change Reporting totals. Current-week data is marked in progress; comparisons use completed weeks. Click a chart period for linked PR titles, or Yesterday for the daily recap.
 
-Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes` and `node test_reporting.cjs` and `node test_workspace.cjs` from `scripts/`. Browser checks cover chart drill-down, repository filtering, refresh, and responsive layout.
+Daily charts overlay a separate trailing average for reviews and merges, using 10 complete workdays by default or 5 from the Activity trend selector. Each daily distinct-PR count is one observation; zero weekdays count. Saturdays, Sundays and inclusive date ranges marked as Time off are excluded from both the numerator and denominator. Their raw activity remains in bars and weekly counts. The line holds its last value across excluded days and starts only after a full window is available within cached history. No history before `range_start` or after `range_end` is assumed. Today and `range_end` are excluded because the final cached day may still be incomplete, including after the calendar advances. Repository filters apply before calculating the averages. Weekly charts retain distinct-PR totals without an average overlay.
+
+The window and time-off ranges are stored under `pr-inbox-reporting` in browser local storage. Overlapping ranges are merged; invalid saved dates are ignored. Preferences apply across repository selections and do not modify the GitHub cache. Storage failures are visible and leave preferences applied only for the current session. Asset changes take effect on reload without restarting the server.
+
+Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes`, `node test_reporting.cjs`, `node test_workspace.cjs` and `node test_reporting_browser.cjs` from `scripts/`. Browser checks use a disposable local server and synthetic activity to cover trend windows, time off, persistence, repository filtering, chart drill-down, incomplete history, bar/line alignment and light/dark desktop and mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` to the installed Playwright module path when it is not available through normal Node resolution; `PR_REVIEW_BROWSER_CHANNEL` defaults to `chrome`.
 
 ## Initial review effort
 

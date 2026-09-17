@@ -78,8 +78,22 @@
 </section></details>
 <div class="report-modes" role="group" aria-label="Chart interval"><button class="button" id="report-daily" aria-pressed="true">Daily</button><button class="button" id="report-weekly" aria-pressed="false">Weekly</button></div>
 <button class="button" id="report-yesterday">Yesterday</button></div>
+<div class="report-trend-controls">
+<label for="report-trend-window">Activity trend <select id="report-trend-window"><option value="10">Last 10 workdays</option><option value="5">Last 5 workdays</option></select></label>
+<span class="muted">Daily view · PRs per workday</span>
+</div>
+<details class="report-time-off"><summary>Time off</summary>
+<p class="muted">Weekends are excluded automatically. Mark holidays or leave here to exclude them from the trend. Activity bars and weekly totals keep all PRs. Settings are saved in this browser.</p>
+<form id="report-time-off-form" class="report-time-off-form">
+<label>From <input type="date" id="report-time-off-start" required></label>
+<label>Through <input type="date" id="report-time-off-end" required></label>
+<button class="button" type="submit">Add time off</button>
+</form>
+<ul id="report-time-off-list"></ul>
+</details>
+<p id="report-preferences-status" class="muted" role="status"></p>
 <div id="report-content"></div>
-<details class="report-rules"><summary>How counts work</summary><p class="muted">A PR counts once per day or week, even if you review it again. Weekly totals count distinct PRs, so they can be lower than the sum of the days. Submitted GitHub reviews include comment-only reviews; draft reviews, ordinary comments and AI runs are excluded. Hidden inbox PRs still count here. History covers repositories your GitHub login can access.</p></details>
+<details class="report-rules"><summary>How counts work</summary><p class="muted">A PR counts once per day or week, even if you review it again. Weekly totals count distinct PRs, so they can be lower than the sum of the days. Submitted GitHub reviews include comment-only reviews; draft reviews, ordinary comments and AI runs are excluded. Hidden inbox PRs still count here. History covers repositories your GitHub login can access.</p><p class="muted">The activity trend averages daily counts over the last 5 or 10 complete Monday–Friday workdays, excluding marked time off. Zero-activity workdays count. Weekend and time-off activity stays in the bars but is excluded from the average. The line holds steady across excluded days and starts once a full window is available. Today and the last synced day are excluded until a later sync confirms their full activity. Trends follow the report repository filter. Weekly bars and comparisons remain distinct-PR totals, without a daily-average overlay.</p></details>
 </section>
 <footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
 </main>

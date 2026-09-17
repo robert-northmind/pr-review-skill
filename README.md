@@ -198,11 +198,24 @@ There are no checks or notifications while the page is closed.
 
 ### See your activity
 
-Open **Reporting** and click **Load history** or **Refresh history**. The report
+Open **Reporting** and click **Sync GitHub**. The report
 covers four complete weeks and the current week, using Europe/Berlin dates.
 Switch between **Daily** and **Weekly**, select a chart bar, or click
 **Yesterday** to see the associated PRs. Reporting has its own repository
 filter; hiding an inbox PR does not remove it from your activity.
+
+Daily bars include separate review and merge trend lines. **Activity trend**
+uses the last 10 complete workdays by default; select 5 for a faster-moving
+average. Weekends and dates marked under **Time off** are excluded, while
+zero-activity workdays count. The line stays flat across excluded days and
+starts once a full window is available. Today and the last synced day remain
+outside the average until a later sync confirms their full activity.
+
+Time off accepts an inclusive date range; use the same start and end for a
+single day, or **Remove** to include those weekdays again. These preferences
+are saved in the current browser. Bars and weekly totals retain all activity,
+including PRs reviewed or merged on excluded days. Trend values are daily
+averages; weekly counts remain distinct PRs for the week.
 
 ## Personalize the installation
 
