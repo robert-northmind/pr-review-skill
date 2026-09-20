@@ -28,7 +28,7 @@
    <nav id="file-tree" aria-label="File navigation"></nav>
    <div class="file-sidebar-footer"><progress id="file-progress" value="0" max="3" aria-label="Files viewed"></progress><p id="sidebar-progress"></p><p>Viewed status is private and saved for this comparison.</p></div>
   </aside>
-  <div class="diff-column"><div class="diff-toolbar"><button class="button file-toggle" id="files-toggle" aria-expanded="false">Files</button><span>Unified diff</span><span class="selection-hint">Select code, or click and Shift-click line numbers</span><label class="wrap-control"><input id="wrap-lines" type="checkbox"> Wrap lines</label></div><div id="files" tabindex="-1"></div></div>
+  <div class="diff-column"><div class="diff-toolbar"><button class="button file-toggle" id="files-toggle" aria-expanded="false">Files</button><label class="sr-only" for="diff-layout">Diff layout</label><select id="diff-layout" aria-label="Diff layout"><option value="unified">Unified</option><option value="split">Side by side</option></select><span id="layout-hint" role="status"></span><span class="selection-hint">Select code, or click and Shift-click line numbers</span><label class="wrap-control"><input id="wrap-lines" type="checkbox"> Wrap lines</label></div><div id="files" tabindex="-1"></div></div>
  </section>
  <section id="ai-view" class="ai-view" aria-label="AI review" hidden></section>
  <aside class="conversation" id="conversation" aria-label="Code conversation" hidden>

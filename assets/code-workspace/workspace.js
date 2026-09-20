@@ -5,7 +5,41 @@
  const params = new URLSearchParams(location.search);
  let data, storageKey, saved = {viewed:[], collapsed:[], threads:[], notes:[]}, selection = null, threadId = null, activeFile = 0, toastTimer;
  let tab = params.get('tab') === 'review' ? 'review' : 'code';
+ let layoutPreference='unified',diffLayout='unified';
+ try {if(localStorage.getItem('pr-code-diff-layout')==='split')layoutPreference='split';}catch{}
  const full = new Map(), revealed = new Map();
+ let alignmentFrame;
+ function alignSplitRows(){
+  cancelAnimationFrame(alignmentFrame);
+  alignmentFrame=requestAnimationFrame(()=>{
+   for(const grid of document.querySelectorAll('.split-diff')){
+    const left=[...grid.querySelector('.split-pane').querySelectorAll('[data-pair]')];
+    const right=[...grid.querySelectorAll('.split-pane')[1].querySelectorAll('[data-pair]')];
+    [...left,...right].forEach(row=>row.style.minHeight='');
+    const heights=left.map((row,i)=>Math.max(row.getBoundingClientRect().height,right[i].getBoundingClientRect().height));
+    left.forEach((row,i)=>{row.style.minHeight=right[i].style.minHeight=heights[i]+'px';});
+   }
+  });
+ }
+ function updateLayout(){
+  if(!data||$('code-view').hidden)return;
+  const column=document.querySelector('.diff-column'),style=getComputedStyle(column);
+  const width=column.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
+  const fits=width>=760,next=layoutPreference==='split'&&fits?'split':'unified';
+  $('diff-layout').querySelector('[value="split"]').disabled=!fits;
+  $('diff-layout').value=next;
+  $('layout-hint').textContent=!fits?(layoutPreference==='split'?'Unified to fit · side by side returns with more room':'Hide Files or close chat for side by side'):'';
+  $('files-toggle').setAttribute('aria-expanded',getComputedStyle(document.querySelector('.file-sidebar')).display!=='none');
+  if(next!==diffLayout){
+   const top=document.querySelector('.diff-toolbar').getBoundingClientRect().bottom;
+   const anchor=[...document.querySelectorAll('.code-row')].find(row=>row.getBoundingClientRect().bottom>top&&row.getBoundingClientRect().height>0);
+   const position=anchor?{file:anchor.dataset.file,row:anchor.dataset.row,side:anchor.dataset.side,top:anchor.getBoundingClientRect().top}:null;
+   diffLayout=next;renderFiles();
+   if(position){const targets=[...document.querySelectorAll(`[data-file="${position.file}"][data-row="${position.row}"]`)];const replacement=targets.find(row=>!row.dataset.side||row.dataset.side===position.side)||targets[0];if(replacement)column.scrollTop+=replacement.getBoundingClientRect().top-position.top;}
+  }
+  alignSplitRows();
+ }
+
  const basename = path => path.split('/').pop();
  function notify(text) { $('workspace-toast').textContent=text; $('workspace-toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('workspace-toast').hidden=true,3500); }
  function persist() {
@@ -41,37 +75,63 @@
   if(mode)return file.rows.filter(r=>mode==='base'?r.old!==null:r.new!==null);
   return file.rows;
  }
- function fileRows(index) {
-  const file=data.files[index], mode=full.get(index), extra=revealed.get(index)||new Set();
-  const rows=visibleRows(index), changed=file.rows.filter(r=>r.kind!=='context').map(r=>r.id);
+ function diffEntries(index) {
+  const file=data.files[index],mode=full.get(index),extra=revealed.get(index)||new Set();
+  const rows=visibleRows(index),changed=file.rows.filter(r=>r.kind!=='context').map(r=>r.id);
   const visible=r=>mode||r.kind!=='context'||extra.has(r.id)||changed.some(id=>Math.abs(id-r.id)<=3);
-  let result='', i=0;
-  while(i<rows.length){
-   const row=rows[i];
-   if(!visible(row)){
-    const start=i;while(i<rows.length&&!visible(rows[i]))i++;
-    result+=`<button class="context-gap" data-expand="${index}" data-start="${rows[start].id}" data-end="${rows[i-1].id}">↕ Show ${Math.min(12,i-start)} more lines <span>(${i-start} hidden)</span></button>`;continue;
-   }
-   const kind=mode?'context':row.kind;
-   result+=`<div class="code-row ${kind}" data-file="${index}" data-row="${row.id}"><button class="line-number" data-line="base" aria-label="Select base line ${row.old??'not present'}" ${row.old===null?'disabled':''}>${row.old??''}</button><button class="line-number" data-line="head" aria-label="Select head line ${row.new??'not present'}" ${row.new===null?'disabled':''}>${row.new??''}</button><span class="line-sign">${kind==='add'?'+':kind==='delete'?'−':' '}</span><code>${highlight(row.text)||' '}</code></div>`;
-   i++;
+  const entries=[];
+  for(let i=0;i<rows.length;){
+   if(visible(rows[i])){entries.push(rows[i++]);continue;}
+   const start=i;while(i<rows.length&&!visible(rows[i]))i++;
+   entries.push({gap:true,start:rows[start].id,end:rows[i-1].id,count:i-start});
   }
-  return result||'<p class="empty-code">This file does not exist at this revision.</p>';
+  return entries;
+ }
+ function gapHTML(index,gap,pair=''){
+  return `<button class="context-gap" ${pair} data-expand="${index}" data-start="${gap.start}" data-end="${gap.end}">↕ Show ${Math.min(12,gap.count)} more lines <span>(${gap.count} hidden)</span></button>`;
+ }
+ function splitRows(index,entries){
+  const pairs=[];
+  for(let i=0;i<entries.length;){
+   const row=entries[i];
+   if(row.gap||row.kind==='context'){pairs.push([row,row]);i++;continue;}
+   const removed=[],added=[];
+   while(i<entries.length&&!entries[i].gap&&entries[i].kind!=='context'){
+    const changed=entries[i++];(changed.kind==='delete'?removed:added).push(changed);
+   }
+   for(let n=0;n<Math.max(removed.length,added.length);n++)pairs.push([removed[n],added[n]]);
+  }
+  return `<div class="split-diff">${['base','head'].map((side,lane)=>`<section class="split-pane" aria-label="${side==='base'?'Base':'Head'} version"><div class="split-heading">${side==='base'?'Base':'Head'} <code>${esc(side==='base'?data.base:data.head)}</code></div><div class="split-line-list">${pairs.map((pair,n)=>{
+   const row=pair[lane];
+   if(!row)return `<div class="split-blank" data-pair="${n}" aria-hidden="true"></div>`;
+   if(row.gap)return gapHTML(index,row,`data-pair="${n}"`);
+   const number=side==='base'?row.old:row.new;
+   return `<div class="code-row split-cell ${row.kind}" data-pair="${n}" data-side="${side}" data-file="${index}" data-row="${row.id}"><button class="line-number" data-line="${side}" aria-label="Select ${side} line ${number}">${number}</button><span class="line-sign">${row.kind==='add'?'+':row.kind==='delete'?'−':' '}</span><code>${highlight(row.text)||' '}</code></div>`;
+  }).join('')}</div></section>`).join('')}</div>`;
+ }
+ function fileRows(index) {
+  const mode=full.get(index),entries=diffEntries(index);
+  if(diffLayout==='split'&&!mode)return splitRows(index,entries);
+  return entries.map(row=>{
+   if(row.gap)return gapHTML(index,row);
+   const kind=mode?'context':row.kind;
+   return `<div class="code-row ${kind}" data-file="${index}" data-row="${row.id}"><button class="line-number" data-line="base" aria-label="Select base line ${row.old??'not present'}" ${row.old===null?'disabled':''}>${row.old??''}</button><button class="line-number" data-line="head" aria-label="Select head line ${row.new??'not present'}" ${row.new===null?'disabled':''}>${row.new??''}</button><span class="line-sign">${kind==='add'?'+':kind==='delete'?'−':' '}</span><code>${highlight(row.text)||' '}</code></div>`;
+  }).join('')||'<p class="empty-code">This file does not exist at this revision.</p>';
  }
  function renderFiles() {
   $('files').innerHTML=filteredFiles().map(({file,index})=>{
    const collapsed=saved.collapsed.includes(file.path),mode=full.get(index);
    return `<article class="file-card ${collapsed?'collapsed':''}" id="file-${index}"><header class="file-header"><button class="file-collapse" data-collapse="${index}" aria-expanded="${!collapsed}"><span aria-hidden="true">${collapsed?'›':'⌄'}</span><code>${esc(file.path)}</code></button><span class="file-stats"><span class="added">+${file.additions}</span><span class="deleted">−${file.deletions}</span></span><div class="file-actions">${file.status==='added'?'<span class="file-status">Added</span>':''}${mode?`<select data-revision="${index}" aria-label="Full file revision"><option value="head" ${mode==='head'?'selected':''}>Head ${esc(data.head)}</option><option value="base" ${mode==='base'?'selected':''}>Base ${esc(data.base)}</option></select>`:''}<button data-full="${index}" aria-pressed="${!!mode}">${mode?'Back to diff':'Full file'}</button><label><input data-viewed="${index}" type="checkbox" ${saved.viewed.includes(file.path)?'checked':''}>Viewed</label></div></header><div class="code-lines" ${collapsed?'hidden':''}>${collapsed?'':fileRows(index)}</div></article>`;
   }).join('')||'<div class="empty-code"><h3>No files to show</h3><p>Clear the file filter or turn off Only unviewed.</p><button class="button" id="reset-filters">Show all files</button></div>';
-  paintSelection();renderTree();renderProgress();
+  paintSelection();renderTree();renderProgress();alignSplitRows();
  }
  function paintSelection() {
-  for(const row of document.querySelectorAll('.code-row'))row.classList.toggle('selected',!!selection&&Number(row.dataset.file)===selection.file&&selection.ids.includes(Number(row.dataset.row)));
+  for(const row of document.querySelectorAll('.code-row'))row.classList.toggle('selected',!!selection&&Number(row.dataset.file)===selection.file&&selection.ids.includes(Number(row.dataset.row))&&(!row.dataset.side||row.dataset.side===selection.side));
   $('selection-bar').hidden=!selection||tab!=='code';
   if(selection)$('selection-label').textContent=`${basename(data.files[selection.file].path)} · ${selection.label}`;
  }
- function makeSelection(file,start,end,side='head') {
-  const ids=visibleRows(file).filter(row=>row.id>=Math.min(start,end)&&row.id<=Math.max(start,end)).map(row=>row.id);
+ function makeSelection(file,start,end,side='head',sideOnly=false) {
+  const ids=visibleRows(file).filter(row=>row.id>=Math.min(start,end)&&row.id<=Math.max(start,end)&&(!sideOnly||(side==='base'?row.old:row.new)!==null)).map(row=>row.id);
   const rows=data.files[file].rows.filter(r=>ids.includes(r.id));
   const lines=rows.map(r=>side==='base'?r.old:r.new).filter(n=>n!==null);
   const other=rows.some(r=>side==='base'?r.old===null:r.new===null);
@@ -79,32 +139,32 @@
   return {file,ids,side,label,path:data.files[file].path,head:data.head,base:data.base,
    snippet:rows.map(r=>`${r.kind==='add'?'+':r.kind==='delete'?'-':' '} ${r.text}`).join('\n')};
  }
- function selectRows(file,start,end,side) {selection=makeSelection(file,start,end,side);paintSelection();}
+ function selectRows(file,start,end,side) {selection=makeSelection(file,start,end,side,diffLayout==='split'&&!full.has(file));paintSelection();}
  function setTab(value) {
   tab=value;$('code-view').hidden=tab!=='code';$('ai-view').hidden=tab!=='review';
   $('code-tab').setAttribute('aria-pressed',tab==='code');$('review-tab').setAttribute('aria-pressed',tab==='review');
-  const url=new URL(location.href);url.searchParams.set('tab',tab);history.replaceState(null,'',url);paintSelection();
+  const url=new URL(location.href);url.searchParams.set('tab',tab);history.replaceState(null,'',url);paintSelection();updateLayout();
  }
  function jump(file,ids=null,side='head') {
   activeFile=file;$('file-filter').value='';$('unviewed-only').checked=false;
   saved.collapsed=saved.collapsed.filter(p=>p!==data.files[file].path);persist();setTab('code');
   if(ids){full.delete(file);const extra=revealed.get(file)||new Set();for(const id of ids)extra.add(id);revealed.set(file,extra);selection=makeSelection(file,ids[0],ids.at(-1),side);}
-  $('code-view').classList.remove('files-open');$('files-toggle').setAttribute('aria-expanded','false');renderFiles();
+  $('code-view').classList.remove('files-open');$('files-toggle').setAttribute('aria-expanded','false');renderFiles();updateLayout();
   const target=ids?document.querySelector(`[data-file="${file}"][data-row="${ids[0]}"]`):$(`file-${file}`);
   target?.scrollIntoView({block:'start',behavior:'instant'});
  }
  function showRail(kind='chat') {
   $('conversation').hidden=false;$('workspace-body').classList.add('rail-open');$('chat-toggle').setAttribute('aria-expanded','true');
   $('chat-content').hidden=kind!=='chat';$('notes-content').hidden=kind!=='notes';$('rail-title').textContent=kind==='chat'?'Ask about this code':'Private notes';
-  if(kind==='chat')renderChat();else renderNotes();
+  if(kind==='chat')renderChat();else renderNotes();updateLayout();
  }
- function closeRail() {$('conversation').hidden=true;$('workspace-body').classList.remove('rail-open');$('chat-toggle').setAttribute('aria-expanded','false');$('chat-toggle').focus();}
+ function closeRail() {$('conversation').hidden=true;$('workspace-body').classList.remove('rail-open');$('chat-toggle').setAttribute('aria-expanded','false');$('chat-toggle').focus();updateLayout();}
  function currentThread(){return saved.threads.find(t=>t.id===threadId);}
  let draftContext=null;
  function beginThread(context=null){threadId=null;draftContext=context?structuredClone(context):null;$('question').value='';showRail();$('question').focus({preventScroll:true});}
  function contextHTML(context) {
   if(!context)return `<strong>Entire pull request</strong><p>Example comparison ${esc(data.base)} → ${esc(data.head)}</p>`;
-  return `<div class="context-heading"><button data-context-jump>${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context aria-label="Remove code context" title="${currentThread()?'Start a new conversation without these lines; this conversation stays saved.':'Remove these lines from your question.'}">×</button></div><p>${esc(context.path)} · ${esc(context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details>`;
+  return `<div class="context-heading"><button data-context-jump>${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context aria-label="Remove code context" title="${currentThread()?'Start a new conversation without these lines; this conversation stays saved.':'Remove these lines from your question.'}">×</button></div><p>${esc(context.path)} · ${esc(context.side==='base'?context.base:context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details>`;
  }
  function renderChat() {
   const thread=currentThread(),context=thread?.context||draftContext;
@@ -175,23 +235,34 @@
  document.addEventListener('pointerdown',event=>{
   const gutter=event.target.closest('[data-line]');if(!gutter||gutter.disabled||event.button!==0)return;
   const row=gutter.closest('.code-row'),file=Number(row.dataset.file),id=Number(row.dataset.row),side=gutter.dataset.line;
-  const start=event.shiftKey&&selection?.file===file?selection.ids[0]:id;
+  const start=event.shiftKey&&selection?.file===file&&selection.side===side?selection.ids[0]:id;
   drag={file,start,side};selectRows(file,start,id,side);event.preventDefault();gutter.focus({preventScroll:true});
  });
- document.addEventListener('pointerover',event=>{if(!drag)return;const row=event.target.closest('.code-row');if(row&&Number(row.dataset.file)===drag.file)selectRows(drag.file,drag.start,Number(row.dataset.row),drag.side);});
+ document.addEventListener('pointerover',event=>{if(!drag)return;const row=event.target.closest('.code-row');if(row&&Number(row.dataset.file)===drag.file&&(!row.dataset.side||row.dataset.side===drag.side))selectRows(drag.file,drag.start,Number(row.dataset.row),drag.side);});
  document.addEventListener('pointerup',()=>{drag=null;});
  document.addEventListener('pointercancel',()=>{drag=null;});
- document.addEventListener('click',event=>{const gutter=event.target.closest('[data-line]');if(!gutter||event.detail!==0||gutter.disabled)return;const row=gutter.closest('.code-row'),file=Number(row.dataset.file),id=Number(row.dataset.row);selectRows(file,event.shiftKey&&selection?.file===file?selection.ids[0]:id,id,gutter.dataset.line);});
+ document.addEventListener('click',event=>{const gutter=event.target.closest('[data-line]');if(!gutter||event.detail!==0||gutter.disabled)return;const row=gutter.closest('.code-row'),file=Number(row.dataset.file),id=Number(row.dataset.row);selectRows(file,event.shiftKey&&selection?.file===file&&selection.side===gutter.dataset.line?selection.ids[0]:id,id,gutter.dataset.line);});
  document.addEventListener('mouseup',()=>{
   const text=window.getSelection();if(!text||text.isCollapsed||!text.toString().trim())return;
   const parent=node=>node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement;
   const a=parent(text.anchorNode)?.closest('.code-row'),b=parent(text.focusNode)?.closest('.code-row');
-  if(a&&b&&a.dataset.file===b.dataset.file)selectRows(Number(a.dataset.file),Number(a.dataset.row),Number(b.dataset.row),full.get(Number(a.dataset.file))==='base'?'base':'head');
+  if(a&&b&&a.dataset.file===b.dataset.file&&a.dataset.side===b.dataset.side)selectRows(Number(a.dataset.file),Number(a.dataset.row),Number(b.dataset.row),a.dataset.side||(full.get(Number(a.dataset.file))==='base'?'base':'head'));
  });
- $('files-toggle').addEventListener('click',()=>{const open=$('code-view').classList.toggle('files-open');$('files-toggle').setAttribute('aria-expanded',open);});
+ $('files-toggle').addEventListener('click',()=>{
+  const overlay=innerWidth<=750||(innerWidth<=1150&&!$('conversation').hidden);
+  if(overlay){$('code-view').classList.remove('files-hidden');$('code-view').classList.toggle('files-open');}
+  else $('code-view').classList.toggle('files-hidden');
+  updateLayout();
+ });
+ $('diff-layout').addEventListener('change',event=>{
+  layoutPreference=event.target.value;
+  try{localStorage.setItem('pr-code-diff-layout',layoutPreference);}catch{notify('Diff layout applies for this session; browser storage is unavailable.');}
+  updateLayout();
+ });
+ new ResizeObserver(updateLayout).observe(document.querySelector('.diff-column'));
  $('reset-demo').addEventListener('click',()=>{saved={viewed:[],collapsed:[],threads:[],notes:[]};selection=null;threadId=null;draftContext=null;editingNote=null;full.clear();revealed.clear();$('file-filter').value='';$('unviewed-only').checked=false;$('note-text').value='';$('question').value='';persist();renderFiles();closeRail();notify('This example’s progress, conversations and notes were cleared.');});
  $('file-filter').addEventListener('input',renderFiles);$('unviewed-only').addEventListener('change',renderFiles);
- $('wrap-lines').addEventListener('change',event=>$('files').classList.toggle('wrap-code',event.target.checked));
+ $('wrap-lines').addEventListener('change',event=>{$('files').classList.toggle('wrap-code',event.target.checked);alignSplitRows();});
  $('collapse-all').addEventListener('click',()=>{const all=data.files.every(f=>saved.collapsed.includes(f.path));saved.collapsed=all?[]:data.files.map(f=>f.path);$('collapse-all').textContent=all?'Collapse all':'Expand all';persist();renderFiles();});
  $('code-tab').addEventListener('click',()=>setTab('code'));$('review-tab').addEventListener('click',()=>setTab('review'));
  $('chat-toggle').addEventListener('click',()=>{showRail();$('question').focus({preventScroll:true});});$('notes-toggle').addEventListener('click',()=>showRail('notes'));$('close-rail').addEventListener('click',closeRail);

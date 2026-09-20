@@ -70,7 +70,7 @@ ready** and **No AI review yet** appear beside the effort pill, independently
 of the action label. Example PR titles contain only the change title.
 
 The prototype exercises file navigation, filtering, collapse, viewed progress,
-unified diffs, incremental context expansion, complete base/head files,
+unified and side-by-side diffs, incremental context expansion, complete base/head files,
 line and range selection, anchored conversations, follow-ups, private notes,
 and navigation from a sample review finding into code. It is intentionally a
 separate fixture, not a live feature flag or replacement for generated reports.
@@ -102,3 +102,26 @@ The existing dashboard, launch, review-notes, artifact-state, snooze and queue
 Python suites pass (112 tests), as does the workspace sync JavaScript check.
 JavaScript syntax and `git diff --check` pass. These validate the prototype and
 existing dashboard contracts, not the fictional TypeScript code or AI quality.
+
+
+## Diff layout and available space
+
+The **Diff layout** selector offers **Unified** and **Side by side**, remembering
+that preference in this browser across example PRs. Split view pairs removed
+lines on the base side with additions on the head side, aligns unchanged rows,
+and leaves empty cells for additions/deletions without counterparts. Context
+expansion affects both sides; full-file mode still shows one chosen revision.
+Selection in split view attaches only the chosen side, with its line numbers
+and revision. Each side can scroll horizontally; **Wrap lines** keeps paired
+rows aligned when either side wraps.
+
+Side by side needs at least 760px of actual diff space (about 380px per side).
+Below that, the selector shows Unified and explains the temporary fallback;
+the saved split preference returns when space is available. **Files** toggles
+the file list on desktop as well as mobile. At 880px viewport width, hiding
+Files makes room for the split view; opening chat falls back to unified.
+The threshold is a prototype design choice, not a fixed product requirement.
+
+Browser checks cover paired row alignment with wrapping, base-only range
+selection and chat attachment, context expansion on both sides, full base/head
+files, saved layout after reload, and width changes with chat and Files open.
