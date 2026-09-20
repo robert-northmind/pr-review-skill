@@ -77,12 +77,11 @@ See [screenshot provenance](docs/screenshots/README.md).
 
 - Python 3.10 or newer, Git, and the [GitHub CLI](https://cli.github.com/).
 - A GitHub login with access to the repositories you want to review.
-- **macOS for the dashboard's review-launch buttons.** They open the macOS
-  Terminal app. The Python code also uses Unix facilities; Windows support
-  is not provided.
-- Claude Code or Codex CLI installed and authenticated if you want to launch
-  AI reviews. The Codex launcher currently requires support for
-  `--approve-for-me`.
+- macOS for Claude review launches, which open Terminal. The Python backend
+  uses Unix facilities; Windows support is not provided.
+- Claude Code installed and authenticated for Claude reviews, or the pinned
+  `openai-codex` runtime from `requirements-triage.txt` and an existing Codex
+  login for in-app Codex reviews.
 
 Background effort estimates use the optional Python dependencies in
 `requirements-triage.txt`. Install them into `.venv`, then configure
