@@ -81,6 +81,11 @@ model sessions, bounded context gathering, cancellation/errors, durable server
 storage, and revision changes that invalidate viewed state and label old chats.
 No posting, approval or merge action is implemented.
 
+Use **×** on the chat’s selected-code card to remove the attachment while
+keeping the draft question. If the conversation already has messages, removal
+starts a fresh PR-wide conversation; the original thread and its code context
+remain available in the conversation picker.
+
 ## Validation
 
 Browser-checked in the Codex browser at desktop, 390px and 320px widths, with

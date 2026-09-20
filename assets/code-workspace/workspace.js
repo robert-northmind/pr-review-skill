@@ -104,7 +104,7 @@
  function beginThread(context=null){threadId=null;draftContext=context?structuredClone(context):null;$('question').value='';showRail();$('question').focus({preventScroll:true});}
  function contextHTML(context) {
   if(!context)return `<strong>Entire pull request</strong><p>Example comparison ${esc(data.base)} → ${esc(data.head)}</p>`;
-  return `<button data-context-jump>${esc(basename(context.path))} · ${esc(context.label)}</button><p>${esc(context.path)} · ${esc(context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details>`;
+  return `<div class="context-heading"><button data-context-jump>${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context aria-label="Remove code context" title="${currentThread()?'Start a new conversation without these lines; this conversation stays saved.':'Remove these lines from your question.'}">×</button></div><p>${esc(context.path)} · ${esc(context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details>`;
  }
  function renderChat() {
   const thread=currentThread(),context=thread?.context||draftContext;
@@ -155,6 +155,7 @@
   if(d.full!==undefined){const index=Number(d.full);full.has(index)?full.delete(index):full.set(index,'head');saved.collapsed=saved.collapsed.filter(p=>p!==data.files[index].path);persist();renderFiles();document.querySelector(`[data-full="${index}"]`)?.focus({preventScroll:true});}
   if(d.prompt)ask(d.prompt);
   if(d.saveMessage!==undefined){const t=currentThread();saved.notes.push({text:'[Scripted demo reply]\n'+t.messages[Number(d.saveMessage)].text,context:t.context});persist();renderProgress();notify('Saved to private notes.');}
+  if(d.removeContext!==undefined){const hadThread=!!currentThread();threadId=null;draftContext=null;selection=null;paintSelection();renderChat();$('question').focus({preventScroll:true});notify(hadThread?'Code detached. Your previous conversation is saved.':'Code detached. Your draft question is kept.');}
   if(d.contextJump!==undefined){const context=currentThread()?.context||draftContext;if(context){jump(context.file,context.ids,context.side);if(innerWidth<=750)closeRail();}}
   if(d.noteJump!==undefined){const c=saved.notes[Number(d.noteJump)].context;jump(c.file,c.ids,c.side);if(innerWidth<=750)closeRail();}
   if(d.noteDelete!==undefined){saved.notes.splice(Number(d.noteDelete),1);editingNote=null;$('note-text').value='';persist();renderNotes();}
