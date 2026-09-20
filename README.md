@@ -252,11 +252,28 @@ Selecting Codex runs AI reviews in a background worker and opens live activity
 in the dashboard. Stage progress follows reviewer checkpoints; it is an estimate,
 not time remaining. Reviews keep running across page reloads and server restarts.
 Stop review cancels the worker and preserves its saved activity. Claude still
-opens Terminal. Follow-up messages and inline answers are not available yet.
+opens Terminal. Full-review sessions do not accept follow-ups; the code workspace
+has a separate persistent chat for code questions.
 
 Install `requirements-triage.txt` into the server's Python environment for Codex
 reviews. See [dashboard operations](references/dashboard.md#in-app-codex-reviews)
 for isolated state, progress reporting, and validation.
+
+## Code review workspace
+
+**Open review** opens a workspace with AI review and Code changes tabs. Explore
+unified or side-by-side diffs, expand context, open full files, and save viewed
+progress. Checking for new commits resets viewed status only for changed file
+comparisons. Private notes and revision-labeled conversations are saved locally.
+
+Select lines to ask Codex questions, add or remove code attachments, and request
+additional repository context. The assistant can search the full repository,
+including unchanged code, and read matching files at the pinned revision. It cannot
+execute code or post feedback. Finished HTML reviews stay in the dashboard;
+completion does not open an external browser.
+
+Inline chat uses the local Codex login and model profile. See
+[workspace architecture, limits and tests](references/code-workspace.md).
 
 ## Development and recovery
 

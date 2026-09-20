@@ -121,18 +121,31 @@ function aiReviewActions(pr){
 function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
 }
+function codeWorkspaceLink(pr){
+ const ready=!!notesArtifact(pr.artifacts);
+ const query='url='+encodeURIComponent(pr.url);
+ return `<a class="button" href="/workspace?${query}&tab=${ready?'review':'code'}">Open review</a>`;
+}
+function workspaceStatusBadge(pr){
+ const artifact=notesArtifact(pr.artifacts);
+ const ready=!!artifact;
+ const running=active(pr.run);
+ const label=running?'AI review running':ready?(artifact?.freshness==='older'?'AI review · older commit':'AI review ready'):'No AI review yet';
+ return `<span class="chip ${running?'run-live':ready&&artifact?.freshness!=='older'?'good':artifact?.freshness==='older'?'warn':''} workspace-status">${label}</span>`;
+}
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;
+ const workspaceLink=codeWorkspaceLink(pr);
  const organize=hidden?'':`<p class="detail-heading">Organize</p>${snoozeControl(pr)}<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}">Hide from inbox</button>`;
  const extra=`${organize}${hasNotes?'<p class="detail-heading">AI tools</p>'+aiReviewActions(pr):''}`;
  const buttons=hidden?`<button class="button primary" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
-  queueCaptureButton(pr)+artifactLink(notesArtifact(arts),'Open AI notes',pr)+
-  (!hasNotes?actionDisclosure(pr,'AI review',aiReviewActions(pr),'pr-ai-menu'):'')+actionDisclosure(pr,'•••',extra);
+  queueCaptureButton(pr)+(workspaceLink||artifactLink(notesArtifact(arts),'Open AI notes',pr))+
+  (!hasNotes&&!workspaceLink?actionDisclosure(pr,'AI review',aiReviewActions(pr),'pr-ai-menu'):'')+actionDisclosure(pr,'•••',extra);
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">AI: ${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes&&!run)status+='<span class="chip good">AI notes ready</span>';
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
- return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
+ return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}</div>
  ${triageCard(pr)}${artifactWarning(pr)}${reviewSummary(run)}
  ${run||history||Object.keys(arts).length?`<details class="run-details"><summary>AI run details & history</summary><div class="detail-content">

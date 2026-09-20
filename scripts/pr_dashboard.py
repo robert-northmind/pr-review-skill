@@ -716,6 +716,7 @@ def full_review_prompt(pr_url: str) -> str:
         "self-contained review.html: explain the change at the top, then include "
         "verified findings, copyable draft comments, and validation evidence. "
         "Register it as review-html with the pr-review-tracker for the dashboard. "
+        "Do not automatically open the report or launch an external browser. "
         "Do not produce a separate explainer HTML or publish to GitHub."
     )
 
