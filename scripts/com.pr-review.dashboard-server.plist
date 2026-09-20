@@ -6,7 +6,7 @@
     <string>com.pr-review.dashboard-server</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/example-user/.agents/skills/pr-review/.venv/bin/python</string>
         <string>/Users/example-user/.agents/skills/pr-review/scripts/pr_server.py</string>
     </array>
     <key>EnvironmentVariables</key>
