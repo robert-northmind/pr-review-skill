@@ -29,3 +29,9 @@ flows were exercised interactively through the app's browser tools rather than
 running that script in this session. No full AI review was generated during
 validation; generation uses the existing tested launch service. Existing reports
 were represented by a registered synthetic HTML report for embedding checks.
+
+Follow-up: side-by-side selection now remains enabled at every width instead of
+being overridden by the width check. Verified switching with Files open at 876px
+(645px diff viewport, 760px scrollable comparison) and at 390px (368px viewport).
+Both retain split layout without page overflow. The browser regression covers
+selection at 880px with Files open, persistence, and retaining split on resize.

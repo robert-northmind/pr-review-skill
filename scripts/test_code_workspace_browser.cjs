@@ -11,12 +11,17 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
  try{
   const [output]=await once(fixture.stdout,'data');
   browser=await chromium.launch({headless:true,channel:process.env.PR_REVIEW_BROWSER_CHANNEL||'chrome'});
-  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+  const page=await browser.newPage({viewport:{width:880,height:1000}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(output.toString().trim());
   await page.locator('#file-0 [data-line="head"]').first().waitFor();
   await page.locator('#diff-layout').selectOption('split');
   assert.equal(await page.locator('#file-0 .split-pane').count(),2);
+  // Side by side must remain usable with the Files panel occupying part of a narrow window.
+  assert.equal(await page.locator('#files-toggle').getAttribute('aria-expanded'),'true');
+  assert.equal(await page.locator('#diff-layout').inputValue(),'split');
+  await page.reload();await page.locator('#file-0 .split-pane').first().waitFor();
+  assert.equal(await page.locator('#diff-layout').inputValue(),'split');
   await page.locator('#file-0').getByRole('button',{name:'Select head line 40',exact:true}).click();
   await page.locator('#ask-selection').click();
   await page.locator('#question').fill('Explain this guard');
@@ -59,6 +64,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   for(const width of [1440,880,390,320]){
    await page.setViewportSize({width,height:950});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`overflow ${width}`);
+   assert.equal(await page.locator('#diff-layout').inputValue(),'split');
   }
   assert.deepEqual(errors,[]);
   console.log('Workspace browser checks passed: layouts, source selection, durable chat/notes/viewed state, cancellation, report sandbox and responsive layout.');

@@ -11,8 +11,9 @@ Code changes use GitHub's PR head and merge base, pinned by full commit SHA.
 Changed files load as they enter the viewport, with a retry control for failures.
 Unified/side-by-side layouts, wrapping, context expansion, full base/head files,
 selection, collapse, filtering and viewed status follow the prototype. Side by
-side falls back to unified below 760px of available diff width and returns when
-space becomes available. Layout preference is stored in the browser.
+side stays selectable at every width. When less than 760px is available, the diff
+scrolls horizontally instead of overriding the chosen layout. Hiding Files gives
+it more room. Layout preference is stored in the browser.
 
 **Check for new commits** fetches a new pinned comparison. Viewed status survives
 only when both file blobs, modes, rename identity and status remain unchanged.

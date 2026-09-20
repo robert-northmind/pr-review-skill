@@ -158,14 +158,10 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       column.clientWidth -
       parseFloat(style.paddingLeft) -
       parseFloat(style.paddingRight);
-    const fits = width >= 760,
-      next = layoutPreference === "split" && fits ? "split" : "unified";
-    $("diff-layout").querySelector('[value="split"]').disabled = !fits;
+    const next = layoutPreference;
     $("diff-layout").value = next;
-    $("layout-hint").textContent = !fits
-      ? layoutPreference === "split"
-        ? "Unified to fit · side by side returns with more room"
-        : "Hide Files or close chat for side by side"
+    $("layout-hint").textContent = next === "split" && width < 760
+      ? "Scroll horizontally to see both sides, or hide Files for more room"
       : "";
     $("files-toggle").setAttribute(
       "aria-expanded",
