@@ -21,10 +21,14 @@ import dashboard_reporting as reporting
 import dashboard_queue as queue
 import dashboard_triage as triage
 import dashboard_reviews as codex
+import code_workspace as workspace
+import workspace_github
+import workspace_chat
+import workspace_report
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
-             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel'}
+             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
 
 
 class Server(ThreadingHTTPServer):
@@ -65,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get('Origin')
         return origin == 'http://' + self.headers.get('Host','')
 
-    def _serve_artifact(self, query):
+    def _serve_artifact(self, query, embedded=False):
         raw = (parse_qs(query).get('path') or [''])[0]
         if not raw:
             self._error(400,'Missing artifact path.'); return
@@ -75,9 +79,10 @@ class Handler(BaseHTTPRequestHandler):
         suffix=path.suffix.lower()
         if suffix == '.md':
             body=dashboard.render_markdown_page(path.name,path,dashboard.markdown_to_html(path.read_text()))
+            if embedded: body=workspace_report.embed(body)
             # Markdown is sanitized by our renderer; permit its fixed copy handler.
             self._send(200,body,'text/html; charset=utf-8',
-                "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+                ("sandbox allow-scripts; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; frame-ancestors FRAME; base-uri 'none'; form-action 'none'").replace("FRAME", "'self'" if embedded else "'none'"))
         elif suffix in ('.html','.htm'):
             # Opaque sandbox origin: explainer scripts can run, but cannot read
             # dashboard state/tokens or send authenticated dashboard actions.
@@ -91,8 +96,9 @@ class Handler(BaseHTTPRequestHandler):
                     return match.group(0)
                 return 'href=' + match.group(1) + '/artifact?path=' + quote(target, safe='') + match.group(1)
             body = re.sub(r"href=([\"'])(file://[^\"']+)\1", local_link, path.read_text())
+            if embedded: body=workspace_report.embed(body)
             self._send(200,body,'text/html; charset=utf-8',
-                "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+                ("sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; connect-src 'none'; frame-ancestors FRAME; base-uri 'none'; form-action 'none'").replace('FRAME', "'self'" if embedded else "'none'"))
         elif suffix in ('.png','.jpg','.jpeg','.webp','.gif'):
             self._send(200,path.read_bytes(),mimetypes.guess_type(str(path))[0])
         else:
@@ -131,6 +137,36 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path in MUTATIONS:
                 self._error(405,'Use the dashboard action button to make a POST request.')
+            elif parsed.path == '/workspace':
+                page=(ASSETS/'code-workspace/index.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
+                self._send(200,page,'text/html; charset=utf-8')
+            elif parsed.path.startswith('/assets/code-workspace/'):
+                name = parsed.path.removeprefix('/assets/code-workspace/')
+                if name not in ('workspace.js','workspace.css','model.mjs','api.mjs','diff.mjs','review.mjs','demo.mjs','views.mjs'):
+                    self._error(404,'Asset not found.'); return
+                self._send(200,(ASSETS/'code-workspace'/name).read_bytes(), 'text/css' if name.endswith('.css') else 'text/javascript')
+            elif parsed.path.startswith('/api/workspace') or parsed.path == '/workspace-report':
+                if self.headers.get('Sec-Fetch-Site') == 'cross-site' or (self.headers.get('Origin') and not self._valid_origin()):
+                    self._error(403,'Workspace data is only available from this origin.'); return
+                query=parse_qs(parsed.query)
+                url=query.get('url',[''])[0]
+                rev=query.get('revision',[None])[0]
+                if parsed.path == '/api/workspace':
+                    self._send(200,workspace.load(url,rev))
+                elif parsed.path == '/api/workspace-file':
+                    self._send(200,workspace_github.file_diff(url,rev,query.get('path',[''])[0]))
+                elif parsed.path == '/api/workspace-chat':
+                    self._send(200,workspace_chat.snapshot(url,query.get('thread_id',[''])[0]))
+                elif parsed.path == '/api/workspace-review':
+                    self._send(200,workspace.review(url,query.get('head',[''])[0]))
+                elif parsed.path == '/workspace-report':
+                    info=workspace.review(url,query.get('head',[''])[0])
+                    artifact=info['artifact']
+                    if not artifact or artifact['version'] != query.get('version',[''])[0]:
+                        self._error(404,'Report version unavailable. Reload the AI review tab.'); return
+                    self._serve_artifact('path='+quote(artifact['path'],safe=''),embedded=True)
+                else:
+                    self._error(404,'Workspace API not found.')
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
@@ -172,11 +208,17 @@ class Handler(BaseHTTPRequestHandler):
             self._error(404,'Action not found.'); return
         try:
             length=int(self.headers.get('Content-Length','0'))
-            if not 0 < length <= 16384 or self.headers.get('Content-Type','').split(';')[0] != 'application/json':
+            if not 0 < length <= (650000 if path == '/workspace-save' else 100000 if path == '/workspace-chat' else 16384) or self.headers.get('Content-Type','').split(';')[0] != 'application/json':
                 self._error(400,'Expected a small JSON request.'); return
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict):
                 raise ValueError('Expected an object.')
+            if path == '/workspace-save':
+                self._send(200,workspace.save(str(data.get('url','')),data)); return
+            if path == '/workspace-chat':
+                self._send(202,workspace_chat.start(str(data.get('url','')),data)); return
+            if path == '/workspace-chat-cancel':
+                self._send(200,workspace_chat.cancel(str(data.get('url','')),data.get('thread_id'))); return
             if path == '/review-cancel':
                 self._send(200, codex.cancel(str(data.get('run_id', '')))); return
             if path == '/artifact-opened':

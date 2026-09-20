@@ -176,9 +176,9 @@ class Handler(pr_server.Handler):
             self._send(200, payload(scenario)); return
         if parsed.path.startswith('/assets/code-workspace/'):
             name = parsed.path.removeprefix('/assets/code-workspace/')
-            if name not in ('workspace.js', 'workspace.css'):
+            if name not in ('workspace.js', 'workspace.css', 'model.mjs','api.mjs','diff.mjs','review.mjs','demo.mjs','views.mjs'):
                 self._error(404, 'Asset not found.'); return
-            self._send(200, (ASSETS/name).read_bytes(), 'text/javascript' if name.endswith('.js') else 'text/css'); return
+            self._send(200, (ASSETS/name).read_bytes(), 'text/javascript' if name.endswith(('.js','.mjs')) else 'text/css'); return
         super().do_GET()
 
     def do_POST(self):

@@ -460,3 +460,8 @@ from `scripts/`. `node scripts/test_codex_browser.cjs` uses a disposable synthet
 review to exercise live progress, reload/reconnect, cancellation, escaped text,
 and light/dark desktop/mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` when
 Playwright is outside Node's normal module path. The fixture never calls a model.
+
+## Code exploration and inline questions
+
+See [the code workspace](code-workspace.md) for revision-pinned diffs, private
+progress/notes, persistent inline chat, report embedding and focused tests.

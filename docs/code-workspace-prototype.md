@@ -145,3 +145,9 @@ files, saved layout after reload, and width changes with chat and Files open.
   OS browser. Explicit user requests to open a report remain supported. The
   installed skill also follows this behavior for future reviews; the workspace
   prototype itself remains isolated from the live dashboard.
+
+## Implementation branch
+
+`feature/review-code-workspace` builds on this prototype. See
+`references/code-workspace.md` for the connected architecture, behavior, bounds,
+and validation commands. The original prototype and its server remain isolated.

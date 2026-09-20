@@ -21,7 +21,7 @@ function queueCard(pr){
  const reviewed=w.review_observation?.head_sha;
  const stateLabel=w.closed?(pr.pr_state==='merged'?'Merged':'Closed'):queueLabels[w.stage];
  return `<article class="pr-card queue-card" data-queue-pr="${esc(pr.url)}">
-  <div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${primary}${codeWorkspaceLink(pr)}${artifactLink(notesArtifact(pr.artifacts),'Open AI notes',pr)}${actionDisclosure(pr,'•••',menu)}</div></div>
+  <div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${primary}${codeWorkspaceLink(pr)}${actionDisclosure(pr,'•••',menu)}</div></div>
   ${reasons.length?`<div class="queue-reasons">${reasons.map(reason=>`<a target="_blank" rel="noopener" class="chip warn" href="${esc(safeUrl(reason.url))}">${esc(reason.label)} ↗</a>`).join('')}</div>`:''}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
   ${artifactWarning(pr)}${triageCard(pr)}${reviewSummary(run)}

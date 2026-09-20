@@ -1,5 +1,6 @@
 """Lifecycle and HTTP checks without model calls or credentials."""
 import json
+from pathlib import Path
 import threading
 import subprocess
 import sys
@@ -112,7 +113,8 @@ class Stalled:
  def close(self):pass
 c.run_worker(sys.argv[1],lambda approval:Stalled())
 """
-        proc=subprocess.Popen([sys.executable,'-c',code,run],start_new_session=True)
+        proc=subprocess.Popen([sys.executable,'-c',code,run],start_new_session=True,
+                              cwd=Path(__file__).resolve().parent)
         try:
             deadline=time.monotonic()+5
             while c.read_job(run)['status']!='running' and time.monotonic()<deadline:time.sleep(.05)

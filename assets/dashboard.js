@@ -122,15 +122,18 @@ function aiReviewActions(pr){
 function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
 }
-// Prototype entry points are supplied only by the offline workspace fixture.
 function codeWorkspaceLink(pr){
- if(!['ready','empty'].includes(pr.workspace_demo))return '';
- return `<a class="button" href="/workspace?demo=${pr.workspace_demo}&tab=${pr.workspace_demo==='ready'?'review':'code'}">Open review</a>`;
+ const demo=['ready','empty'].includes(pr.workspace_demo);
+ const ready=demo?pr.workspace_demo==='ready':!!notesArtifact(pr.artifacts);
+ const query=demo?'demo='+pr.workspace_demo:'url='+encodeURIComponent(pr.url);
+ return `<a class="button" href="/workspace?${query}&tab=${ready?'review':'code'}">Open review</a>`;
 }
 function workspaceStatusBadge(pr){
- if(pr.workspace_demo==='ready')return '<span class="chip good workspace-status" title="An AI review is available for this comparison.">AI review ready</span>';
- if(pr.workspace_demo==='empty')return '<span class="chip workspace-status" title="Explore the code now, or generate an AI review inside the workspace.">No AI review yet</span>';
- return '';
+ const artifact=notesArtifact(pr.artifacts);
+ const ready=pr.workspace_demo==='ready'||!!artifact;
+ const running=active(pr.run);
+ const label=running?'AI review running':ready?(artifact?.freshness==='older'?'AI review · older commit':'AI review ready'):'No AI review yet';
+ return `<span class="chip ${running?'run-live':ready&&artifact?.freshness!=='older'?'good':artifact?.freshness==='older'?'warn':''} workspace-status">${label}</span>`;
 }
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;
