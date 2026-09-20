@@ -79,6 +79,7 @@ async function copyPrompt(button){
 }
 function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='codex-sdk'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
+ if(['ready','empty'].includes(pr.workspace_demo))return '<span class="pr-author"><span class="avatar-wrap"><span class="avatar-fallback" aria-hidden="true">A</span></span>Alex <span class="author-login">· Example author</span></span>';
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';
  const encoded=encodeURIComponent(login), name=pr.author_name||login;
@@ -121,12 +122,17 @@ function aiReviewActions(pr){
 function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
 }
+// Prototype entry points are supplied only by the offline workspace fixture.
+function codeWorkspaceLink(pr){
+ if(!['ready','empty'].includes(pr.workspace_demo))return '';
+ return `<a class="button" href="/workspace?demo=${pr.workspace_demo}&tab=${pr.workspace_demo==='ready'?'review':'code'}">${pr.workspace_demo==='ready'?'Open review workspace':'Explore code'}</a>`;
+}
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;
  const organize=hidden?'':`<p class="detail-heading">Organize</p>${snoozeControl(pr)}<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}">Hide from inbox</button>`;
  const extra=`${organize}${hasNotes?'<p class="detail-heading">AI tools</p>'+aiReviewActions(pr):''}`;
  const buttons=hidden?`<button class="button primary" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
-  queueCaptureButton(pr)+artifactLink(notesArtifact(arts),'Open AI notes',pr)+
+  queueCaptureButton(pr)+codeWorkspaceLink(pr)+artifactLink(notesArtifact(arts),'Open AI notes',pr)+
   (!hasNotes?actionDisclosure(pr,'AI review',aiReviewActions(pr),'pr-ai-menu'):'')+actionDisclosure(pr,'•••',extra);
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">AI: ${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes&&!run)status+='<span class="chip good">AI notes ready</span>';

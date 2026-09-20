@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review workspace · PR reviews</title>
+<script src="/assets/theme.js"></script>
+<link rel="stylesheet" href="/assets/dashboard.css">
+<link rel="stylesheet" href="/assets/code-workspace/workspace.css">
+<script src="/assets/code-workspace/workspace.js" defer></script>
+</head>
+<body class="code-workspace">
+<a class="skip" href="#files">Skip to code</a>
+<header class="workspace-header">
+ <div class="breadcrumbs"><a href="/">‹ PR reviews</a><span>/</span><span id="pr-identity">Loading…</span><span class="prototype-badge">Prototype</span><label class="appearance"><span class="sr-only">Appearance</span><select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
+ <div class="title-row"><h1 id="pr-title">Review workspace</h1><span class="open-badge">Open</span></div>
+ <div class="pr-caption"><span id="pr-author"></span><span id="comparison"></span><span class="diff-totals" id="diff-totals"></span></div>
+ <div class="workspace-nav"><nav aria-label="Review workspace"><button id="review-tab" aria-pressed="false">AI review <span id="review-count"></span></button><button id="code-tab" aria-pressed="true">Code changes <span id="file-count"></span></button></nav><div class="workspace-tools"><span id="viewed-progress"></span><button class="button" id="notes-toggle">Private notes <span id="note-count">0</span></button><button class="button" id="chat-toggle" aria-expanded="false">Ask AI</button></div></div>
+</header>
+<div class="demo-strip"><span>Offline demo · Example code and scripted AI replies</span><div class="demo-actions"><button id="reset-demo" class="text-button" title="Clear viewed files, conversations, and notes for this example">Reset demo</button><a id="scenario-switch" href="?demo=empty&tab=code">Try without an AI review</a></div></div>
+<p id="storage-error" class="storage-error" role="status" hidden></p>
+<p id="load-error" class="notice warning" role="alert" hidden></p>
+<div class="workspace-body" id="workspace-body">
+ <section id="code-view" class="code-view" aria-label="Code changes">
+  <aside class="file-sidebar" aria-label="Changed files">
+   <div class="sidebar-heading"><strong>Changed files</strong><button class="text-button" id="collapse-all">Collapse all</button></div>
+   <label class="sr-only" for="file-filter">Filter files</label><input id="file-filter" type="search" placeholder="Filter files…" autocomplete="off">
+   <label class="unviewed-filter"><input id="unviewed-only" type="checkbox"> Only unviewed</label>
+   <nav id="file-tree" aria-label="File navigation"></nav>
+   <div class="file-sidebar-footer"><progress id="file-progress" value="0" max="3" aria-label="Files viewed"></progress><p id="sidebar-progress"></p><p>Viewed status is private and saved for this comparison.</p></div>
+  </aside>
+  <div class="diff-column"><div class="diff-toolbar"><button class="button file-toggle" id="files-toggle" aria-expanded="false">Files</button><span>Unified diff</span><span class="selection-hint">Select code, or click and Shift-click line numbers</span><label class="wrap-control"><input id="wrap-lines" type="checkbox"> Wrap lines</label></div><div id="files" tabindex="-1"></div></div>
+ </section>
+ <section id="ai-view" class="ai-view" aria-label="AI review" hidden></section>
+ <aside class="conversation" id="conversation" aria-label="Code conversation" hidden>
+  <div class="conversation-heading"><strong id="rail-title">Ask about this code</strong><button id="close-rail" class="icon-button" aria-label="Close conversation">×</button></div>
+  <div id="chat-content" class="chat-content">
+   <div class="conversation-picker"><label class="sr-only" for="thread-picker">Saved conversations</label><select id="thread-picker"><option value="">New conversation</option></select><button class="text-button" id="new-thread">New</button></div>
+   <div id="chat-context" class="chat-context"></div>
+   <div id="messages" class="messages" role="log" aria-live="polite"></div>
+   <div class="suggested-prompts" id="suggested-prompts"><button data-prompt="Explain this change">Explain this change</button><button data-prompt="What edge cases should I check?">Check edge cases</button><button data-prompt="What tests would help?">Suggest tests</button></div>
+   <form id="chat-form" class="chat-form"><label class="sr-only" for="question">Ask a question</label><textarea id="question" placeholder="Ask about the selected code…" rows="3" maxlength="4000"></textarea><div><span>⌘ / Ctrl + Enter to send</span><button id="send-question" class="button primary" type="submit">Ask AI</button></div></form>
+   <p class="chat-footnote">Scripted demo. Questions stay in this browser.</p>
+  </div>
+  <div id="notes-content" class="notes-content" hidden><p class="muted">Your own review notes. Saved locally; nothing is posted.</p><div id="saved-notes"></div><form id="note-form"><label for="note-text">Add a private note</label><textarea id="note-text" rows="4" maxlength="6000" placeholder="What do you want to check or remember?" required></textarea><button class="button primary" type="submit">Save note</button></form></div>
+ </aside>
+</div>
+<div id="selection-bar" class="selection-bar" hidden><span id="selection-label"></span><button class="button primary" id="ask-selection">Ask about selection</button><button class="icon-button" id="clear-selection" aria-label="Clear selection">×</button></div>
+<div id="workspace-toast" class="toast" role="status" hidden></div>
+</body>
+</html>
