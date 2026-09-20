@@ -125,7 +125,7 @@ function actionDisclosure(pr,label,contents,className='pr-overflow'){
 // Prototype entry points are supplied only by the offline workspace fixture.
 function codeWorkspaceLink(pr){
  if(!['ready','empty'].includes(pr.workspace_demo))return '';
- return `<a class="button" href="/workspace?demo=${pr.workspace_demo}&tab=${pr.workspace_demo==='ready'?'review':'code'}">${pr.workspace_demo==='ready'?'Open review workspace':'Explore code'}</a>`;
+ return `<a class="button" href="/workspace?demo=${pr.workspace_demo}&tab=${pr.workspace_demo==='ready'?'review':'code'}">Open review</a>`;
 }
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;

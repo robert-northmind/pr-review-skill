@@ -62,6 +62,9 @@ is not shared with the live dashboard's review state.
 
 ## Scope
 
+Both inbox entries use **Open review**. A ready AI review opens the AI review
+tab; otherwise it opens Code changes. Both tabs remain available.
+
 The prototype exercises file navigation, filtering, collapse, viewed progress,
 unified diffs, incremental context expansion, complete base/head files,
 line and range selection, anchored conversations, follow-ups, private notes,
