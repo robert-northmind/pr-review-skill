@@ -111,3 +111,14 @@ const pinned={repository:'owner/repo',head:'b'.repeat(40),base:'a'.repeat(40),fi
 assert.deepEqual(sourceTarget('https://github.com/owner/repo/blob/'+pinned.head+'/src/a.ts#L4-L7',pinned),{path:'src/a.ts',side:'head',start:4,end:7});
 assert.equal(sourceTarget('https://github.com/elsewhere/repo/blob/'+pinned.head+'/src/a.ts#L4',pinned),null);
 assert.equal(sourceTarget('https://github.com/owner/repo/blob/main/src/a.ts#L4',pinned),null);
+
+const {reviewHTML, unavailableHTML} = await import('../assets/code-workspace/review.mjs');
+const {esc} = await import('../assets/code-workspace/views.mjs');
+const run = {run_id: 'saved-run', status: 'running', transport: 'terminal'};
+assert.ok(!reviewHTML({run}, pinned, esc).includes('Review activity'));
+assert.ok(reviewHTML({run: {...run, transport: 'codex-sdk'}}, pinned, esc).includes('/?review=saved-run'));
+const fallback = unavailableHTML(new Error('<offline>'), {artifact: {path: '/tmp/review & notes.html'}}, esc);
+assert.ok(fallback.includes('&lt;offline&gt;'));
+assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));
+assert.ok(fallback.includes('Its commit could not be checked'));
+assert.equal(unavailableHTML(new Error('Offline'), null, esc), 'Offline');

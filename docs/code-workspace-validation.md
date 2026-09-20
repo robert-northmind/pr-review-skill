@@ -35,3 +35,10 @@ being overridden by the width check. Verified switching with Files open at 876px
 (645px diff viewport, 760px scrollable comparison) and at 390px (368px viewport).
 Both retain split layout without page overflow. The browser regression covers
 selection at 880px with Files open, persistence, and retaining split on resize.
+
+Pre-merge checks: 27 workspace service/HTTP tests and JavaScript model/render,
+workspace-sync and reporting checks passed. Regression cases cover saved report
+lookup after a GitHub failure and provider-specific activity links. Saved reports
+are linked from comparison loading errors. A merge-tree check against local
+`main` completed without conflicts. Full review generation remains untested end
+to end as noted above.

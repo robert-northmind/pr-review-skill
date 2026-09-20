@@ -18,7 +18,7 @@ import {
 } from "./model.mjs";
 import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
-import { reviewHTML } from "./review.mjs";
+import { reviewHTML, unavailableHTML } from "./review.mjs";
 import { demoAnswer, renderDemoReview } from "./demo.mjs";
 ("use strict");
 (() => {
@@ -717,7 +717,9 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     if (button.id === "generate-review") {
       button.disabled = true;
       try {
-        await api.request("/regenerate-review", {});
+        const result = await api.request("/regenerate-review", {});
+        if (result.transport === "terminal")
+          notify("Review opened in your terminal. Progress will appear here.");
         clearTimeout(reviewTimer);
         await updateReview();
       } catch (error) {
@@ -1054,6 +1056,14 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       $("load-error").textContent = error.message;
       $("load-error").hidden = false;
       $("workspace-body").hidden = true;
+      if (!params.has("demo")) {
+        try {
+          const info = await api.review("");
+          $("load-error").innerHTML = unavailableHTML(error, info, esc);
+        } catch {
+          // Keep the original loading error if saved reports are unavailable too.
+        }
+      }
     }
   }
   window.addEventListener("message", async (event) => {

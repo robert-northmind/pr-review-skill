@@ -42,3 +42,12 @@ class WorkspaceHTTP(test_dashboard.HTTP):
             self.assertEqual(self.request('/workspace-chat','POST',{'url':URL})[0],403)
             start.assert_not_called()
             self.assertEqual(self.request('/workspace-chat','POST',{'url':URL},self.auth())[0],202)
+
+    def test_saved_report_lookup_survives_github_failure(self):
+        query='?'+urlencode({'url':URL})
+        report={'artifact':{'path':'/tmp/saved.html','version':'v1'},'run':None}
+        with patch.object(github,'manifest',side_effect=ValueError('GitHub unavailable')),patch.object(workspace,'review',return_value=report):
+            self.assertEqual(self.request('/api/workspace'+query)[0],400)
+            code,_,body=self.request('/api/workspace-review'+query)
+            self.assertEqual(code,200)
+            self.assertEqual(json.loads(body),report)

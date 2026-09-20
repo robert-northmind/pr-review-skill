@@ -6,6 +6,9 @@ otherwise Code changes. Registered HTML/legacy Markdown reports are embedded in
 an opaque sandbox. They cannot access the dashboard or its action token. Review
 generation uses the existing configured provider and live activity flow; report
 completion never launches an external browser.
+Codex reviews expose live activity in the dashboard; terminal reviews run in the
+configured terminal. If the GitHub comparison cannot load, the error offers a
+direct link to any saved report, with its current commit freshness unverified.
 
 Code changes use GitHub's PR head and merge base, pinned by full commit SHA.
 Changed files load as they enter the viewport, with a retry control for failures.
