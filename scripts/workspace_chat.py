@@ -26,15 +26,24 @@ Explain with file/line references and distinguish observations from guesses.
 Never claim tests were run. Never post feedback, approve, edit or execute code.
 Your initial context is selected lines plus the PR diff and this conversation.
 When you need more context, return reads requesting read_file (repository-relative
-path, base/head side) or list_files (path prefix). All reads use the pinned revision.
+path, base/head side), list_files (path prefix), or search_code (literal query and
+optional file/directory path). Search is case-insensitive across repository source,
+including unchanged files, with file/line matches. Use an empty path for the whole
+repository and an empty query for read_file/list_files. All reads use the pinned
+revision. You may investigate relevant definitions, callers and tests without
+asking the user to provide them. Search first when you do not know the file path,
+then read the relevant files. Check truncation/skipped-file metadata; incomplete
+searches do not establish absence. Do not confuse repository code with dependencies
+outside the repository. Never claim to have searched or read code you did not fetch.
 Do not invent file contents. Request only relevant context, then answer the question.
 Return no reads when your answer is complete. You have at most six rounds of reads.
 '''
 SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['answer', 'reads'],
           'properties': {'answer': {'type': 'string'}, 'reads': {'type': 'array', 'maxItems': 4,
           'items': {'type': 'object', 'additionalProperties': False,
-                    'required': ['kind', 'path', 'side'], 'properties': {
-                    'kind': {'type': 'string', 'enum': ['read_file', 'list_files']},
+                    'required': ['kind', 'path', 'side', 'query'], 'properties': {
+                    'kind': {'type': 'string', 'enum': ['read_file', 'list_files', 'search_code']},
+                    'query': {'type': 'string'},
                     'path': {'type': 'string'}, 'side': {'type': 'string', 'enum': ['base', 'head']}}}}}}
 
 
@@ -188,7 +197,9 @@ def run_conversation(comparison, messages, ask_model, reader, on_read, progress=
             raise ValueError('The AI requested too much context at once.')
         additions = []
         for request in reads:
-            progress(f'{"Reading" if request.get("kind") == "read_file" else "Listing files"} · {request.get("side", "head")} · {request.get("path") or "/"}')
+            action = {'read_file': 'Reading', 'list_files': 'Listing files', 'search_code': 'Searching source'}.get(request.get('kind'), 'Fetching context')
+            detail = f' · {request.get("query", "")}' if request.get('kind') == 'search_code' else ''
+            progress(f'{action} · {request.get("side", "head")} · {request.get("path") or "/"}{detail}')
             try:
                 value = reader(comparison, request)
             except ValueError as error:
@@ -202,6 +213,9 @@ def run_conversation(comparison, messages, ask_model, reader, on_read, progress=
 
 
 def read_context(comparison, request):
+    if request.get('kind') == 'search_code':
+        from workspace_source import search
+        return search(comparison, request.get('query'), request.get('side'), request.get('path', ''))
     if request.get('kind') == 'read_file':
         text = github.read_file(comparison, request.get('path'), request.get('side'))
         return '\n'.join(f'{n}: {line}' for n, line in enumerate(text.splitlines(), 1))
@@ -228,7 +242,7 @@ def worker(url, thread_id):
     def record(request):
         with store.locked(url):
             current = read(url, thread_id)
-            current['reads'].append({k: request.get(k) for k in ('kind', 'path', 'side')})
+            current['reads'].append({k: request.get(k) for k in ('kind', 'path', 'side', 'query')})
             save(url, current)
     try:
         from openai_codex import Codex, CodexConfig, ApprovalMode, Sandbox

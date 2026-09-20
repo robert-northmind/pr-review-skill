@@ -28,8 +28,12 @@ Chat starts with selected lines plus the PR diff. Additional selections join the
 active conversation, duplicates are ignored, and removal changes future questions
 without rewriting earlier messages. Each question retains its source snapshot.
 The server reconstructs attachments from pinned source, ignoring client snippets.
-The assistant can request additional files or a repository file listing at that
-revision; the chat displays which context it requested. No code is executed.
+The assistant can request full files, list repository paths, and search source
+at that revision, including unchanged files. Searches use case-insensitive literal
+text and return paths, line numbers and snippets; an optional file/directory path
+narrows the scope. It can search for callers or definitions, then read matching
+files before answering. Chat activity and saved answers show these requests.
+No repository code is executed.
 
 Inline chat uses the local Codex login and the Codex model and reasoning effort
 profile in dashboard settings, independently of the provider chosen for full
@@ -59,6 +63,7 @@ complete. Private reasoning and raw provider output are not displayed.
 - `workspace_chat.py`: durable turn lifecycle, bounded context requests, provider
   adapter, cancellation and worker supervision.
 - `workspace_chat_provider.py`: streamed provider events and completed responses.
+- `workspace_source.py`: cached pinned source archives and bounded text search.
 - `code_workspace.py`: application service for HTTP routes and report selection.
 - `assets/code-workspace/model.mjs`: pure context/history/state transformations.
 - `diff.mjs`: pure unified/split projection, expansion and selection semantics.
@@ -76,11 +81,19 @@ Private state, conversations and cached immutable comparisons live under
 `$PR_REVIEW_TRACKER_HOME/workspaces/<hash-of-PR-URL>/`. The workspace does not modify
 repository checkouts. Files and history are retained locally until that workspace
 cache is removed; automatic retention cleanup is not implemented.
+Source searches cache a GitHub archive per commit alongside that state. Archives
+are read directly without extracting or executing files.
 
 GitHub exposes at most 3,000 changed files through the PR files API. Larger PRs
 fail explicitly instead of showing an incomplete list. Text previews support
 UTF-8 files up to 500 KB / 12,000 lines; binary files, symlinks and submodules show
 an explicit unavailable state. Truncated directory listings are labeled.
+Search downloads are limited to 100 MB and 90 seconds. A scan reads at most
+200 MB of decompressed archive data and 20,000 archive entries, returning at most
+80 matching lines. Binary, non-UTF-8, symlink and over-500-KB files are skipped.
+Results report skipped files and limits so partial searches cannot be mistaken
+for exhaustive results. Full-file reads and listings remain available if the
+repository is too large for archive search.
 
 Chat allows 12 attachments, 500 lines per selection, a 60 KB attachment payload,
 180 KB total model context, six context-read rounds (four requests each), and

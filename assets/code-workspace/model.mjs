@@ -26,6 +26,12 @@ export const isOlder = (thread, comparison) =>
   !!thread?.head &&
   (thread.head !== comparison.head || thread.base !== comparison.base);
 
+export function contextReadLabel(request) {
+  const location = `${request.side} · ${request.path || '/'}`;
+  if (request.kind === 'search_code') return `Search “${request.query}” · ${location}`;
+  return `${request.kind === 'list_files' ? 'List files' : 'Read file'} · ${location}`;
+}
+
 export function attach(contexts, context) {
   return contexts.some((item) => contextKey(item) === contextKey(context))
     ? structuredClone(contexts)

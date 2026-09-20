@@ -267,7 +267,8 @@ progress. Checking for new commits resets viewed status only for changed file
 comparisons. Private notes and revision-labeled conversations are saved locally.
 
 Select lines to ask Codex questions, add or remove code attachments, and request
-additional repository context. The assistant reads pinned revisions and cannot
+additional repository context. The assistant can search the full repository,
+including unchanged code, and read matching files at the pinned revision. It cannot
 execute code or post feedback. Finished HTML reviews stay in the dashboard;
 completion does not open an external browser.
 

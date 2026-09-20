@@ -129,3 +129,5 @@ assert.equal(chatProgress(progressThread, 165000), 'Reading file… · 1m 5s');
 assert.equal(chatProgress({...progressThread,status:'stopping'}), 'Stopping…');
 assert.equal(chatProgress({...progressThread,status:'completed'}), '');
 assert.ok(activityHTML(progressThread).includes('&lt;source&gt;'));
+const {contextReadLabel} = await import('../assets/code-workspace/model.mjs');
+assert.equal(contextReadLabel({kind:'search_code',query:'flush',side:'head',path:''}), 'Search “flush” · head · /');

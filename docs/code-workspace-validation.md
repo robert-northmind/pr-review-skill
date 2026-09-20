@@ -57,3 +57,11 @@ with draft/history retained, and embedded reports; no console errors were observ
 The fixture now uses separate synthetic source data and the production diff
 projection. The standalone prototype server, fake-reply UI paths and styles are
 removed; their design history remains in Git.
+
+Source search: 38 workspace tests passed, followed by all eight source-search
+tests after adding failed-download cleanup coverage. A real Codex call requested
+`search_code`, then `read_file`, and answered from an unchanged synthetic file.
+A real GitHub archive search for `traceparent` scanned all 146 text files under
+`lib/` at PR #271's pinned head `33d5e9a0c5738fd978ff2f0eeb895c3d4377b518`,
+with no skipped files or truncation. Real PR source was not sent to the model
+during that validation.
