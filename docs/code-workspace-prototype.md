@@ -65,7 +65,9 @@ is not shared with the live dashboard's review state.
 Both inbox entries use **Open review**. A ready AI review opens the AI review
 tab; otherwise it opens Code changes. Both tabs remain available. Prototype
 cards have one review entry; **Generate AI review** lives in the workspace’s
-AI review tab instead of a separate AI review menu on the card.
+AI review tab instead of a separate AI review menu on the card. **AI review
+ready** and **No AI review yet** appear beside the effort pill, independently
+of the action label. Example PR titles contain only the change title.
 
 The prototype exercises file navigation, filtering, collapse, viewed progress,
 unified diffs, incremental context expansion, complete base/head files,

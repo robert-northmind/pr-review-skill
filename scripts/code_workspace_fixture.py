@@ -201,7 +201,7 @@ def main():
             demo = payload(scenario)
             url = f'https://github.com/example/telemetry-sdk/pull/{demo["number"]}'
             entries[url] = {'owner': 'example', 'repository': 'telemetry-sdk', 'number': demo['number'],
-                'title': demo['title'] + (' · AI review ready' if scenario == 'ready' else ' · Not reviewed yet'),
+                'title': demo['title'],
                 'reasons': ['review-requested'], 'author_login': 'alex', 'head_sha': demo['head'],
                 'pr_created_at': tracker.utc_now(), 'pr_updated_at': tracker.utc_now(),
                 'workspace_demo': scenario}

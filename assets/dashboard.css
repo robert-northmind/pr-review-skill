@@ -235,3 +235,6 @@ progress::-webkit-progress-bar{background:var(--line);border-radius:8px}progress
 @media(prefers-reduced-motion:reduce){progress::-webkit-progress-value{transition:none}}
 
 .review-event time{white-space:nowrap;flex-basis:60px}
+
+/* Workspace availability sits beside effort; the entry action keeps one label. */
+.workspace-status{font-size:12px;padding:3px 8px;line-height:1.5;border:1px solid transparent;border-radius:5px}

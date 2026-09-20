@@ -127,6 +127,11 @@ function codeWorkspaceLink(pr){
  if(!['ready','empty'].includes(pr.workspace_demo))return '';
  return `<a class="button" href="/workspace?demo=${pr.workspace_demo}&tab=${pr.workspace_demo==='ready'?'review':'code'}">Open review</a>`;
 }
+function workspaceStatusBadge(pr){
+ if(pr.workspace_demo==='ready')return '<span class="chip good workspace-status" title="An AI review is available for this comparison.">AI review ready</span>';
+ if(pr.workspace_demo==='empty')return '<span class="chip workspace-status" title="Explore the code now, or generate an AI review inside the workspace.">No AI review yet</span>';
+ return '';
+}
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;
  const workspaceLink=codeWorkspaceLink(pr);
@@ -139,7 +144,7 @@ function card(pr){
  if(hasNotes&&!run)status+='<span class="chip good">AI notes ready</span>';
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
- return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
+ return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}</div>
  ${triageCard(pr)}${artifactWarning(pr)}${reviewSummary(run)}
  ${run||history||Object.keys(arts).length?`<details class="run-details"><summary>AI run details & history</summary><div class="detail-content">
