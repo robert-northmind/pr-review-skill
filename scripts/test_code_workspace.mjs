@@ -122,3 +122,10 @@ assert.ok(fallback.includes('&lt;offline&gt;'));
 assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));
 assert.ok(fallback.includes('Its commit could not be checked'));
 assert.equal(unavailableHTML(new Error('Offline'), null, esc), 'Offline');
+
+const {chatProgress, activityHTML} = await import('../assets/code-workspace/progress.mjs');
+const progressThread = {status:'running', started_at:100, progress:'Reading file…', activity:[{at:102,text:'<source>'}]};
+assert.equal(chatProgress(progressThread, 165000), 'Reading file… · 1m 5s');
+assert.equal(chatProgress({...progressThread,status:'stopping'}), 'Stopping…');
+assert.equal(chatProgress({...progressThread,status:'completed'}), '');
+assert.ok(activityHTML(progressThread).includes('&lt;source&gt;'));

@@ -42,3 +42,10 @@ lookup after a GitHub failure and provider-specific activity links. Saved report
 are linked from comparison loading errors. A merge-tree check against local
 `main` completed without conflicts. Full review generation remains untested end
 to end as noted above.
+
+Chat progress validation: all 31 workspace service/HTTP tests passed, including
+stream completion/failure, reasoning-effort forwarding, bounded activity and
+cancellation. Browser checks confirmed live elapsed status, expandable file-read
+activity, completed answers and the Stop action, with no console errors. One real
+Codex call on a synthetic two-line diff completed through the streamed adapter;
+no real PR source was used for that check.

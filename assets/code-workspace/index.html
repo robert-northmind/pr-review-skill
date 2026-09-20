@@ -156,12 +156,17 @@
             ><button class="text-button" id="new-thread">New</button>
           </div>
           <div id="chat-context" class="chat-context"></div>
+          <div id="message-scroll" class="messages">
           <div
             id="messages"
-            class="messages"
             role="log"
             aria-live="polite"
           ></div>
+          <details id="chat-activity" class="chat-activity" hidden>
+            <summary>AI activity</summary>
+            <ol id="chat-activity-items"></ol>
+          </details>
+          </div>
           <div class="suggested-prompts" id="suggested-prompts">
             <button data-prompt="Explain this change">
               Explain this change</button

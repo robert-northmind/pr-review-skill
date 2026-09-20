@@ -137,10 +137,11 @@ class FakeCodex:
  def __enter__(self):return self
  def __exit__(self,*a):pass
  def thread_start(self,**kw):
-  def run(*a,**kw):
+  def stream():
    (chat.store.directory(sys.argv[1])/'provider-ready').touch()
    time.sleep(60)
-  return NS(run=run)
+   yield None
+  return NS(turn=lambda *a,**kw:NS(stream=stream))
 sys.modules['openai_codex']=NS(Codex=FakeCodex,CodexConfig=lambda **kw:None,ApprovalMode=NS(deny_all='never'),Sandbox=NS(read_only='read-only'),ExternalMessage=lambda **kw:None)
 sys.modules['triage_provider']=NS(codex_overrides=lambda:())
 chat.worker(sys.argv[1],sys.argv[2])

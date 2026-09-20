@@ -142,7 +142,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200,page,'text/html; charset=utf-8')
             elif parsed.path.startswith('/assets/code-workspace/'):
                 name = parsed.path.removeprefix('/assets/code-workspace/')
-                if name not in ('workspace.js','workspace.css','model.mjs','api.mjs','diff.mjs','review.mjs','demo.mjs','views.mjs'):
+                if name not in ('workspace.js','workspace.css','model.mjs','api.mjs','diff.mjs','review.mjs','demo.mjs','views.mjs','progress.mjs'):
                     self._error(404,'Asset not found.'); return
                 self._send(200,(ASSETS/'code-workspace'/name).read_bytes(), 'text/css' if name.endswith('.css') else 'text/javascript')
             elif parsed.path.startswith('/api/workspace') or parsed.path == '/workspace-report':

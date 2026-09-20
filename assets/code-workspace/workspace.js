@@ -19,6 +19,7 @@ import {
 import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
 import { reviewHTML, unavailableHTML } from "./review.mjs";
+import { chatProgress, activityHTML } from "./progress.mjs";
 import { demoAnswer, renderDemoReview } from "./demo.mjs";
 ("use strict");
 (() => {
@@ -438,6 +439,8 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     $("question").focus({ preventScroll: true });
   }
   function renderChat() {
+    const scroll = $("message-scroll");
+    const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60;
     const thread = currentThread(),
       contexts = activeContexts();
     $("thread-picker").innerHTML =
@@ -452,7 +455,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       ? `<p class="context-count">${contexts.length} code ${contexts.length === 1 ? "selection" : "selections"} + PR diff</p>` +
         contexts.map(contextHTML).join("")
       : `<strong>Entire pull request</strong><p>Comparison ${esc((thread?.base || data.base).slice(0, 12))} → ${esc((thread?.head || data.head).slice(0, 12))}</p>`;
-    $("messages").innerHTML = thread
+    const messagesHTML = thread
       ? thread.messages
           .map(
             (m, index) =>
@@ -460,6 +463,8 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
           )
           .join("")
       : `<div class="chat-empty"><strong>${contexts.length ? "Start with a question." : "A second pair of eyes."}</strong><p>${contexts.length ? "Ask about these lines. Add more selections from any file to keep exploring in this conversation." : "Select lines in the diff for a focused conversation, or ask about the whole change."}</p></div>`;
+    if ($("messages").innerHTML !== messagesHTML)
+      $("messages").innerHTML = messagesHTML;
     $("question").placeholder = thread
       ? "Ask a follow-up…"
       : contexts.length
@@ -472,19 +477,16 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     $("send-question").disabled = chatStarting || isRunning(thread);
     $("stop-chat").hidden = !isRunning(thread) || data.demo;
     $("stop-chat").disabled = thread?.status === "stopping";
-    $("chat-status").textContent = isRunning(thread)
-      ? thread.status === "stopping"
-        ? "Stopping…"
-        : `Thinking…${thread.reads?.length ? " Read " + thread.reads.length + " additional files." : ""}`
-      : thread?.error ||
+    $("chat-status").classList.toggle("working", isRunning(thread));
+    $("chat-status").textContent = chatProgress(thread) ||
         (isOlder(thread, data)
           ? "Older commit · follow-ups use the original revision. Start New to discuss current code."
           : "");
-    const last = $("messages").lastElementChild;
-    if (last)
-      $("messages").scrollTop +=
-        last.getBoundingClientRect().top -
-        $("messages").getBoundingClientRect().top;
+    $("chat-activity").hidden = !thread?.activity?.length;
+    const activity = activityHTML(thread);
+    if ($("chat-activity-items").innerHTML !== activity)
+      $("chat-activity-items").innerHTML = activity;
+    if (nearBottom) scroll.scrollTop = scroll.scrollHeight;
   }
   async function ask(question) {
     question = question.trim();

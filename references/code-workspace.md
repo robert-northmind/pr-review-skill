@@ -31,8 +31,9 @@ The server reconstructs attachments from pinned source, ignoring client snippets
 The assistant can request additional files or a repository file listing at that
 revision; the chat displays which context it requested. No code is executed.
 
-Inline chat uses the local Codex login and the Codex model profile in dashboard
-settings, independently of the provider chosen for full reviews. Its SDK sessions
+Inline chat uses the local Codex login and the Codex model and reasoning effort
+profile in dashboard settings, independently of the provider chosen for full
+reviews. Blank settings inherit Codex defaults. Its SDK sessions
 are ephemeral; bounded history is rebuilt from the local conversation each turn.
 Shells, external search, plugins, MCP, hooks and other host tools are disabled.
 Only the application can fulfill structured read-only GitHub context requests.
@@ -44,6 +45,10 @@ Chat workers survive browser closure and dashboard restart. Reopening reconnects
 to saved activity without another model call. Stop requests cancel the dedicated
 worker process group. Failures and timeouts preserve the question and prior answers.
 Submitting another question never automatically retries a model request.
+While waiting, chat shows elapsed time and streamed provider phases, plus pinned
+file reads as they happen. Expand **AI activity** for the current question's
+activity history. Progress refreshes every second; the final answer appears when
+complete. Private reasoning and raw provider output are not displayed.
 
 ## Structure
 
@@ -53,6 +58,7 @@ Submitting another question never automatically retries a model request.
   fingerprint-based viewed invalidation. Concurrent stale saves fail visibly.
 - `workspace_chat.py`: durable turn lifecycle, bounded context requests, provider
   adapter, cancellation and worker supervision.
+- `workspace_chat_provider.py`: streamed provider events and completed responses.
 - `code_workspace.py`: application service for HTTP routes and report selection.
 - `assets/code-workspace/model.mjs`: pure context/history/state transformations.
 - `diff.mjs`: pure unified/split projection, expansion and selection semantics.

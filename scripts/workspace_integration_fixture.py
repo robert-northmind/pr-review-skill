@@ -40,6 +40,8 @@ def main():
             return result
         def file_diff(url,rev,path):return copy.deepcopy(next(f for f in comparison['files'] if f['path']==path))
         def launch(url,thread_id):
+            for delay,message in [(1,'Connecting to Codex…'),(3,'Analyzing code…'),(5,'Reading · head · src/transports/types.ts')]:
+                threading.Timer(delay,chat.record_progress,args=(url,thread_id,message)).start()
             def finish():
                 with store.locked(url):
                     thread=chat.read(url,thread_id)

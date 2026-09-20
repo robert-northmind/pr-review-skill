@@ -66,7 +66,19 @@ def alive(thread):
 
 
 def public(thread):
-    return {k: v for k, v in thread.items() if k not in ('pid', 'cancel', 'started')}
+    return {**{k: v for k, v in thread.items() if k not in ('pid', 'cancel', 'started')},
+            'started_at': thread.get('started')}
+
+
+def record_progress(url, thread_id, message):
+    with store.locked(url):
+        current = read(url, thread_id)
+        if current['status'] != 'running' or current.get('progress') == message:
+            return
+        current['progress'] = message
+        current.setdefault('activity', []).append({'text': message, 'at': time.time()})
+        current['activity'] = current['activity'][-40:]
+        save(url, current)
 
 
 def snapshot(url, thread_id):
@@ -125,7 +137,8 @@ def start(url, request, launcher=None):
         if len(json.dumps(thread['messages'])) > 250_000:
             raise ValueError('This conversation is full. Start a new conversation.')
         thread['messages'].append({'role': 'user', 'text': question.strip(), 'contexts': contexts})
-        thread.update(contexts=contexts, status='running', error='', reads=[], started=time.time(), pid=None, cancel=False)
+        thread.update(contexts=contexts, status='running', error='', reads=[], started=time.time(), pid=None, cancel=False,
+                      progress='Starting AI…', activity=[])
         save(url, thread)
         try:
             if launcher:
@@ -155,12 +168,13 @@ def cancel(url, thread_id):
         return public(thread)
 
 
-def run_conversation(comparison, messages, ask_model, reader, on_read):
+def run_conversation(comparison, messages, ask_model, reader, on_read, progress=lambda _: None):
     patches = [{'path': f['path'], 'status': f['status'], 'patch': f.get('patch') or '[Patch unavailable; request file context]'} for f in comparison['files']]
     content = {'comparison': {k: comparison[k] for k in ('repository', 'base', 'head')}, 'diff': patches, 'messages': messages}
     if len(json.dumps(content)) > MAX_CONTEXT:
         raise ValueError('Conversation plus PR diff exceeds the 180 KB context limit. Start a shorter conversation or review a smaller PR.')
     for round_number in range(7):
+        progress('Reviewing additional context…' if round_number else 'Sending selected code and PR diff…')
         response = ask_model(json.dumps(content, ensure_ascii=False))
         reads = response.get('reads', [])
         if not reads:
@@ -174,6 +188,7 @@ def run_conversation(comparison, messages, ask_model, reader, on_read):
             raise ValueError('The AI requested too much context at once.')
         additions = []
         for request in reads:
+            progress(f'{"Reading" if request.get("kind") == "read_file" else "Listing files"} · {request.get("side", "head")} · {request.get("path") or "/"}')
             try:
                 value = reader(comparison, request)
             except ValueError as error:
@@ -216,8 +231,11 @@ def worker(url, thread_id):
             current['reads'].append({k: request.get(k) for k in ('kind', 'path', 'side')})
             save(url, current)
     try:
-        from openai_codex import Codex, CodexConfig, ApprovalMode, Sandbox, ExternalMessage
+        from openai_codex import Codex, CodexConfig, ApprovalMode, Sandbox
         from triage_provider import codex_overrides
+        from workspace_chat_provider import ask
+        progress = lambda message: record_progress(url, thread_id, message)
+        progress('Connecting to Codex…')
         thread = read(url, thread_id)
         comparison = github.cached(url, thread['revision'])
         config = dashboard.load_config().get('agent_profiles', {}).get('codex', {})
@@ -227,9 +245,8 @@ def worker(url, thread_id):
                 # Rebuild bounded history each round, avoiding duplicate accumulation in the provider context.
                 session = codex.thread_start(model=config.get('model') or None, ephemeral=True,
                     sandbox=Sandbox.read_only, approval_mode=ApprovalMode.deny_all, base_instructions=INSTRUCTIONS)
-                result = session.run(ExternalMessage(tool_name='review_context', content=content), output_schema=SCHEMA)
-                return json.loads(result.final_response)
-            answer = run_conversation(comparison, thread['messages'], ask_model, read_context, record)
+                return ask(session, content, SCHEMA, config.get('effort'), progress)
+            answer = run_conversation(comparison, thread['messages'], ask_model, read_context, record, progress)
         with store.locked(url):
             current = read(url, thread_id)
             if not current.get('cancel'):
