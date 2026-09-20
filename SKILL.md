@@ -348,7 +348,9 @@ Mark `report` complete only after assembly and validation, recording any
 limitations. Follow tracking cleanup after all source-dependent checks finish.
 Registration failures must not discard a completed report.
 
-Open the final HTML in the OS default browser using its verified absolute path.
+Do not automatically open the completed HTML or launch an external browser.
+Leave the registered report available in the dashboard; open it only when the
+user explicitly asks.
 Lead the chat handoff with the current assessment and link **Review notes**
 once. Briefly state reviewed revisions, key findings and material verification
 limits; let the one report carry the explanation, drafts and evidence.
