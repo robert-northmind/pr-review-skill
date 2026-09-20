@@ -71,6 +71,53 @@ or an unavailable prerequisite is established. Adjust the plan when evidence
 justifies it and record why. Do not retry the same environment failure or
 repeat passing suites without a new reason.
 
+### Preflight the execution boundary
+
+Before running the selected checks, run a small runtime startup probe (for
+example `dart --version`) inside the same sandbox and clean environment. If
+startup fails, diagnose that prerequisite once; do not repeat every check
+against a runtime that cannot start. Preserve the startup error and distinguish
+an environment blocker from a product test failure.
+
+On macOS, prefer the bundled `scripts/verification_sandbox.py` for local CLI
+checks. It builds the execution profile, provides a clean HOME/cache, denies
+external networking, and terminates the command's process group on timeout or
+exit. Give it a disposable workspace and only the runtime/dependency directories
+needed by the selected check. It never falls back to unsandboxed execution.
+For example (replace the paths with the actual review workspace and installed SDK):
+
+```sh
+python3 scripts/verification_sandbox.py \
+  --workspace /path/to/disposable-runtime \
+  --read-only /path/to/dart-sdk \
+  --output /path/to/run/evidence/dart-version \
+  --timeout 15 -- /path/to/dart-sdk/bin/dart --version
+```
+
+Use `--cwd` for a source directory inside the workspace, repeat `--read-only`
+for installed dependency caches, and enable `--loopback` only for selected checks
+that need local test services. Evidence includes the profile, output and result
+JSON. A nonzero exit is evidence to inspect, not automatically a product defect.
+Use an equivalent execution boundary on other platforms; this helper is macOS-only.
+
+The profile includes two narrowly scoped macOS runtime requirements: an exact
+`(literal "/")` directory read for dyld/libignition's `openat` root, and
+`(allow signal (target children))` so test runners can stop their compiler
+subprocesses. It does not grant recursive root access or signals to arbitrary
+processes. File, network and child-process boundaries have synthetic regression
+checks in `test_verification_sandbox.py`. If adapting the profile, repeat those
+checks before executing PR code.
+
+For offline Dart checks, resolve the pinned manifest with `dart pub get
+--offline` in the helper’s disposable `.verification/pub-cache` using read-only links to
+installed packages. Allow read access only to the installed package directory. Do
+not assume a different checkout's `package_config.json` satisfies this head.
+If `dart test` attempts network access despite that resolution, invoke the
+resolved `test` package's `bin/test.dart` with
+`dart --packages=.dart_tool/package_config.json <resolved-test-entrypoint>`.
+Record this harness adaptation and the resolved dependency versions; keep
+external networking denied rather than widening it merely for the wrapper.
+
 Record command, working directory, revision, relevant tool versions and
 nonsensitive configuration, duration, exit status and meaningful output. Use
 `passed`, `failed`, `blocked`, `skipped` or `not-run` per check; distinguish a
