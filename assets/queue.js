@@ -24,13 +24,13 @@ function queueCard(pr){
   <div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}<span>${esc(stateLabel)}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}</div></div><div class="pr-actions">${primary}${artifactLink(notesArtifact(pr.artifacts),'Open AI notes',pr)}${actionDisclosure(pr,'•••',menu)}</div></div>
   ${reasons.length?`<div class="queue-reasons">${reasons.map(reason=>`<a target="_blank" rel="noopener" class="chip warn" href="${esc(safeUrl(reason.url))}">${esc(reason.label)} ↗</a>`).join('')}</div>`:''}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
-  ${artifactWarning(pr)}${triageCard(pr)}
+  ${artifactWarning(pr)}${triageCard(pr)}${reviewSummary(run)}
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   <details class="queue-tools"><summary>Review details${run?' · AI '+esc(statusLabels[run.status]||run.status):''}</summary>
    <p class="muted">${w.checked_at?'GitHub checked '+esc(since(w.checked_at)):'Awaiting first GitHub check'}</p>
    ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
    ${run?`<p class="muted">AI activity recorded ${esc(since(run.updated_at))}${run.message?' · '+esc(run.message):''}</p>`:''}
-   ${attention(run)||['starting','queued'].includes(run?.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}
+   ${run?.transport!=='codex-sdk'&&(attention(run)||['starting','queued'].includes(run?.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}
    ${pr.history?.length?renderHistory(pr):''}
   </details>
  </article>`;

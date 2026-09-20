@@ -156,12 +156,11 @@ Read ~/.agents/skills/pr-review/SKILL.md and run a full review of
 https://github.com/OWNER/REPOSITORY/pull/123.
 ```
 
-From the dashboard, click **Run review**, or expand **Review actions** to
-regenerate the combined review report. This opens an interactive
-CLI session in Terminal and passes it the skill prompt. It is not a headless
-background review service. The CLI's authentication and approval settings
-still apply. Use **Copy review prompt** to paste the same review instructions
-into an agent session of your choice without launching Terminal.
+From the dashboard, click **Run AI review** to generate the combined report.
+Codex runs in a background worker with live progress inside the dashboard.
+Claude opens an interactive Terminal session. Both use the skill prompt and
+the selected agent's authentication. Use **Copy review prompt** to paste the
+same instructions into another agent session.
 
 The agent records progress and artifacts in the local tracker. When finished,
 click **Open notes** on the card. There is one report and one review skill:
@@ -247,6 +246,18 @@ Dashboard GitHub operations are read-only: they do not post comments, approve,
 or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
 for PR code. Runtime history and generated review artifacts are not included
 in this repository's Git backup. Keep those out of commits and screenshots.
+
+## In-app Codex reviews
+
+Selecting Codex runs AI reviews in a background worker and opens live activity
+in the dashboard. Stage progress follows reviewer checkpoints; it is an estimate,
+not time remaining. Reviews keep running across page reloads and server restarts.
+Stop review cancels the worker and preserves its saved activity. Claude still
+opens Terminal. Follow-up messages and inline answers are not available yet.
+
+Install `requirements-triage.txt` into the server's Python environment for Codex
+reviews. See [dashboard operations](references/dashboard.md#in-app-codex-reviews)
+for isolated state, progress reporting, and validation.
 
 ## Development and recovery
 

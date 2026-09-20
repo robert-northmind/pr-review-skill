@@ -7,8 +7,8 @@ const artifactUrl = path => '/artifact?path='+encodeURIComponent(path);
 const safeUrl = value => {try {const u=new URL(value);return u.protocol==='https:'?u.href:'#';} catch{return '#';}};
 const labels={requested:'Requested from you',watching:'Watching',mine:'Your PRs',snoozed:'Snoozed',hidden:'Hidden'};
 const descriptions={requested:'PRs assigned to you or requesting your review.',watching:'Open PRs from repositories you follow.',mine:'Open pull requests you created.',snoozed:'Temporarily out of your inbox. Open PRs return after their snooze, once checked on GitHub.',hidden:'Set aside for now. Restore a PR to bring it back to its view.'};
-const statusLabels={starting:'Starting',queued:'Starting',running:'Reviewing',completed:'Completed',blocked:'Needs input',failed:'Run failed',cancelled:'Tracking stopped','no-activity':'No recent activity'};
-const active = run => run && ['starting','queued','running','no-activity'].includes(run.status);
+const statusLabels={starting:'Starting',queued:'Starting',running:'Reviewing',completed:'Completed','completed-with-gaps':'Completed with gaps',blocked:'Needs input',failed:'Run failed',cancelled:'Cancelled',stopping:'Stopping','no-activity':'No recent activity'};
+const active = run => run && ['starting','queued','running','stopping','no-activity'].includes(run.status);
 const attention = run => run && ['blocked','failed','no-activity'].includes(run.status);
 const defaults={view:'requested',search:'',reportRepositoriesOnly:[],reportRepositoriesExcluded:[],repositoriesOnly:[],repositoriesExcluded:[],authorsOnly:[],authorsExcluded:[],statusesOnly:[],statusesExcluded:[],drafts:'all',triageEffort:'all',sort:'updated'};
 let filters={...defaults};
@@ -77,7 +77,7 @@ async function copyPrompt(button){
   }
  }catch(error){notify(error.message);}finally{button.disabled=false;}
 }
-function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
+function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='codex-sdk'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';
@@ -134,10 +134,10 @@ function card(pr){
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
  return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}</div>
- ${triageCard(pr)}${artifactWarning(pr)}
+ ${triageCard(pr)}${artifactWarning(pr)}${reviewSummary(run)}
  ${run||history||Object.keys(arts).length?`<details class="run-details"><summary>AI run details & history</summary><div class="detail-content">
- ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded AI activity ${esc(since(run.updated_at))}. ${isActive?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
- ${attention(run)||['starting','queued'].includes(run.status)?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
+ ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded AI activity ${esc(since(run.updated_at))}. ${isActive&&run.transport!=='codex-sdk'?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
+ ${run.transport!=='codex-sdk'&&(attention(run)||['starting','queued'].includes(run.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
  ${Object.keys(arts).length?`<section><p class="detail-heading">Results currently shown</p>${Object.entries(arts).map(([name,a])=>`<p class="muted">${artifactLabel(name)}: ${esc(when(a.created_at))} · ${esc(a.tool)} · commit ${esc(a.head_sha?.slice(0,12)||'not recorded')}${a.status!=='completed'?' · partial result':''}</p>`).join('')}</section>`:''}${history}</div></details>`:''}</article>`;
 }
 const statusOptions={unreviewed:'No GitHub feedback yet',reviewed:'Reviewed or commented on GitHub',ready:'AI notes available',unread:'New unopened AI results',running:'AI run active',attention:'AI run needs attention',older:'Older AI results'};
@@ -239,7 +239,7 @@ function fillAgent(){const profile=profiles[editingAgent]||{model:'',effort:''};
 function markDirty(){if(!state)return;const config=state.config;settingsDirty=editingAgent!==config.agent||$('model').value!==config.model||$('effort').value!==config.effort;$('save-state').textContent=settingsDirty?'Unsaved changes — save before starting a review.':'Saved. Blank fields use the CLI defaults.';$('discard').hidden=!settingsDirty;}
 function queueCaptureButton(pr){return `<button class="button ${pr.workflow?'':'primary'}" data-queue-action="${pr.workflow?'show':'enqueue'}" data-url="${esc(pr.url)}">${pr.workflow?'My reviews':'Add to Up next'}</button>`;}
 function renderState(){
- const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · Approve for me':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
+ const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · in app':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
  const runs=state.prs.filter(pr=>active(pr.run)||attention(pr.run));$('active-runs').textContent=runs.length?'('+runs.length+')':'';
  $('active-run-list').innerHTML=runs.map(pr=>`<div class="activity-run"><a href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}</a><p>${esc(pr.title)}</p><p class="muted">${esc(statusLabels[pr.run.status]||pr.run.status)} · Recorded ${esc(since(pr.run.updated_at))}</p></div>`).join('')||'<p class="muted">No active AI reviews.</p>';
  renderSyncStatus();
@@ -250,7 +250,8 @@ function renderState(){
  renderList();
  if(typeof renderQueue==='function')renderQueue();
 }
-async function loadState(){if(loading)return;loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();refreshExpiredSnoozes();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;}}
+let stateRequest=null;
+function loadState(){if(stateRequest)return stateRequest;stateRequest=(async()=>{loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();refreshExpiredSnoozes();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;stateRequest=null;}})();return stateRequest;}
 function syncFilterControls(){ $('search').value=filters.search;renderPickers();$('drafts').value=filters.drafts;$('sort').value=filters.sort;$('triage-filter').value=filters.triageEffort;}
 function clearFilters(){for(const id of Object.keys(pickerConfig))$(id+'-search').value='';filters={...defaults,view:filters.view,reportRepositoriesOnly:filters.reportRepositoriesOnly,reportRepositoriesExcluded:filters.reportRepositoriesExcluded};syncFilterControls();saveFilters();renderList();}
 document.addEventListener('click',async event=>{
@@ -266,12 +267,13 @@ document.addEventListener('click',async event=>{
  if(retry==='true'&&!confirm('Close the previous Terminal session first. Retry stops tracking that run; it does not stop its process. Start a new review?'))return;
  busy.add(url);button.disabled=true;
  try{const result=await post(action,{url,retry:retry==='true',...(days?{days:Number(days)}:{})});
-  if(launching)notify(result.existing?'This PR already has an active run. Open its review history for details.':'Terminal opened. Progress will appear here and survives reloading the page.');
+  if(launching)notify(result.existing?'This PR already has an active run.':result.transport==='codex-sdk'?'Codex review started. You can follow it here.':'Terminal opened. Progress will appear here.');
   else if(action==='/snooze')notify('Snoozed until '+when(result.snoozed_until)+'.',async()=>{await post('/unsnooze',{url});await loadState();});
   else if(action==='/unsnooze')notify('PR returned to your inbox.');
   else if(action==='/hide')notify('PR hidden.',async()=>{await post('/unhide',{url});await loadState();});
   else if(action==='/unhide')notify('PR restored.');
   await loadState();
+  if(launching){const run=state?.prs.find(p=>p.url===url)?.run;if(run?.transport==='codex-sdk')openReview(run.run_id);}
  }catch(error){notify(error.message);}finally{busy.delete(url);renderList(true);}
 });
 for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort'],['triage-filter','triageEffort']])$(id).addEventListener(id==='search'?'input':'change',()=>{filters[key]=$(id).value;saveFilters();renderList();});

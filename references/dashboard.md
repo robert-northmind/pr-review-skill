@@ -160,7 +160,7 @@ waiting, notes, removal/Undo, reload, navigation, and 320px/390px layouts.
 
 ## Starting and following a review
 
-The review buttons create a tracker run before opening Terminal, then pass
+The review buttons create a tracker run before starting the agent, then pass
 that exact ID to the agent. Reuse it. The tracker ID is the launch identity;
 never attach whichever unrelated run happens to finish next.
 
@@ -172,7 +172,7 @@ registers its run and artifacts when it starts. If clipboard access fails, a
 dialog shows selected prompt text for manual copying. `/copy-prompt` validates
 the PR URL and prompt kind and returns the prompt without changing local state.
 
-The Terminal launch action uses the saved agent settings and the entire
+The review launch action uses the saved agent settings and the entire
 pr-review workflow. Register one combined HTML as `review-html`; only completed
 `report` tasks surface as finished notes. Historical Markdown and explanation
 artifacts remain accessible in run history. Requests from an old explainer button
@@ -182,12 +182,11 @@ The prompt prefers a verified local clone under
 `/Users/example-user/Development`, using an isolated worktree. Follow the
 existing checkout and verification sandbox instructions.
 
-The launcher uses an interactive CLI. Claude uses `claude` with optional
-`--model` and `--effort`. Codex uses `codex --approve-for-me --cd
-<tracker-root>` with optional `-m` and
-`-c model_reasoning_effort=...`. Blank model/effort uses that CLI's default.
-Model and effort are stored independently per agent; changes must be saved
-before starting a run. These flags do not change global CLI configuration.
+Claude launches `claude` in Terminal with optional `--model` and `--effort`.
+Codex uses the in-app SDK worker described below, with the same saved model and
+reasoning effort. Blank settings use the selected runtime's defaults. Model and
+effort are stored independently per agent; save changes before starting a run.
+These overrides do not change global agent configuration.
 
 These settings configure the lead session. The skill's
 [reviewer allocation policy](reviewer-allocation.md) lets that session assess
@@ -201,13 +200,13 @@ not guarantee every request succeeds. PR code still requires the isolated
 verification environment specified by the skill.
 
 A second launch for an active PR returns the existing run instead of opening
-another terminal. The page shows Starting, Reviewing, Completed, Needs input,
+another session. For Terminal launches, the page shows Starting, Reviewing, Completed, Needs input,
 Run failed, or No recent activity. These are tracker states, not proof that a
 process is alive. A shell wrapper records normal CLI exit, including a missing
 CLI or early termination. A forcibly closed terminal may not run that callback;
 after the activity window expires the dashboard shows No recent activity.
 
-An explicit retry releases tracking of previous active runs; it does not kill
+For Terminal launches, an explicit retry releases tracking of previous active runs; it does not kill
 their terminal processes. The UI asks Robert to close the previous session
 first. Session references are displayed when recorded and can be copied or
 opened if they are HTTPS URLs. Earlier artifacts remain available during a
@@ -409,3 +408,55 @@ it checks rubric behavior, not calibrated review times or broad model accuracy.
 For an isolated UI session, run `python3 scripts/workspace_browser_fixture.py`
 from the skill directory. Add `--report-failure` to exercise partial sync failures.
 The fixture uses disposable state and blocks GitHub, provider and terminal work.
+
+## In-app Codex reviews
+
+Codex reviews run in a detached Python worker through `openai-codex` (the pinned
+runtime in `requirements-triage.txt`). Claude keeps its existing Terminal launch.
+The review button opens a live activity panel with stage progress and cancellation.
+Finished runs show their outcome and blocked/failed stage counts instead of a
+percentage or progress bar. Stage details retain incomplete checks and their reasons.
+Reloading the page or restarting the dashboard reconnects to the saved run; it
+never starts another model call. Session resume/follow-up and inline answers to
+agent questions are not implemented yet. Unhandled input requests are declined
+and surfaced as a blocker if the review cannot complete.
+
+The worker uses workspace-write sandboxing and automatic approval review, keeps
+the skill's separate sandbox requirement for executing PR code, and passes the
+selected lead model/effort. It explicitly reads the current skill checkout.
+Reviewers report checkpoint counts through `set-task`; stage weights are a UI
+estimate, not an ETA or coverage guarantee. Skipped validation is shown explicitly.
+A successful finish requires settled tracker tasks and an existing `review-html`
+in the run. A finished report with blocked or failed checks is labeled Finished
+with the incomplete stage counts. Final outcomes replace the progress bar.
+
+`dashboard_reviews.py` launches and supervises workers; `codex_review.py` owns
+the SDK protocol and prompt; `review_jobs.py` owns persistent state, locking,
+activity and progress. Job metadata and events live in each run directory.
+The worker records bounded agent messages and tool activity summaries, not raw command arguments, tool output or reasoning traces.
+The UI escapes messages as plain text. The activity view shows the latest 100
+saved events (with a bounded file-tail read); older events remain on disk.
+Worker heartbeats and actual agent activity are separate. A missing worker is
+reported as failed after a startup grace period. Retry cannot overlap an active
+in-app worker. Stop first requests a Codex interruption; after eight seconds the
+worker can terminate its own dedicated process group. Partial artifacts and
+checkout state are retained for inspection/normal tracker cleanup.
+
+Same-origin GET `/api/review` returns saved state; `/api/review-events` streams
+snapshots over SSE. POST `/review-cancel` uses the normal Origin/CSRF checks.
+SSE disconnects do not stop the worker. The browser can safely replay snapshots
+without duplicating activity. No provider keys or protocol sockets are exposed
+to the browser.
+
+For an isolated development instance, set `PR_REVIEW_TRACKER_HOME` to a separate
+directory and start `scripts/pr_server.py --port 8877` with the Python interpreter containing
+`requirements-triage.txt`. `PR_REVIEW_PYTHON` can explicitly select the worker
+interpreter. Copy inbox/config metadata into the separate state directory if
+wanted; select Codex in that instance's settings. Do not restart the normal
+launchd service to try an isolated worktree.
+
+Run `python3 -m unittest test_codex_review test_dashboard test_dashboard_launch`
+from `scripts/`. `node scripts/test_codex_browser.cjs` uses a disposable synthetic
+review to exercise live progress, reload/reconnect, cancellation, escaped text,
+and light/dark desktop/mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` when
+Playwright is outside Node's normal module path. The fixture never calls a model.

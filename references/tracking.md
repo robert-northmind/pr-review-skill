@@ -98,6 +98,18 @@ Update in `finally`-equivalent cleanup when possible so interrupted work is not
 left looking successful. Preserve completed task states when another task
 fails.
 
+For an in-app Codex review, report intermediate checkpoints with optional
+`--completed-units`, `--total-units`, and `--unit` flags on `set-task`. Supply both
+counts together, using the task's real inventory (for example, file groups or
+planned checks). Update the counts and a short nonsensitive message at meaningful
+checkpoints. Each reviewer owns its assigned task; the lead summarizes progress.
+Counts may change when scope expands. The dashboard combines these checkpoints
+with fixed stage weights into an explicitly approximate progress bar. Skipped
+stages remain visible, and 100% requires a completed run with a registered report.
+
+When a launch supplies a skill checkout or `PR_REVIEW_TRACKER_HOME`, use that
+checkout's scripts and supplied registry root in place of the example paths here.
+
 To update the originating session reference:
 
 ```shell

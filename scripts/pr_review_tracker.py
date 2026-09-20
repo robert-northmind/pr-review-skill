@@ -256,12 +256,20 @@ def command_set_session(args: argparse.Namespace) -> None:
 def command_set_task(args: argparse.Namespace) -> None:
     directory = run_dir(args.run_id)
     task = validate_name(args.task, "task name")
+    completed = getattr(args, 'completed_units', None)
+    total = getattr(args, 'total_units', None)
+    if (completed is None) != (total is None) or (total is not None and
+            (total <= 0 or completed < 0 or completed > total)):
+        raise TrackerError('Progress needs 0 <= completed-units <= total-units and a positive total.')
+    progress = {} if total is None else {'completed': completed, 'total': total,
+        'unit': str(getattr(args, 'unit', '') or 'items')[:80]}
     atomic_write(
         directory / "tasks" / f"{task}.json",
         {
             "task": task,
             "status": args.status,
             "message": args.message,
+            "progress": progress,
             "updated_at": utc_now(),
         },
     )
@@ -1088,6 +1096,9 @@ def build_parser() -> argparse.ArgumentParser:
     task.add_argument("--task", required=True)
     task.add_argument("--status", choices=TASK_STATUSES, required=True)
     task.add_argument("--message", default="")
+    task.add_argument("--completed-units", type=int)
+    task.add_argument("--total-units", type=int)
+    task.add_argument("--unit", default="items")
     task.set_defaults(handler=command_set_task)
 
     artifact = commands.add_parser("add-artifact", help="Attach a local artifact")

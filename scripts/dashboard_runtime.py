@@ -9,9 +9,10 @@ import threading
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_queue as queue
+import dashboard_reviews as codex
 
 ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
-TERMINAL = {'completed', 'failed', 'blocked', 'cancelled'}
+TERMINAL = {'completed', 'completed-with-gaps', 'failed', 'blocked', 'cancelled'}
 
 
 def artifact_allowed(path):
@@ -100,10 +101,15 @@ def summarize_run(run, checked_sha=''):
         status = 'starting' if age_seconds(run['created_at']) < 180 else 'no-activity'
     elif status == 'potentially-stale':
         status = 'no-activity'
+    job = codex.job_state(run['run_id']) if launch.get('transport') == 'codex-sdk' else {}
+    if job:
+        status = job['status']
     return {'run_id': run['run_id'], 'status': status, 'tool': run.get('tool', ''),
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
-        'kind': launch.get('kind', 'review'), 'message': launch.get('message', '') or run.get('control', {}).get('message', ''),
+        'kind': launch.get('kind', 'review'), 'transport': launch.get('transport', 'terminal'),
+        'progress': codex.progress(run, status) if job else None,
+        'message': job.get('message', '') or launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
         'artifacts': collect_artifacts([run], checked_sha)}
 
@@ -178,18 +184,24 @@ def start_launch(url, kind, retry=False):
         if entry is None:
             raise dashboard.DashboardError('This PR is no longer in the inbox. Refresh the page.')
         runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
-        active = [r for r in runs if r['pr_url'] == canonical and r['status'] not in TERMINAL]
+        active = [r for r in runs if r['pr_url'] == canonical and
+                  (summarize_run(r)['status'] not in TERMINAL or
+                   (codex.read_job(r['run_id']) and codex.worker_alive(r['run_id'])))]
         if active and not retry:
-            return {'run_id':active[0]['run_id'], 'existing':True}
+            return {'run_id': active[0]['run_id'], 'existing': True,
+                    'transport': summarize_run(active[0])['transport']}
         if active and retry:
             for run in active:
+                if codex.read_job(run['run_id']):
+                    raise dashboard.DashboardError('Stop the active Codex review and wait for it to finish before retrying.')
                 tracker.command_cancel(Namespace(run_id=run['run_id'], message='Tracking released for an explicit retry; terminal is not terminated.'))
         config = dashboard.load_config()
         run_id = tracker.command_start(Namespace(pr_url=canonical,
             tool='codex' if config['agent']=='codex' else 'claude-code',
             title=entry.get('title',''), working_directory=str(tracker.tracker_root()),
             session_reference='', base_sha='', head_sha=''), emit=False)
-        meta = {'kind':kind, 'agent':config['agent'], 'created_at':tracker.utc_now(), 'message':''}
+        transport = 'codex-sdk' if config['agent'] == 'codex' else 'terminal'
+        meta = {'kind':kind, 'agent':config['agent'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
         tracker.atomic_write(launch_path(run_id), meta)
         prompt = dashboard.full_review_prompt(canonical)
         prompt += ('\n\nThe dashboard has already registered this exact run. '
@@ -200,13 +212,16 @@ def start_launch(url, kind, retry=False):
             'This request authorizes the complete local review workflow and its local artifacts, '
             'not posting anything to GitHub.')
         try:
-            dashboard.open_interactive_terminal(prompt, run_id=run_id)
+            if transport == 'codex-sdk':
+                codex.start(run_id, prompt, config)
+            else:
+                dashboard.open_interactive_terminal(prompt, run_id=run_id)
         except (OSError, dashboard.DashboardError) as error:
             _record_exit(run_id, 1, str(error))
             raise dashboard.DashboardError(str(error)) from error
     if kind == 'review' and not entry.get('workflow'):
         queue.mutate(canonical, 'enqueue')
-    return {'run_id':run_id, 'existing':False}
+    return {'run_id':run_id, 'existing':False, 'transport':transport}
 
 
 def _record_exit(run_id, code, message=''):

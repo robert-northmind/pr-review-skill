@@ -34,6 +34,14 @@ For lifecycle registration, progress, cleanup, artifact versions and status
 questions, read [Tracking](references/tracking.md). Use the scripts; never edit
 registry JSON by hand. Dashboard operations have a separate reference below.
 
+During a review, give brief progress updates at stage changes, meaningful
+checkpoints, and blockers. For long tasks, aim for an update every 30–60 seconds
+when there is new information; do not manufacture activity. Give each reviewer
+its tracker task and ask it to record completed/total file groups or checks as
+it works. The lead summarizes these checkpoints and the next remaining work.
+Use actual inventory counts, not invented percentages or time estimates. See
+the tracking reference for the optional progress flags.
+
 ## Safety and scope
 
 - Accept only an `https://github.com/<owner>/<repository>/pull/<number>` URL.

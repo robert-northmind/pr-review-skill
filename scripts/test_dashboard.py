@@ -139,8 +139,8 @@ class Launches(Isolated):
    old=r.start_launch(URL,'review')['run_id'];new=r.start_launch(URL,'review',retry=True)['run_id']
   self.assertNotEqual(old,new);self.assertEqual(t.load_run(t.run_dir(old),6)['status'],'cancelled')
  def test_shell_wrapper_records_actual_cli_failure(self):
-  d.save_agent_config('codex','','')
-  fake=self.root/'codex';fake.write_text('#!/bin/sh\nexit 127\n');fake.chmod(0o700)
+  d.save_agent_config('claude','','')
+  fake=self.root/'claude';fake.write_text('#!/bin/sh\nexit 127\n');fake.chmod(0o700)
   with patch.object(d.subprocess,'run',return_value=subprocess.CompletedProcess([],0)) as opener:
    run=r.start_launch(URL,'review')['run_id']
    script=Path(opener.call_args.args[0][-1])

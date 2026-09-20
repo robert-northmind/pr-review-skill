@@ -8,6 +8,7 @@ import mimetypes
 import secrets
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote, quote
@@ -19,10 +20,11 @@ import dashboard_runtime as runtime
 import dashboard_reporting as reporting
 import dashboard_queue as queue
 import dashboard_triage as triage
+import dashboard_reviews as codex
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
-             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt'}
+             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel'}
 
 
 class Server(ThreadingHTTPServer):
@@ -96,6 +98,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(200,path.read_bytes(),'text/plain; charset=utf-8',"sandbox; default-src 'none'")
 
+    def _review_events(self, run_id):
+        current = codex.snapshot(run_id)  # Validate before sending headers.
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        previous = None
+        try:
+            # Reconnects replay a bounded saved activity window, even after server restart.
+            # The worker is independent of this connection and HTTP server.
+            for _ in range(60):
+                encoded = json.dumps(current)
+                if encoded != previous:
+                    self.wfile.write(('event: review\ndata: ' + encoded + '\n\n').encode())
+                    previous = encoded
+                else:
+                    self.wfile.write(b': heartbeat\n\n')
+                self.wfile.flush()
+                if current['status'] in codex.FINAL:
+                    return
+                time.sleep(1)
+                current = codex.snapshot(run_id)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def do_GET(self):
         if not self._valid_host():
             self._error(403,'Unexpected host.'); return
@@ -106,13 +134,19 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
-            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js'):
+            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js','/assets/live-review.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')
-            elif parsed.path in ('/api/state','/api/reporting','/status'):
+            elif parsed.path in ('/api/state','/api/reporting','/status','/api/review','/api/review-events'):
                 if self.headers.get('Sec-Fetch-Site') == 'cross-site' or (self.headers.get('Origin') and not self._valid_origin()):
                     self._error(403,'Dashboard state is only available from this origin.'); return
-                if parsed.path == '/api/reporting':
+                if parsed.path in ('/api/review', '/api/review-events'):
+                    run_id = (parse_qs(parsed.query).get('run_id') or [''])[0]
+                    if parsed.path == '/api/review-events':
+                        self._review_events(run_id)
+                    else:
+                        self._send(200, codex.snapshot(run_id))
+                elif parsed.path == '/api/reporting':
                     self._send(200,reporting.snapshot())
                 elif parsed.path == '/api/state':
                     self._send(200,runtime.snapshot())
@@ -143,6 +177,8 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict):
                 raise ValueError('Expected an object.')
+            if path == '/review-cancel':
+                self._send(200, codex.cancel(str(data.get('run_id', '')))); return
             if path == '/artifact-opened':
                 self._send(200, runtime.mark_artifact_opened(str(data.get('run_id', '')),
                     str(data.get('name', '')), data.get('version'))); return

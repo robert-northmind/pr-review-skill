@@ -11,6 +11,7 @@
 <script src="/assets/dashboard.js" defer></script>
 <script src="/assets/reporting.js" defer></script>
 <script src="/assets/queue.js" defer></script>
+<script src="/assets/live-review.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#pr-list">Skip to pull requests</a>
@@ -98,6 +99,15 @@
 <footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
 </main>
 
+<dialog id="review-dialog" class="review-dialog" aria-labelledby="review-title">
+<div class="review-dialog-header"><div><span class="review-eyebrow">CODEX · IN-APP REVIEW</span><h2 id="review-title">Codex review</h2><p id="review-subtitle" class="muted"></p></div><button class="button" id="review-close" aria-label="Close review activity">Close</button></div>
+<div class="review-overview"><div class="review-overview-top"><div><strong id="review-status">Starting</strong><p id="review-message" class="muted"></p></div><span id="review-percent">0%</span></div><progress id="review-progress" value="0" max="100" aria-label="Estimated review progress"></progress><p id="review-counts"></p><p id="review-estimate" class="muted review-estimate">Stage estimate, not time remaining. Based on agent checkpoints; skipped checks remain visible. Scope changes can revise progress.</p></div>
+<ol id="review-stages" class="review-stages"></ol>
+<div class="review-feed-heading"><h3>Agent updates</h3><span id="review-stream-status" class="muted" role="status">Connecting…</span></div>
+<ol id="review-updates" class="review-updates" aria-label="Saved agent updates"></ol>
+<details class="review-tool-details"><summary>Recent tool activity <span id="review-tools-count" class="count">0</span></summary><ul id="review-tools"></ul><p class="muted">Latest activity only. Raw commands and tool output are not stored in this feed.</p></details>
+<div class="review-footer"><span class="muted">Closing this panel keeps the review running.</span><div id="review-result"></div><button id="review-stop" class="button" hidden>Stop review</button></div>
+</dialog>
 <dialog id="settings" class="workspace-dialog" aria-labelledby="settings-heading">
   <div class="dialog-heading"><h2 id="settings-heading">Settings</h2><button class="button subtle" data-close-dialog>Close</button></div>
   <nav class="settings-tabs" aria-label="Settings sections">
@@ -108,9 +118,9 @@
   </nav>
   <section id="agent-settings" data-settings-section>      <form id="agent-form">
         <h2>Review agent</h2><p class="muted">Used when you start a review. Model and effort are remembered for each agent.</p>
-        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code</option><option value="codex">Codex CLI</option></select></label>
-        <label>Model<input id="model" name="model" list="model-options" placeholder="CLI default" autocomplete="off"><datalist id="model-options"></datalist></label>
-        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="CLI default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
+        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code · Terminal</option><option value="codex">Codex · In app</option></select></label>
+        <label>Model<input id="model" name="model" list="model-options" placeholder="Agent default" autocomplete="off"><datalist id="model-options"></datalist></label>
+        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="Agent default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
         <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
       </form></section>
   <section id="estimate-settings" data-settings-section hidden>      <form id="triage-form" class="triage-settings">
