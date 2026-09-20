@@ -49,3 +49,11 @@ cancellation. Browser checks confirmed live elapsed status, expandable file-read
 activity, completed answers and the Stop action, with no console errors. One real
 Codex call on a synthetic two-line diff completed through the streamed adapter;
 no real PR source was used for that check.
+
+After prototype cleanup: all 254 Python tests and the JavaScript model/render,
+workspace-sync and reporting checks passed. Browser checks against the retained
+production-route fixture verified split diffs, chat completion, attachment removal
+with draft/history retained, and embedded reports; no console errors were observed.
+The fixture now uses separate synthetic source data and the production diff
+projection. The standalone prototype server, fake-reply UI paths and styles are
+removed; their design history remains in Git.

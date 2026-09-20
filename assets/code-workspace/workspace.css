@@ -49,12 +49,6 @@
   text-decoration: none;
   color: var(--muted);
 }
-.prototype-badge {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 10px;
-}
 .appearance {
   margin-left: auto;
 }
@@ -150,31 +144,6 @@
   color: var(--muted);
   font-size: 11px;
   margin-right: 6px;
-}
-.demo-strip {
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  padding: 8px 28px;
-  background: var(--soft);
-  border-block: 1px solid var(--line);
-  font-size: 11px;
-  color: var(--muted);
-}
-.demo-actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-.demo-actions .text-button {
-  font-size: inherit;
-  padding: 0;
-  color: inherit;
-}
-.demo-strip a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .workspace-body {
   display: flex;
@@ -760,76 +729,12 @@
   font-weight: 600;
   margin: 0 0 10px;
 }
-.ai-view .review-intro {
-  font-size: 15px;
-  color: var(--muted);
-  max-width: 72ch;
-}
 .review-meta {
   display: flex;
   gap: 12px;
   font-size: 11px;
   color: var(--muted);
   margin-bottom: 22px;
-}
-.before-after {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 25px;
-  padding: 22px 0;
-  margin: 24px 0;
-  border-block: 1px solid var(--line);
-}
-.before-after h3 {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 500;
-  margin: 0 0 8px;
-}
-.before-after p {
-  font-size: 14px;
-  margin: 0;
-}
-.ai-view h3 {
-  font-size: 16px;
-  margin-top: 30px;
-}
-.finding {
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--warn);
-  border-radius: 5px;
-  padding: 18px 20px;
-  margin-top: 15px;
-}
-.finding-heading {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.finding h4 {
-  font-size: 15px;
-  margin: 0;
-}
-.finding p {
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 75ch;
-  margin: 12px 0;
-}
-.finding .button {
-  font-size: 12px;
-  min-height: 32px;
-  margin-right: 8px;
-}
-.review-route {
-  display: flex;
-  gap: 12px;
-  margin-top: 25px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.review-route .muted {
-  font-size: 12px;
 }
 .review-empty {
   max-width: 550px;
@@ -912,9 +817,6 @@
   .breadcrumbs #pr-identity {
     font-size: 11px;
   }
-  .prototype-badge {
-    display: none;
-  }
   .title-row {
     margin-top: 13px;
     align-items: flex-start;
@@ -948,12 +850,6 @@
     margin-right: auto;
   }
   .workspace-tools .button {
-    font-size: 10px;
-  }
-  .demo-strip {
-    padding: 8px 16px;
-    flex-wrap: wrap;
-    gap: 4px;
     font-size: 10px;
   }
   .code-view {
@@ -1074,19 +970,6 @@
   }
   .ai-view h2 {
     font-size: 22px;
-  }
-  .before-after {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  .finding {
-    padding: 15px;
-  }
-  .finding-heading {
-    align-items: flex-start;
-  }
-  .finding h4 {
-    font-size: 14px;
   }
   .review-meta {
     flex-wrap: wrap;

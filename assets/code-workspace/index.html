@@ -16,8 +16,6 @@
       <div class="breadcrumbs">
         <a href="/">‹ PR reviews</a><span>/</span
         ><span id="pr-identity">Loading…</span
-        ><span class="prototype-badge" id="prototype-badge" hidden
-          >Prototype</span
         ><label class="appearance"
           ><span class="sr-only">Appearance</span
           ><select id="theme" aria-label="Color theme">
@@ -55,20 +53,6 @@
         </div>
       </div>
     </header>
-    <div class="demo-strip" id="demo-strip" hidden>
-      <span>Offline demo · Example code and scripted AI replies</span>
-      <div class="demo-actions">
-        <button
-          id="reset-demo"
-          class="text-button"
-          title="Clear viewed files, conversations, and notes for this example"
-        >
-          Reset demo</button
-        ><a id="scenario-switch" href="?demo=empty&tab=code"
-          >Try without an AI review</a
-        >
-      </div>
-    </div>
     <p id="loading-workspace" class="muted" role="status">
       Loading review workspace…
     </p>
@@ -192,7 +176,8 @@
             </div>
           </form>
           <p class="chat-footnote" id="chat-footnote">
-            Scripted demo. Questions stay in this browser.
+            Uses your local Codex login. Selected code and PR context are sent to
+            the AI provider. Nothing is posted to GitHub.
           </p>
         </div>
         <div id="notes-content" class="notes-content" hidden>

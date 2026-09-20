@@ -4,7 +4,6 @@ import fcntl
 import hashlib
 import json
 import threading
-from pathlib import Path
 import pr_review_tracker as tracker
 
 _lock = threading.RLock()

@@ -79,7 +79,6 @@ async function copyPrompt(button){
 }
 function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='codex-sdk'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
- if(['ready','empty'].includes(pr.workspace_demo))return '<span class="pr-author"><span class="avatar-wrap"><span class="avatar-fallback" aria-hidden="true">A</span></span>Alex <span class="author-login">· Example author</span></span>';
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';
  const encoded=encodeURIComponent(login), name=pr.author_name||login;
@@ -123,14 +122,13 @@ function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
 }
 function codeWorkspaceLink(pr){
- const demo=['ready','empty'].includes(pr.workspace_demo);
- const ready=demo?pr.workspace_demo==='ready':!!notesArtifact(pr.artifacts);
- const query=demo?'demo='+pr.workspace_demo:'url='+encodeURIComponent(pr.url);
+ const ready=!!notesArtifact(pr.artifacts);
+ const query='url='+encodeURIComponent(pr.url);
  return `<a class="button" href="/workspace?${query}&tab=${ready?'review':'code'}">Open review</a>`;
 }
 function workspaceStatusBadge(pr){
  const artifact=notesArtifact(pr.artifacts);
- const ready=pr.workspace_demo==='ready'||!!artifact;
+ const ready=!!artifact;
  const running=active(pr.run);
  const label=running?'AI review running':ready?(artifact?.freshness==='older'?'AI review · older commit':'AI review ready'):'No AI review yet';
  return `<span class="chip ${running?'run-live':ready&&artifact?.freshness!=='older'?'good':artifact?.freshness==='older'?'warn':''} workspace-status">${label}</span>`;

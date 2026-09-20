@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 import threading
 from unittest.mock import patch
-import code_workspace_fixture as demo
+import workspace_fixture_data as fixture
 import workspace_github as github
 import workspace_store as store
 import workspace_chat as chat
@@ -25,8 +25,8 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=0);args=parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='review-connected-fixture-') as root, ExitStack() as stack:
         os.environ['PR_REVIEW_TRACKER_HOME']=root
-        comparison=demo.payload('ready')
-        comparison.update(url=URL,demo=False,base='a'*40,head='b'*40,prState='open')
+        comparison=fixture.comparison()
+        comparison.update(url=URL,base='a'*40,head='b'*40,prState='open')
         comparison['revision']=github.revision(comparison['base'],comparison['head'])
         for f in comparison['files']:
             f['fingerprint']=hashlib.sha256(json.dumps(f['rows']).encode()).hexdigest()

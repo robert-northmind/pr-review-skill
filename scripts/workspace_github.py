@@ -74,7 +74,7 @@ def manifest(url):
         trees[side] = {item['path']: item for item in tree_data['tree']}
     result = {'url': url, 'repository': repo, 'number': number, 'title': pr['title'],
               'author': pr['user']['login'], 'prState': pr['state'], 'base': base, 'head': head,
-              'revision': rev, 'demo': False, 'files': []}
+              'revision': rev, 'files': []}
     for file in files:
         item = {k: file.get(k) for k in ('status', 'additions', 'deletions', 'patch', 'sha')}
         item.update(path=file['filename'], previous=file.get('previous_filename'), rows=None)

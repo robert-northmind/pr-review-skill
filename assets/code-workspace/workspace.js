@@ -8,6 +8,7 @@ import {
   contextsOf,
   contextKey,
   attach,
+  removeContext,
   preserveMessageContexts,
   uiState,
   hydrate,
@@ -20,8 +21,6 @@ import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
 import { reviewHTML, unavailableHTML } from "./review.mjs";
 import { chatProgress, activityHTML } from "./progress.mjs";
-import { demoAnswer, renderDemoReview } from "./demo.mjs";
-("use strict");
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -110,7 +109,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
   });
 
   let data,
-    storageKey,
     saved = { viewed: [], collapsed: [], threads: [], notes: [] },
     selection = null,
     threadId = null,
@@ -214,33 +212,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     toastTimer = setTimeout(() => ($("workspace-toast").hidden = true), 3500);
   }
   function persist() {
-    if (!data.demo) {
-      saver.enqueue(uiState(saved));
-      return;
-    }
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(saved));
-    } catch {
-      $("storage-error").textContent =
-        "Browser storage is unavailable. Changes last only until this page closes.";
-      $("storage-error").hidden = false;
-    }
-  }
-  function loadSaved() {
-    try {
-      const value = JSON.parse(localStorage.getItem(storageKey) || "null");
-      if (
-        value &&
-        ["viewed", "collapsed", "threads", "notes"].every((k) =>
-          Array.isArray(value[k]),
-        )
-      )
-        saved = value;
-    } catch {
-      $("storage-error").textContent =
-        "Saved demo state could not be read. Starting a new session.";
-      $("storage-error").hidden = false;
-    }
+    saver.enqueue(uiState(saved));
   }
   function filteredFiles() {
     const term = $("file-filter").value.toLowerCase();
@@ -350,7 +322,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     $("ai-view").hidden = tab !== "review";
     $("code-tab").setAttribute("aria-pressed", tab === "code");
     $("review-tab").setAttribute("aria-pressed", tab === "review");
-    if (tab === "review" && !data.demo) markReportRead();
+    if (tab === "review") markReportRead();
     const url = new URL(location.href);
     url.searchParams.set("tab", tab);
     history.replaceState(null, "", url);
@@ -459,7 +431,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       ? thread.messages
           .map(
             (m, index) =>
-              `<article class="message ${m.role}"><header>${m.role === "user" ? "You" : data.demo ? "AI preview" : "AI"}${m.role === "assistant" && data.demo ? "<span>Scripted reply</span>" : ""}</header>${messageContextHTML(m, index, thread)}<p>${esc(m.text)}</p>${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} reads</summary>${m.reads.map((r) => `<p>${esc(r.side)} · ${esc(r.path || "File list")}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
+              `<article class="message ${m.role}"><header>${m.role === "user" ? "You" : "AI"}</header>${messageContextHTML(m, index, thread)}<p>${esc(m.text)}</p>${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} reads</summary>${m.reads.map((r) => `<p>${esc(r.side)} · ${esc(r.path || "File list")}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
           )
           .join("")
       : `<div class="chat-empty"><strong>${contexts.length ? "Start with a question." : "A second pair of eyes."}</strong><p>${contexts.length ? "Ask about these lines. Add more selections from any file to keep exploring in this conversation." : "Select lines in the diff for a focused conversation, or ask about the whole change."}</p></div>`;
@@ -475,7 +447,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
         ? "Add selection to chat"
         : "Ask about selection";
     $("send-question").disabled = chatStarting || isRunning(thread);
-    $("stop-chat").hidden = !isRunning(thread) || data.demo;
+    $("stop-chat").hidden = !isRunning(thread);
     $("stop-chat").disabled = thread?.status === "stopping";
     $("chat-status").classList.toggle("working", isRunning(thread));
     $("chat-status").textContent = chatProgress(thread) ||
@@ -491,27 +463,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
   async function ask(question) {
     question = question.trim();
     if (!question || chatStarting || isRunning(currentThread())) return;
-    if (data.demo) {
-      let thread = currentThread();
-      if (!thread) {
-        thread = {
-          id: crypto.randomUUID(),
-          contexts: structuredClone(draftContexts),
-          messages: [],
-        };
-        saved.threads.push(thread);
-        threadId = thread.id;
-      }
-      const contexts = structuredClone(contextsOf(thread));
-      thread.messages.push(
-        { role: "user", text: question, contexts },
-        { role: "assistant", text: demoAnswer(question, contexts), contexts },
-      );
-      persist();
-      $("question").value = "";
-      renderChat();
-      return;
-    }
     chatStarting = true;
     renderChat();
     try {
@@ -568,10 +519,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
   }
   let editingNote = null;
   function renderReview() {
-    if (data.demo) {
-      renderDemoReview(data, $, esc);
-      return;
-    }
     $("review-count").textContent = data.review?.artifact ? "Ready" : "Not run";
     const next = JSON.stringify(data.review);
     if (next !== reviewSignature) {
@@ -596,11 +543,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     }
   }
 
-  function findingSelection() {
-    const file = data.files[0];
-    const rows = file.rows.filter((r) => r.new >= 34 && r.new <= 50);
-    return makeSelection(0, rows[0].id, rows.at(-1).id);
-  }
   document.addEventListener("click", async (event) => {
     if (!data) return;
     const button = event.target.closest("button");
@@ -657,7 +599,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
         Array.isArray(message.contexts) ? message.contexts : contextsOf(t),
       );
       saved.notes.push({
-        text: (data.demo ? "[Scripted demo reply]\n" : "") + message.text,
+        text: message.text,
         contexts,
         context: contexts.at(-1) || null,
       });
@@ -666,14 +608,12 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       notify("Saved to private notes.");
     }
     if (d.removeContext !== undefined) {
-      const thread = currentThread(),
-        contexts = structuredClone(activeContexts()),
-        removed = contexts.splice(Number(d.removeContext), 1)[0];
+      const thread = currentThread();
+      let removed;
       if (thread) {
-        preserveMessageContexts(thread);
-        thread.contexts = contexts;
+        removed = removeContext(thread, Number(d.removeContext));
         persist();
-      } else draftContexts = contexts;
+      } else removed = draftContexts.splice(Number(d.removeContext), 1)[0];
       if (selection && removed && contextKey(selection) === contextKey(removed))
         selection = null;
       paintSelection();
@@ -747,21 +687,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       } catch (error) {
         notify(error.message);
       }
-    }
-    if (button.id === "generate-demo") {
-      data.reviewReady = true;
-      renderReview();
-      notify("Prepared example review shown.");
-    }
-    if (button.id === "finding-code") {
-      selection = findingSelection();
-      jump(0, selection.ids);
-    }
-    if (button.id === "finding-ask") {
-      const c = findingSelection();
-      jump(0, c.ids);
-      attachContext(c);
-      ask("What happens to rejected promises here?");
     }
     if (button.id === "reset-filters") {
       $("file-filter").value = "";
@@ -888,23 +813,6 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
   new ResizeObserver(updateLayout).observe(
     document.querySelector(".diff-column"),
   );
-  $("reset-demo").addEventListener("click", () => {
-    saved = { viewed: [], collapsed: [], threads: [], notes: [] };
-    selection = null;
-    threadId = null;
-    draftContexts = [];
-    editingNote = null;
-    full.clear();
-    revealed.clear();
-    $("file-filter").value = "";
-    $("unviewed-only").checked = false;
-    $("note-text").value = "";
-    $("question").value = "";
-    persist();
-    renderFiles();
-    closeRail();
-    notify("This example’s progress, conversations and notes were cleared.");
-  });
   $("file-filter").addEventListener("input", renderFiles);
   $("unviewed-only").addEventListener("change", renderFiles);
   $("wrap-lines").addEventListener("change", (event) => {
@@ -941,7 +849,7 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
     draftContexts = [];
     $("question").value = "";
     renderChat();
-    if (!data.demo && isRunning(currentThread())) pollChat(threadId);
+    if (isRunning(currentThread())) pollChat(threadId);
   });
   $("chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -981,52 +889,32 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
   });
   async function init() {
     try {
-      if (params.has("demo")) {
-        const response = await fetch(
-          "/api/code-workspace?demo=" + encodeURIComponent(params.get("demo")),
-        );
-        if (!response.ok) throw new Error("The example could not be loaded.");
-        data = await response.json();
-        storageKey = `pr-code-demo-v1:${data.repository}:${data.number}:${data.base}:${data.head}`;
-        loadSaved();
-        $("demo-strip").hidden = false;
-        $("prototype-badge").hidden = false;
-        $("scenario-switch").href =
-          `?demo=${data.reviewReady ? "empty" : "ready"}&tab=${data.reviewReady ? "code" : "review"}`;
-        $("scenario-switch").textContent = data.reviewReady
-          ? "Try without an AI review"
-          : "Try with an AI review";
-      } else {
-        data = await api.load(params.get("revision"));
-        saved = hydrate(data.saved);
-        saver = new SaveQueue(
-          api,
-          data.revision,
-          data.saved.version,
-          storageError,
-        );
-        $("refresh-comparison").hidden = false;
-        $("chat-footnote").textContent =
-          "Uses your local Codex login. Selected code and PR context are sent to the AI provider. Nothing is posted to GitHub.";
-        if (params.has("revision")) {
-          $("storage-error").textContent =
-            "Historical comparison. Viewed status is read-only. Notes and chat stay available; check for new commits to return to latest.";
-          $("storage-error").hidden = false;
-        }
-        const selected =
-          saved.threads.find((t) => t.id === params.get("chat")) ||
-          saved.threads.find(isRunning);
-        if (selected) {
-          selectThread(selected.id);
-          showRail();
-          if (isRunning(selected)) pollChat(threadId);
-        }
-        reviewTimer = setTimeout(updateReview, 15000);
+      data = await api.load(params.get("revision"));
+      saved = hydrate(data.saved);
+      saver = new SaveQueue(
+        api,
+        data.revision,
+        data.saved.version,
+        storageError,
+      );
+      $("refresh-comparison").hidden = false;
+      if (params.has("revision")) {
+        $("storage-error").textContent =
+          "Historical comparison. Viewed status is read-only. Notes and chat stay available; check for new commits to return to latest.";
+        $("storage-error").hidden = false;
       }
+      const selected =
+        saved.threads.find((t) => t.id === params.get("chat")) ||
+        saved.threads.find(isRunning);
+      if (selected) {
+        selectThread(selected.id);
+        showRail();
+        if (isRunning(selected)) pollChat(threadId);
+      }
+      reviewTimer = setTimeout(updateReview, 15000);
       $("pr-identity").textContent = `${data.repository} #${data.number}`;
       $("pr-title").textContent = data.title;
-      $("pr-author").textContent =
-        data.author + (data.demo ? " wants to merge 1 example commit" : "");
+      $("pr-author").textContent = data.author;
       $("pr-state").textContent = data.prState || "Open";
       $("comparison").textContent =
         data.base.slice(0, 12) + " → " + data.head.slice(0, 12);
@@ -1058,13 +946,11 @@ import { demoAnswer, renderDemoReview } from "./demo.mjs";
       $("load-error").textContent = error.message;
       $("load-error").hidden = false;
       $("workspace-body").hidden = true;
-      if (!params.has("demo")) {
-        try {
-          const info = await api.review("");
-          $("load-error").innerHTML = unavailableHTML(error, info, esc);
-        } catch {
-          // Keep the original loading error if saved reports are unavailable too.
-        }
+      try {
+        const info = await api.review("");
+        $("load-error").innerHTML = unavailableHTML(error, info, esc);
+      } catch {
+        // Keep the original loading error if saved reports are unavailable too.
       }
     }
   }

@@ -3,7 +3,6 @@ from unittest.mock import patch
 from urllib.parse import urlencode
 import test_dashboard
 import workspace_github as github
-import workspace_store as store
 import workspace_chat as chat
 import code_workspace as workspace
 from test_code_workspace import manifest, URL, REV

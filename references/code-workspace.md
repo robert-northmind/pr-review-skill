@@ -13,7 +13,7 @@ direct link to any saved report, with its current commit freshness unverified.
 Code changes use GitHub's PR head and merge base, pinned by full commit SHA.
 Changed files load as they enter the viewport, with a retry control for failures.
 Unified/side-by-side layouts, wrapping, context expansion, full base/head files,
-selection, collapse, filtering and viewed status follow the prototype. Side by
+selection, collapse, filtering and viewed status are available. Side by
 side stays selectable at every width. When less than 760px is available, the diff
 scrolls horizontally instead of overriding the chosen layout. Hiding Files gives
 it more room. Layout preference is stored in the browser.
@@ -65,7 +65,6 @@ complete. Private reasoning and raw provider output are not displayed.
 - `api.mjs`: HTTP boundary and serialized/coalesced optimistic saves.
 - `views.mjs` / `review.mjs`: escaped code/context and report presentation.
 - `workspace.js`: DOM events, responsive layout and orchestration.
-- `demo.mjs`: scripted prototype behavior, used only by the offline fixture.
 
 No framework or build step is required. Modules are served as native ES modules.
 Shared dashboard code remains unchanged except for entry links and status pills.
@@ -94,7 +93,7 @@ is lightweight rather than a language-aware parser.
 Use the interpreter containing `requirements-triage.txt`; `PR_REVIEW_PYTHON` can
 select it for detached workers. Start an isolated instance with a separate
 `PR_REVIEW_TRACKER_HOME` and `scripts/pr_server.py --port 8880`. The normal dashboard
-and prototype do not need to be restarted or replaced.
+does not need to be restarted or replaced.
 
 Run pure/service tests:
 
@@ -110,7 +109,9 @@ viewed invalidation, attachment history, context bounds and durable chat turns.
 
 `python3 scripts/workspace_integration_fixture.py --port 8879` runs production
 routes with synthetic GitHub/model boundaries and disposable state. It never
-contacts either provider. `node scripts/test_code_workspace_browser.cjs` automates
+contacts either provider. Synthetic source lives in `workspace_fixture_data.py`;
+the fixture uses the production UI, diff projection and persistence paths.
+`node scripts/test_code_workspace_browser.cjs` automates
 that fixture using the existing Playwright/Chrome convention; set
 `PR_REVIEW_PLAYWRIGHT_MODULE` and `PR_REVIEW_BROWSER_CHANNEL` as needed. It exercises
 layouts, selections, chat persistence, notes, viewed state, cancellation, report
