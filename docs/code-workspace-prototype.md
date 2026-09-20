@@ -81,10 +81,11 @@ model sessions, bounded context gathering, cancellation/errors, durable server
 storage, and revision changes that invalidate viewed state and label old chats.
 No posting, approval or merge action is implemented.
 
-Use **×** on the chat’s selected-code card to remove the attachment while
-keeping the draft question. If the conversation already has messages, removal
-starts a fresh PR-wide conversation; the original thread and its code context
-remain available in the conversation picker.
+Use **×** on any chat attachment to remove it from future questions while
+keeping the draft and conversation. Earlier messages retain their original
+code attachments, available through each question’s context disclosure.
+**Add selection to chat** adds code to the active conversation; **New** explicitly
+starts another. Duplicate selections are ignored.
 
 ## Validation
 
@@ -125,3 +126,22 @@ The threshold is a prototype design choice, not a fixed product requirement.
 Browser checks cover paired row alignment with wrapping, base-only range
 selection and chat attachment, context expansion on both sides, full base/head
 files, saved layout after reload, and width changes with chat and Files open.
+
+
+## Accepted behavior for the connected workspace
+
+- Start chat with selected lines and the PR diff. On request, fetch additional
+  files/callers at the pinned revision and show which context was read. This
+  prototype only explains that behavior; it cannot fetch more code or call AI.
+- When new commits arrive, reset viewed state only for changed files. Preserve
+  unchanged files’ viewed state. Keep previous conversations with their original
+  revision and an Older commit label. Live commit updates are not implemented.
+- Private notes remain private. Posting feedback requires a separate explicit
+  user action; no posting flow is implemented in this prototype.
+- Additional code selections join the current conversation, retaining its
+  messages and draft. Attachments accumulate until removed; each question saves
+  its exact attachments so removing one does not rewrite chat history.
+- Completion registers the HTML report for the dashboard without opening the
+  OS browser. Explicit user requests to open a report remain supported. The
+  installed skill also follows this behavior for future reviews; the workspace
+  prototype itself remains isolated from the live dashboard.

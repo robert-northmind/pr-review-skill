@@ -248,6 +248,9 @@ released checkout from the default listing; show checkout details only while it
 is active or cleanup failed. The detailed single-run view may include released
 checkout history.
 
+Completing or registering a review must not automatically open its HTML or
+launch an external browser. Keep it available through the dashboard.
+
 When the user asks to open or view review notes, verify that it is a
 registered existing HTML artifact, then open its absolute path in the operating
 system's default web browser. On macOS, use `/usr/bin/open`; use the

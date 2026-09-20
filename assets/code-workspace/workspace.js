@@ -128,6 +128,7 @@
  function paintSelection() {
   for(const row of document.querySelectorAll('.code-row'))row.classList.toggle('selected',!!selection&&Number(row.dataset.file)===selection.file&&selection.ids.includes(Number(row.dataset.row))&&(!row.dataset.side||row.dataset.side===selection.side));
   $('selection-bar').hidden=!selection||tab!=='code';
+  $('ask-selection').textContent=currentThread()||activeContexts().length?'Add selection to chat':'Ask about selection';
   if(selection)$('selection-label').textContent=`${basename(data.files[selection.file].path)} · ${selection.label}`;
  }
  function makeSelection(file,start,end,side='head',sideOnly=false) {
@@ -160,23 +161,44 @@
  }
  function closeRail() {$('conversation').hidden=true;$('workspace-body').classList.remove('rail-open');$('chat-toggle').setAttribute('aria-expanded','false');$('chat-toggle').focus();updateLayout();}
  function currentThread(){return saved.threads.find(t=>t.id===threadId);}
- let draftContext=null;
- function beginThread(context=null){threadId=null;draftContext=context?structuredClone(context):null;$('question').value='';showRail();$('question').focus({preventScroll:true});}
- function contextHTML(context) {
-  if(!context)return `<strong>Entire pull request</strong><p>Example comparison ${esc(data.base)} → ${esc(data.head)}</p>`;
-  return `<div class="context-heading"><button data-context-jump>${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context aria-label="Remove code context" title="${currentThread()?'Start a new conversation without these lines; this conversation stays saved.':'Remove these lines from your question.'}">×</button></div><p>${esc(context.path)} · ${esc(context.side==='base'?context.base:context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details>`;
+ let draftContexts=[];
+ const contextsOf=value=>Array.isArray(value?.contexts)?value.contexts:value?.context?[value.context]:[];
+ const contextKey=context=>JSON.stringify([context.path,context.base,context.head,context.side,context.ids]);
+ const activeContexts=()=>currentThread()?contextsOf(currentThread()):draftContexts;
+ function preserveMessageContexts(thread){
+  const original=contextsOf(thread);
+  for(const message of thread.messages)if(!Array.isArray(message.contexts))message.contexts=structuredClone(original);
+ }
+ function beginThread(context=null){threadId=null;draftContexts=context?[structuredClone(context)]:[];$('question').value='';showRail();$('question').focus({preventScroll:true});}
+ function attachContext(context){
+  if(!context)return;
+  const thread=currentThread(),contexts=structuredClone(activeContexts());
+  if(!contexts.some(c=>contextKey(c)===contextKey(context)))contexts.push(structuredClone(context));
+  if(thread){preserveMessageContexts(thread);thread.contexts=contexts;persist();}else draftContexts=contexts;
+  showRail();$('question').focus({preventScroll:true});
+ }
+ function contextHTML(context,index) {
+  return `<div class="context-attachment"><div class="context-heading"><button data-context-jump="${index}">${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context="${index}" aria-label="Remove code context: ${esc(basename(context.path))} ${esc(context.label)}" title="Remove from future questions. Earlier messages keep their code context.">×</button></div><p>${esc(context.path)} · ${esc(context.side==='base'?context.base:context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details></div>`;
+ }
+ function messageContextHTML(message,index,thread){
+  const contexts=Array.isArray(message.contexts)?message.contexts:contextsOf(thread);
+  if(message.role!=='user'||!contexts.length)return '';
+  return `<details class="message-contexts"><summary>${contexts.length} code ${contexts.length===1?'selection':'selections'} + PR diff</summary>${contexts.map((context,n)=>`<button class="text-button" data-message-context="${index}" data-context-index="${n}">${esc(basename(context.path))} · ${esc(context.label)}</button>`).join('')}</details>`;
  }
  function renderChat() {
-  const thread=currentThread(),context=thread?.context||draftContext;
-  $('thread-picker').innerHTML='<option value="">New conversation</option>'+saved.threads.map(t=>`<option value="${esc(t.id)}" ${t.id===threadId?'selected':''}>${esc((t.context?basename(t.context.path):'PR')+' · '+t.messages[0].text.slice(0,42))}</option>`).join('');
-  $('chat-context').innerHTML=contextHTML(context);
-  $('messages').innerHTML=thread?thread.messages.map((m,index)=>`<article class="message ${m.role}"><header>${m.role==='user'?'You':'AI preview'}${m.role==='assistant'?'<span>Scripted reply</span>':''}</header><p>${esc(m.text)}</p>${m.role==='assistant'?`<button class="text-button" data-save-message="${index}">Save to private notes</button>`:''}</article>`).join(''):`<div class="chat-empty"><strong>${context?'Start with a question.':'A second pair of eyes.'}</strong><p>${context?'Ask what these lines do, look for an edge case, or explore a test. Follow-ups keep the same code context.':'Select lines in the diff for a focused conversation, or ask about the whole change.'}</p></div>`;
-  $('question').placeholder=thread?'Ask a follow-up…':context?'Ask about the selected code…':'Ask about this pull request…';
+  const thread=currentThread(),contexts=activeContexts();
+  $('thread-picker').innerHTML='<option value="">New conversation</option>'+saved.threads.map(t=>`<option value="${esc(t.id)}" ${t.id===threadId?'selected':''}>${esc((contextsOf(t)[0]?basename(contextsOf(t)[0].path):'PR')+' · '+t.messages[0].text.slice(0,42))}</option>`).join('');
+  $('chat-context').innerHTML=contexts.length?`<p class="context-count">${contexts.length} code ${contexts.length===1?'selection':'selections'} + PR diff</p>`+contexts.map(contextHTML).join(''):`<strong>Entire pull request</strong><p>Example comparison ${esc(data.base)} → ${esc(data.head)}</p>`;
+  $('messages').innerHTML=thread?thread.messages.map((m,index)=>`<article class="message ${m.role}"><header>${m.role==='user'?'You':'AI preview'}${m.role==='assistant'?'<span>Scripted reply</span>':''}</header>${messageContextHTML(m,index,thread)}<p>${esc(m.text)}</p>${m.role==='assistant'?`<button class="text-button" data-save-message="${index}">Save to private notes</button>`:''}</article>`).join(''):`<div class="chat-empty"><strong>${contexts.length?'Start with a question.':'A second pair of eyes.'}</strong><p>${contexts.length?'Ask about these lines. Add more selections from any file to keep exploring in this conversation.':'Select lines in the diff for a focused conversation, or ask about the whole change.'}</p></div>`;
+  $('question').placeholder=thread?'Ask a follow-up…':contexts.length?'Ask about the selected code…':'Ask about this pull request…';
+  $('ask-selection').textContent=thread||contexts.length?'Add selection to chat':'Ask about selection';
   const last=$('messages').lastElementChild;if(last)$('messages').scrollTop+=last.getBoundingClientRect().top-$('messages').getBoundingClientRect().top;
  }
- function demoAnswer(question,context) {
+ function demoAnswer(question,contexts) {
+  const context=contexts.at(-1);
   const q=question.toLowerCase(),path=context?.path||'';
-  const prefix=context?`About ${basename(path)} (${context.label}):\n\n`:'';
+  const prefix=(contexts.length>1?`${contexts.length} selections attached. This scripted reply focuses on the most recent.\n\n`:'')+(context?`About ${basename(path)} (${context.label}):\n\n`:'');
+  if(/pull in|fetch|more context|read.*file|find.*caller/.test(q))return 'The connected assistant will be able to fetch more code at this review’s pinned revision when you ask, and show which files it read. This offline demo cannot fetch repository files or run a model.';
   if(/test|cover|verify/.test(q))return prefix+'The sample test covers a rejected send, retaining one event, and a successful retry.\n\nUseful next cases: push a new event while send is pending; call flush twice concurrently; reject the first send and verify the original batch stays ahead of new events. Also exercise rejection through the timer callback, where the returned promise is not awaited.\n\nThese are suggested checks for the example; no tests have been run.';
   if(/edge|risk|error|reject|unhandled|problem/.test(q))return prefix+'The direct caller can catch a rejected flush(), but start() and push() discard its promise. The new catch restores the batch and rethrows, so a failed timer-triggered send can still produce an unhandled rejection.\n\nAlso, repeated failures can grow the in-memory queue, and a request that never settles leaves flushing true. Those need an explicit transport policy; this example does not establish one.';
   if(/order|unshift|why|instead/.test(q))return prefix+'unshift(...batch) puts the failed batch back at the front. If event A is in flight and B arrives, a failure leaves [A, B], so the next attempt preserves their queue order. push(...batch) would leave [B, A].\n\nThe flushing guard prevents two flushes from removing batches at the same time. It does not guarantee exactly-once delivery: the server may accept a request before the client observes a network failure.';
@@ -190,12 +212,16 @@
  function ask(question) {
   question=question.trim();if(!question)return;
   let thread=currentThread();
-  if(!thread){thread={id:crypto.randomUUID(),context:draftContext?structuredClone(draftContext):null,messages:[]};saved.threads.push(thread);threadId=thread.id;}
-  thread.messages.push({role:'user',text:question},{role:'assistant',text:demoAnswer(question,thread.context)});
+  if(!thread){thread={id:crypto.randomUUID(),contexts:structuredClone(draftContexts),messages:[]};saved.threads.push(thread);threadId=thread.id;}
+  const contexts=structuredClone(contextsOf(thread));
+  thread.messages.push({role:'user',text:question,contexts},{role:'assistant',text:demoAnswer(question,contexts),contexts});
   persist();$('question').value='';renderChat();
  }
  function renderNotes() {
-  $('saved-notes').innerHTML=saved.notes.length?saved.notes.map((note,index)=>`<article class="saved-note"><small>${note.context?esc(basename(note.context.path)+' · '+note.context.label):'Pull request note'} · ${esc(data.head)}</small><p>${esc(note.text)}</p><div class="note-actions">${note.context?`<button class="text-button" data-note-jump="${index}">Show code</button>`:''}<button class="text-button" data-note-edit="${index}">Edit</button><button class="text-button" data-note-delete="${index}">Delete</button></div></article>`).join(''):'<p class="muted">No notes yet. Save an answer or write your own.</p>';
+  $('saved-notes').innerHTML=saved.notes.length?saved.notes.map((note,index)=>{
+   const contexts=contextsOf(note);
+   return `<article class="saved-note"><small>${contexts.length?esc(contexts.length+' code '+(contexts.length===1?'selection':'selections')):'Pull request note'} · ${esc(data.head)}</small><p>${esc(note.text)}</p><div class="note-actions">${contexts.map((context,n)=>`<button class="text-button" data-note-jump="${index}" data-context-index="${n}">${esc(basename(context.path))} · ${esc(context.label)}</button>`).join('')}<button class="text-button" data-note-edit="${index}">Edit</button><button class="text-button" data-note-delete="${index}">Delete</button></div></article>`;
+  }).join(''):'<p class="muted">No notes yet. Save an answer or write your own.</p>';
   renderProgress();
  }
  let editingNote=null;
@@ -214,16 +240,17 @@
   if(d.expand!==undefined){const index=Number(d.expand),extra=revealed.get(index)||new Set(),start=Number(d.start),end=Number(d.end);for(let i=start;i<=Math.min(start+11,end);i++)extra.add(i);revealed.set(index,extra);renderFiles();document.querySelector(`[data-file="${index}"][data-row="${start}"] .line-number:not(:disabled)`)?.focus({preventScroll:true});}
   if(d.full!==undefined){const index=Number(d.full);full.has(index)?full.delete(index):full.set(index,'head');saved.collapsed=saved.collapsed.filter(p=>p!==data.files[index].path);persist();renderFiles();document.querySelector(`[data-full="${index}"]`)?.focus({preventScroll:true});}
   if(d.prompt)ask(d.prompt);
-  if(d.saveMessage!==undefined){const t=currentThread();saved.notes.push({text:'[Scripted demo reply]\n'+t.messages[Number(d.saveMessage)].text,context:t.context});persist();renderProgress();notify('Saved to private notes.');}
-  if(d.removeContext!==undefined){const hadThread=!!currentThread();threadId=null;draftContext=null;selection=null;paintSelection();renderChat();$('question').focus({preventScroll:true});notify(hadThread?'Code detached. Your previous conversation is saved.':'Code detached. Your draft question is kept.');}
-  if(d.contextJump!==undefined){const context=currentThread()?.context||draftContext;if(context){jump(context.file,context.ids,context.side);if(innerWidth<=750)closeRail();}}
-  if(d.noteJump!==undefined){const c=saved.notes[Number(d.noteJump)].context;jump(c.file,c.ids,c.side);if(innerWidth<=750)closeRail();}
+  if(d.saveMessage!==undefined){const t=currentThread(),message=t.messages[Number(d.saveMessage)];const contexts=structuredClone(Array.isArray(message.contexts)?message.contexts:contextsOf(t));saved.notes.push({text:'[Scripted demo reply]\n'+message.text,contexts,context:contexts.at(-1)||null});persist();renderProgress();notify('Saved to private notes.');}
+  if(d.removeContext!==undefined){const thread=currentThread(),contexts=structuredClone(activeContexts()),removed=contexts.splice(Number(d.removeContext),1)[0];if(thread){preserveMessageContexts(thread);thread.contexts=contexts;persist();}else draftContexts=contexts;if(selection&&removed&&contextKey(selection)===contextKey(removed))selection=null;paintSelection();renderChat();$('question').focus({preventScroll:true});notify('Code detached. Your draft and conversation are kept.');}
+  if(d.contextJump!==undefined){const context=activeContexts()[Number(d.contextJump)];if(context){jump(context.file,context.ids,context.side);if(innerWidth<=750)closeRail();}}
+  if(d.messageContext!==undefined){const thread=currentThread(),message=thread.messages[Number(d.messageContext)],context=(message.contexts||contextsOf(thread))[Number(d.contextIndex)];if(context){jump(context.file,context.ids,context.side);if(innerWidth<=750)closeRail();}}
+  if(d.noteJump!==undefined){const c=contextsOf(saved.notes[Number(d.noteJump)])[Number(d.contextIndex)];jump(c.file,c.ids,c.side);if(innerWidth<=750)closeRail();}
   if(d.noteDelete!==undefined){saved.notes.splice(Number(d.noteDelete),1);editingNote=null;$('note-text').value='';persist();renderNotes();}
   if(d.noteEdit!==undefined){editingNote=Number(d.noteEdit);$('note-text').value=saved.notes[editingNote].text;$('note-text').focus();}
   if(d.showCode!==undefined)setTab('code');
   if(button.id==='generate-demo'){data.reviewReady=true;renderReview();notify('Prepared example review shown.');}
   if(button.id==='finding-code'){selection=findingSelection();jump(0,selection.ids);}
-  if(button.id==='finding-ask'){const c=findingSelection();jump(0,c.ids);beginThread(c);ask('What happens to rejected promises here?');}
+  if(button.id==='finding-ask'){const c=findingSelection();jump(0,c.ids);attachContext(c);ask('What happens to rejected promises here?');}
   if(button.id==='reset-filters'){$('file-filter').value='';$('unviewed-only').checked=false;renderFiles();}
  });
  document.addEventListener('change',event=>{
@@ -260,15 +287,15 @@
   updateLayout();
  });
  new ResizeObserver(updateLayout).observe(document.querySelector('.diff-column'));
- $('reset-demo').addEventListener('click',()=>{saved={viewed:[],collapsed:[],threads:[],notes:[]};selection=null;threadId=null;draftContext=null;editingNote=null;full.clear();revealed.clear();$('file-filter').value='';$('unviewed-only').checked=false;$('note-text').value='';$('question').value='';persist();renderFiles();closeRail();notify('This example’s progress, conversations and notes were cleared.');});
+ $('reset-demo').addEventListener('click',()=>{saved={viewed:[],collapsed:[],threads:[],notes:[]};selection=null;threadId=null;draftContexts=[];editingNote=null;full.clear();revealed.clear();$('file-filter').value='';$('unviewed-only').checked=false;$('note-text').value='';$('question').value='';persist();renderFiles();closeRail();notify('This example’s progress, conversations and notes were cleared.');});
  $('file-filter').addEventListener('input',renderFiles);$('unviewed-only').addEventListener('change',renderFiles);
  $('wrap-lines').addEventListener('change',event=>{$('files').classList.toggle('wrap-code',event.target.checked);alignSplitRows();});
  $('collapse-all').addEventListener('click',()=>{const all=data.files.every(f=>saved.collapsed.includes(f.path));saved.collapsed=all?[]:data.files.map(f=>f.path);$('collapse-all').textContent=all?'Collapse all':'Expand all';persist();renderFiles();});
  $('code-tab').addEventListener('click',()=>setTab('code'));$('review-tab').addEventListener('click',()=>setTab('review'));
  $('chat-toggle').addEventListener('click',()=>{showRail();$('question').focus({preventScroll:true});});$('notes-toggle').addEventListener('click',()=>showRail('notes'));$('close-rail').addEventListener('click',closeRail);
- $('ask-selection').addEventListener('click',()=>{beginThread(selection);$('selection-bar').hidden=true;window.getSelection()?.removeAllRanges();});
- $('clear-selection').addEventListener('click',()=>{selection=null;paintSelection();});$('new-thread').addEventListener('click',()=>beginThread(selection));
- $('thread-picker').addEventListener('change',event=>{threadId=event.target.value||null;draftContext=null;$('question').value='';renderChat();});
+ $('ask-selection').addEventListener('click',()=>{attachContext(selection);$('selection-bar').hidden=true;window.getSelection()?.removeAllRanges();});
+ $('clear-selection').addEventListener('click',()=>{selection=null;paintSelection();});$('new-thread').addEventListener('click',()=>beginThread());
+ $('thread-picker').addEventListener('change',event=>{threadId=event.target.value||null;draftContexts=[];$('question').value='';renderChat();});
  $('chat-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value);});
  $('question').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();ask($('question').value);}});
  $('note-form').addEventListener('submit',event=>{event.preventDefault();const text=$('note-text').value.trim();if(!text)return;if(editingNote!==null){saved.notes[editingNote].text=text;editingNote=null;}else saved.notes.push({text,context:selection?structuredClone(selection):null});persist();$('note-text').value='';renderNotes();notify('Private note saved.');});

@@ -35,3 +35,8 @@
 .split-line-list .context-gap{padding-left:60px;min-height:32px;white-space:nowrap}
 .wrap-code .split-line-list{width:100%}.wrap-code .split-cell{grid-template-columns:40px 20px minmax(0,1fr)}
 .wrap-code .split-line-list .context-gap{white-space:normal}
+
+.chat-context{max-height:190px;overflow:auto;flex-shrink:0}
+.context-attachment+.context-attachment{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.chat-context .context-count{margin:0 0 10px;font-size:10px}
+.message-contexts{font-size:10px;color:var(--muted);margin:0 0 8px}.message-contexts summary{cursor:pointer}.message-contexts .text-button{display:block;text-align:left}
