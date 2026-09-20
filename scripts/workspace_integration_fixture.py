@@ -42,13 +42,21 @@ def main():
         def launch(url,thread_id):
             for delay,message in [(1,'Connecting to Codex…'),(3,'Analyzing code…'),(5,'Reading · head · src/transports/types.ts')]:
                 threading.Timer(delay,chat.record_progress,args=(url,thread_id,message)).start()
+            def partial():
+                with store.locked(url):
+                    thread=chat.read(url,thread_id)
+                    if thread['status']=='running':
+                        thread['draft']='Streaming answer <script>must stay text</script>'
+                        chat.save(url,thread)
+            threading.Timer(4,partial).start()
             def finish():
                 with store.locked(url):
                     thread=chat.read(url,thread_id)
                     if thread.get('cancel'):thread.update(status='cancelled',error='Stopped.')
                     else:
-                        thread['messages'].append({'role':'assistant','text':'Synthetic transport answer. <script>must stay text</script>', 'contexts':thread['contexts'],'reads':[{'kind':'read_file','path':'src/transports/types.ts','side':'head'}]})
+                        thread['messages'].append({'role':'assistant','text':'Synthetic transport answer. <script>must stay text</script> [1]', 'contexts':thread['contexts'],'reads':[{'kind':'read_file','path':'src/transports/types.ts','side':'head'}, {'kind':'web_search','query':'W3C trace context'}], 'sources':[{'title':'Example source link (fixture)','url':'https://www.w3.org/TR/trace-context/'}]})
                         thread['status']='completed'
+                        thread['draft']=''
                     chat.save(url,thread)
             threading.Timer(8,finish).start()
         real_start=chat.start

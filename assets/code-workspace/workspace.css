@@ -1133,6 +1133,9 @@
   color: var(--muted);
 }
 .chat-activity summary { cursor: pointer; }
+.message-sources { margin: 12px 0; font-size: 11px; }
+.message-sources ol { padding-left: 20px; }
+.message-sources a { color: var(--selection); overflow-wrap: anywhere; }
 .chat-activity ol {
   max-height: 130px;
   overflow: auto;

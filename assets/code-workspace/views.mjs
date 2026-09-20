@@ -9,6 +9,16 @@ export const esc = (value) =>
       ],
   );
 const basename = (path) => path.split("/").pop();
+export function sourceLinksHTML(sources) {
+  const links = (Array.isArray(sources) ? sources : []).slice(0, 12).map((source, index) => {
+    try {
+      const url = new URL(source.url);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return '';
+      return `<li value="${index + 1}"><a href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${esc(source.title || url.hostname)}</a></li>`;
+    } catch { return ''; }
+  }).join('');
+  return links ? `<div class="message-sources"><strong>Sources</strong><ol>${links}</ol></div>` : '';
+}
 function highlight(text) {
   return text
     .split(

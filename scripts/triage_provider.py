@@ -2,9 +2,8 @@
 from __future__ import annotations
 import json
 import os
-import re
-from pathlib import Path
 import sys
+from codex_runtime import restricted_overrides as codex_overrides
 
 SCHEMA = {
     'type': 'object', 'additionalProperties': False,
@@ -46,27 +45,6 @@ Write reason as one plain sentence under 240 characters explaining the effort.
 Use at most three attention flags and three missing_context entries, each under 160 characters.
 An empty list is valid. No evidence of a defect is not evidence the PR is safe to merge.
 """
-
-
-def codex_overrides():
-    # Applied when the app-server launches, before any MCP servers or hooks start.
-    overrides = ['web_search="disabled"', 'project_doc_max_bytes=0', 'history.persistence="none"']
-    disabled = ('shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'connectors', 'plugins',
-                'hooks', 'codex_hooks', 'multi_agent', 'collab', 'js_repl', 'computer_use',
-                'browser_use', 'browser_use_external', 'in_app_browser', 'image_generation',
-                'view_image', 'memories', 'memory_tool', 'goals', 'workspace_dependencies')
-    overrides += [f'features.{key}=false' for key in disabled]
-    overrides += ['features.skip_host_skill_discovery=true']
-    # Config maps merge: an empty mcp_servers map would NOT disable inherited servers.
-    import tomllib
-    path = Path(os.environ.get('CODEX_HOME', str(Path.home()/'.codex'))) / 'config.toml'
-    config = tomllib.loads(path.read_text()) if path.exists() else {}
-    names = config.get('mcp_servers', {})
-    if any(not re.fullmatch(r'[A-Za-z0-9_-]+', name) for name in names):
-        raise ValueError('An MCP server name cannot be safely disabled for triage.')
-    overrides += [f'mcp_servers.{name}.enabled=false' for name in names]
-    return tuple(overrides)
-
 
 def classify(request):
     provider, model = request['provider'], request['model']

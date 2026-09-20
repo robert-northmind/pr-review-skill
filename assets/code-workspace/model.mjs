@@ -27,6 +27,11 @@ export const isOlder = (thread, comparison) =>
   (thread.head !== comparison.head || thread.base !== comparison.base);
 
 export function contextReadLabel(request) {
+  if (request.kind === "github_read") return "Authenticated GitHub read";
+  if (request.kind === "repository_read") return "Repository source investigation";
+  if (request.kind === 'web_search') return `Web search · ${request.query || ''}`;
+  if (request.kind === 'open_page') return `Open page · ${request.url || ''}`;
+  if (request.kind === 'find_in_page') return `Find “${request.query || ''}” · ${request.url || ''}`;
   const location = `${request.side} · ${request.path || '/'}`;
   if (request.kind === 'search_code') return `Search “${request.query}” · ${location}`;
   return `${request.kind === 'list_files' ? 'List files' : 'Read file'} · ${location}`;

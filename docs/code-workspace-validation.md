@@ -65,3 +65,25 @@ A real GitHub archive search for `traceparent` scanned all 146 text files under
 `lib/` at PR #271's pinned head `33d5e9a0c5738fd978ff2f0eeb895c3d4377b518`,
 with no skipped files or truncation. Real PR source was not sent to the model
 during that validation.
+
+
+Native Codex chat validation (2026-09-21): the full Python suite passed (261 tests)
+with the application context-fetch loop removed. The JavaScript model/render tests
+passed. Service checks cover isolated checkout preparation, both pinned commits,
+failed-download cleanup, persistent thread resume, one-time history bootstrap,
+streaming, cancellation, and unchanged triage restrictions.
+
+A real chat used the production worker with dartastic_opentelemetry PR #271 at
+head `33d5e9a0c5738fd978ff2f0eeb895c3d4377b518` and base
+`625918c2ea41438a8551524f1abc34d6fa0064d6`. Codex read `pubspec.yaml` from the isolated
+checkout, successfully queried the authenticated issues endpoint of the private
+dashboard repository, and opened the W3C Trace Context specification. The private
+repository returned an empty issue list, so this establishes authenticated endpoint
+access, not reading a private issue body. A follow-up resumed the same native
+thread and recalled the package and GitHub result without new tool calls.
+
+Browser verification against the production-route fixture confirmed visible streamed
+answer text, HTML escaping during streaming and completion, clickable HTTPS source
+links, and no console errors. The committed browser test includes these assertions;
+interactive verification used the app browser rather than running standalone
+Playwright. The normal dashboard was not changed during these checks.

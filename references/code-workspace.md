@@ -28,19 +28,37 @@ Chat starts with selected lines plus the PR diff. Additional selections join the
 active conversation, duplicates are ignored, and removal changes future questions
 without rewriting earlier messages. Each question retains its source snapshot.
 The server reconstructs attachments from pinned source, ignoring client snippets.
-The assistant can request full files, list repository paths, and search source
-at that revision, including unchanged files. Searches use case-insensitive literal
-text and return paths, line numbers and snippets; an optional file/directory path
-narrows the scope. It can search for callers or definitions, then read matching
-files before answering. Chat activity and saved answers show these requests.
-No repository code is executed.
+Codex can investigate the full repository using its native tools. The backend
+prepares an isolated, shallow Git checkout at the comparison's head SHA, with the
+base commit available through `git show` and `git diff`. Setup uses authenticated
+Git fetch, suppresses host hooks/filters, and never runs repository scripts or
+initializes submodules. Source reads and commands appear in chat activity.
 
 Inline chat uses the local Codex login and the Codex model and reasoning effort
 profile in dashboard settings, independently of the provider chosen for full
-reviews. Blank settings inherit Codex defaults. Its SDK sessions
-are ephemeral; bounded history is rebuilt from the local conversation each turn.
-Shells, external search, plugins, MCP, hooks and other host tools are disabled.
-Only the application can fulfill structured read-only GitHub context requests.
+reviews. Blank settings inherit Codex defaults. Each dashboard conversation stores
+a persistent Codex thread ID. Follow-ups resume that thread; Codex owns tool
+execution, conversation context and compaction. The dashboard supplies the diff
+and existing history once, then only the question, selected lines and revision
+metadata. Existing chats without a Codex thread bootstrap from their saved history.
+A failed resume reports an error rather than silently discarding context.
+
+Built-in live web search/page opening supports public documentation. Native shell
+tools can read private GitHub issues, PRs and comments with the user's existing
+`gh` login and permissions. No separate dashboard GitHub login is required. The
+worker must inherit access to the configured CLI and its credentials. GitHub
+commands use an explicit repository because the pinned checkout has no remote.
+The assistant is instructed to keep searches relevant, use read-only GitHub
+operations, and never put private code, issue text or identifiers in public web
+queries. Public web access itself does not authenticate to private GitHub pages.
+
+Chat starts in Codex's read-only filesystem sandbox with automatic approval review
+for requested permission escalations. Native shell access is enabled for reads;
+review instructions prohibit edits, repository scripts/tests and GitHub writes.
+These instructions do not turn a GitHub token into a read-only token. Configured
+plugins, MCP servers, hooks and subagents remain disabled for this chat profile.
+The triage estimator remains a tool-disabled classifier. Full AI reviews retain
+their existing configuration and permissions.
 Source context is sent to the configured Codex provider. Private notes remain local
 and are not included in AI requests. No feedback posting, approval or merge actions
 are exposed by this workspace.
@@ -49,10 +67,9 @@ Chat workers survive browser closure and dashboard restart. Reopening reconnects
 to saved activity without another model call. Stop requests cancel the dedicated
 worker process group. Failures and timeouts preserve the question and prior answers.
 Submitting another question never automatically retries a model request.
-While waiting, chat shows elapsed time and streamed provider phases, plus pinned
-file reads as they happen. Expand **AI activity** for the current question's
-activity history. Progress refreshes every second; the final answer appears when
-complete. Private reasoning and raw provider output are not displayed.
+While waiting, chat shows elapsed time, public Codex updates, native tool activity
+and streamed answer text. Expand **AI activity** for the current question's history.
+Progress refreshes every second. Answers retain clickable external source links. Private reasoning and raw provider output are not displayed.
 
 ## Structure
 
@@ -60,10 +77,11 @@ complete. Private reasoning and raw provider output are not displayed.
   lazy full-file reads, diff projection and revision validation.
 - `workspace_store.py`: locked private state, optimistic write versions, and
   fingerprint-based viewed invalidation. Concurrent stale saves fail visibly.
-- `workspace_chat.py`: durable turn lifecycle, bounded context requests, provider
-  adapter, cancellation and worker supervision.
+- `workspace_chat.py`: durable turn lifecycle, native thread resume, initial context,
+  cancellation and worker supervision.
 - `workspace_chat_provider.py`: streamed provider events and completed responses.
-- `workspace_source.py`: cached pinned source archives and bounded text search.
+- `workspace_checkout.py`: isolated Git checkout preparation at pinned revisions.
+- `codex_runtime.py`: shared restrictive configuration and native chat profile.
 - `code_workspace.py`: application service for HTTP routes and report selection.
 - `assets/code-workspace/model.mjs`: pure context/history/state transformations.
 - `diff.mjs`: pure unified/split projection, expansion and selection semantics.
@@ -77,29 +95,25 @@ A broad dashboard rewrite is not required to test or maintain this feature.
 
 ## Storage and limits
 
-Private state, conversations and cached immutable comparisons live under
-`$PR_REVIEW_TRACKER_HOME/workspaces/<hash-of-PR-URL>/`. The workspace does not modify
-repository checkouts. Files and history are retained locally until that workspace
-cache is removed; automatic retention cleanup is not implemented.
-Source searches cache a GitHub archive per commit alongside that state. Archives
-are read directly without extracting or executing files.
+Private state, conversations, cached comparisons and isolated source checkouts live
+under `$PR_REVIEW_TRACKER_HOME/workspaces/<hash-of-PR-URL>/`. User checkouts remain
+untouched. Native conversation context is also persisted by Codex under its normal
+local storage. Removing the dashboard cache alone does not remove those sessions.
+Automatic retention cleanup is not implemented.
 
 GitHub exposes at most 3,000 changed files through the PR files API. Larger PRs
-fail explicitly instead of showing an incomplete list. Text previews support
-UTF-8 files up to 500 KB / 12,000 lines; binary files, symlinks and submodules show
-an explicit unavailable state. Truncated directory listings are labeled.
-Search downloads are limited to 100 MB and 90 seconds. A scan reads at most
-200 MB of decompressed archive data and 20,000 archive entries, returning at most
-80 matching lines. Binary, non-UTF-8, symlink and over-500-KB files are skipped.
-Results report skipped files and limits so partial searches cannot be mistaken
-for exhaustive results. Full-file reads and listings remain available if the
-repository is too large for archive search.
+fail explicitly. Diff previews support UTF-8 files up to 500 KB / 12,000 lines;
+binary files, symlinks and submodules show an unavailable state. Codex can inspect
+the checkout independently of the diff preview limits. Shallow history, submodules
+and Git LFS pointers can limit investigations and should be reported as such.
+Checkout commands time out after three minutes. An interrupted initial setup may
+leave a `checkout-download-*` directory; completed checkouts are published atomically.
 
 Chat allows 12 attachments, 500 lines per selection, a 60 KB attachment payload,
-180 KB total model context, six context-read rounds (four requests each), and
-five minutes per question. Exceeding a bound is an explicit error, not silent
-truncation. Large reviews can still be explored manually. Source syntax coloring
-is lightweight rather than a language-aware parser.
+180 KB per context submission and five minutes per question, including checkout
+preparation. Codex manages subsequent model context; there is no dashboard-defined
+file-read loop or six-round limit. Source syntax coloring is lightweight rather
+than a language-aware parser.
 
 ## Development and verification
 
@@ -117,8 +131,9 @@ node scripts/test_code_workspace.mjs
 
 The HTTP tests bind ephemeral loopback ports. They cover origin/CSRF guards,
 optimistic save conflicts and opaque report embedding. Service/model tests cover
-pinned reads, renames, binary/size limits, line projection, comparison races,
-viewed invalidation, attachment history, context bounds and durable chat turns.
+pinned checkouts, renames, binary/size limits, line projection, comparison races,
+viewed invalidation, attachment history, context bootstrap, native thread resume
+and durable chat turns.
 
 `python3 scripts/workspace_integration_fixture.py --port 8879` runs production
 routes with synthetic GitHub/model boundaries and disposable state. It never

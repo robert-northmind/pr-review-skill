@@ -108,22 +108,21 @@ class Workspace(unittest.TestCase):
             self.assertEqual(second['id'],first['id'])
             stopped=chat.cancel(URL,first['id']);self.assertEqual(stopped['status'],'stopping')
 
-    def test_model_can_request_bounded_additional_context(self):
-        requests=[]
-        model=iter([{'answer':'','reads':[{'kind':'read_file','path':'caller.ts','side':'head'}]}, {'answer':'Caller catches it.','reads':[]}])
-        def ask(content):
-            requests.append(json.loads(content));return next(model)
-        read=[]
-        answer=chat.run_conversation(self.comparison,[{'role':'user','text':'Find caller'}],ask,
-                                    lambda comparison, request:'1: try { flush() }',read.append)
-        self.assertEqual(answer,'Caller catches it.')
-        self.assertEqual(read[0]['path'],'caller.ts')
-        self.assertIn('additional_context',requests[1])
-        self.assertEqual(requests[0]['comparison']['head'],HEAD)
+    def test_context_bootstrap_and_resume_do_not_replay_history(self):
+        thread={'messages':[{'role':'user','text':'Earlier'}, {'role':'assistant','text':'Prior answer'},
+                            {'role':'user','text':'Why?'}], 'contexts':[]}
+        first=json.loads(chat.turn_context(self.comparison,thread))
+        self.assertEqual(first['comparison']['head'],HEAD)
+        self.assertEqual(len(first['previous_messages']),2)
+        self.assertIn('diff',first)
+        resumed=json.loads(chat.turn_context(self.comparison,{**thread,'codex_context_seeded':True}))
+        self.assertEqual(resumed['question'],'Why?')
+        self.assertNotIn('previous_messages',resumed)
+        self.assertNotIn('diff',resumed)
 
-    def test_model_context_loop_is_bounded(self):
-        with self.assertRaisesRegex(ValueError,'read limit'):
-            chat.run_conversation(self.comparison,[],lambda _: {'reads':[{'kind':'list_files','path':'','side':'head'}]},lambda *_:[],lambda _:None)
+    def test_bootstrap_context_is_bounded(self):
+        with self.assertRaisesRegex(ValueError,'180 KB'):
+            chat.turn_context(self.comparison,{'contexts':[], 'messages':[{'text':'x'*200_000}]})
 
     def test_cancel_stops_only_the_dedicated_chat_worker(self):
         thread=chat.start(URL,{'revision':REV,'question':'Wait','contexts':[]},launcher=lambda *args:None)
@@ -141,9 +140,10 @@ class FakeCodex:
    (chat.store.directory(sys.argv[1])/'provider-ready').touch()
    time.sleep(60)
    yield None
-  return NS(turn=lambda *a,**kw:NS(stream=stream))
-sys.modules['openai_codex']=NS(Codex=FakeCodex,CodexConfig=lambda **kw:None,ApprovalMode=NS(deny_all='never'),Sandbox=NS(read_only='read-only'),ExternalMessage=lambda **kw:None)
-sys.modules['triage_provider']=NS(codex_overrides=lambda:())
+  return NS(id='native-thread',turn=lambda *a,**kw:NS(stream=stream))
+sys.modules['openai_codex']=NS(Codex=FakeCodex,CodexConfig=lambda **kw:None,ApprovalMode=NS(auto_review='auto_review'),Sandbox=NS(read_only='read-only'),ExternalMessage=lambda **kw:None)
+sys.modules['codex_runtime']=NS(chat_overrides=lambda:())
+sys.modules['workspace_checkout']=NS(prepare=lambda _:chat.store.directory(sys.argv[1]))
 chat.worker(sys.argv[1],sys.argv[2])
 """
         process=subprocess.Popen([sys.executable,'-c',code,URL,thread['id']],

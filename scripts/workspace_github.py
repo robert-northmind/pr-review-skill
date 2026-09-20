@@ -148,11 +148,3 @@ def file_diff(url, rev, path):
               'headNoNewline': bool(after) and not after.endswith('\n')}
     tracker.atomic_write(cache, result)
     return result
-
-
-def tree(comparison, side='head', prefix=''):
-    if side not in ('base', 'head') or not isinstance(prefix, str):
-        raise ValueError('Invalid tree request.')
-    result = api(f'repos/{comparison["repository"]}/git/trees/{comparison[side]}?recursive=1')
-    paths = [x['path'] for x in result['tree'] if x['type'] == 'blob' and x['path'].startswith(prefix)]
-    return {'paths': paths[:1000], 'truncated': result.get('truncated', False) or len(paths) > 1000}

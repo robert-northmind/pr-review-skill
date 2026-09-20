@@ -3,6 +3,7 @@ import {
   renderFileRows,
   contextHTML,
   messageContextHTML,
+  sourceLinksHTML,
 } from "./views.mjs";
 import {
   contextsOf,
@@ -428,14 +429,16 @@ import { chatProgress, activityHTML } from "./progress.mjs";
       ? `<p class="context-count">${contexts.length} code ${contexts.length === 1 ? "selection" : "selections"} + PR diff</p>` +
         contexts.map(contextHTML).join("")
       : `<strong>Entire pull request</strong><p>Comparison ${esc((thread?.base || data.base).slice(0, 12))} → ${esc((thread?.head || data.head).slice(0, 12))}</p>`;
-    const messagesHTML = thread
+    let messagesHTML = thread
       ? thread.messages
           .map(
             (m, index) =>
-              `<article class="message ${m.role}"><header>${m.role === "user" ? "You" : "AI"}</header>${messageContextHTML(m, index, thread)}<p>${esc(m.text)}</p>${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} requests</summary>${m.reads.map((r) => `<p>${esc(contextReadLabel(r))}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
+              `<article class="message ${m.role}"><header>${m.role === "user" ? "You" : "AI"}</header>${messageContextHTML(m, index, thread)}<p>${esc(m.text)}</p>${sourceLinksHTML(m.sources)}${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} requests</summary>${m.reads.map((r) => `<p>${esc(contextReadLabel(r))}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
           )
           .join("")
       : `<div class="chat-empty"><strong>${contexts.length ? "Start with a question." : "A second pair of eyes."}</strong><p>${contexts.length ? "Ask about these lines. Add more selections from any file to keep exploring in this conversation." : "Select lines in the diff for a focused conversation, or ask about the whole change."}</p></div>`;
+    if (thread?.draft && isRunning(thread))
+      messagesHTML += `<article class="message assistant streaming"><header>AI · Responding</header><p>${esc(thread.draft)}</p></article>`;
     if ($("messages").innerHTML !== messagesHTML)
       $("messages").innerHTML = messagesHTML;
     $("question").placeholder = thread

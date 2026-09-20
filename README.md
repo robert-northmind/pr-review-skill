@@ -266,14 +266,20 @@ unified or side-by-side diffs, expand context, open full files, and save viewed
 progress. Checking for new commits resets viewed status only for changed file
 comparisons. Private notes and revision-labeled conversations are saved locally.
 
-Select lines to ask Codex questions, add or remove code attachments, and request
-additional repository context. The assistant can search the full repository,
-including unchanged code, and read matching files at the pinned revision. It cannot
-execute code or post feedback. Finished HTML reviews stay in the dashboard;
-completion does not open an external browser.
+Select lines to focus a question, then let Codex investigate beyond the selection.
+Each conversation uses a persistent Codex thread and an isolated Git checkout at
+the PR's pinned revision. Codex can search unchanged source, inspect the base
+version, search public documentation, and read relevant private GitHub issues,
+PRs and comments through your existing `gh` login. Streamed answers, activity and
+source links appear in the conversation. Follow-ups resume the same Codex thread.
 
-Inline chat uses the local Codex login and model profile. See
-[workspace architecture, limits and tests](references/code-workspace.md).
+Chat uses the local Codex login and dashboard model profile. It starts with a
+read-only filesystem sandbox; Codex automatic approval review handles requested
+permission escalations. Review instructions prohibit edits, repository execution,
+tests and GitHub writes. Native shell commands are enabled for source and GitHub
+reads. Public web search is separate from authenticated GitHub access.
+Finished HTML reviews stay in the dashboard; completion does not open an external
+browser. See [workspace architecture, limits and tests](references/code-workspace.md).
 
 ## Development and recovery
 
