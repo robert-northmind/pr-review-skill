@@ -181,7 +181,7 @@ def build_agent_argv(prompt: str) -> list[str]:
     effort = config["effort"]
     if config["agent"] == "codex":
         # Keep ordinary review artifacts inside the workspace boundary. Eligible
-        # escalations go to Codex's reviewer instead of interrupting Robert.
+        # escalations go to Codex's reviewer instead of interrupting the user.
         argv = [
             "codex", "--approve-for-me",
             "--cd", str(tracker.tracker_root().resolve()),
@@ -690,16 +690,16 @@ def command_open(_args: argparse.Namespace) -> None:
     subprocess.run([opener, server_url()], check=False)
 
 
-LOCAL_DEV_ROOT = "/Users/example-user/Development"
-
-LOCAL_CHECKOUT_HINT = (
-    f"Before creating a fresh temporary clone, check under {LOCAL_DEV_ROOT} "
-    "for a local checkout of this same repository (verify its origin remote "
-    "actually matches this PR's owner/repo — don't just match on directory "
-    "name) and, if found, use a detached git worktree from it per the "
-    "isolated-checkout strategy instead of cloning again. Only fall back to "
-    "a temporary clone when no matching local checkout is found."
-)
+def local_checkout_hint() -> str:
+    root = Path(os.environ.get("PR_REVIEW_LOCAL_DEV_ROOT") or Path.home() / "Development").expanduser().absolute()
+    return (
+        f"Before creating a fresh temporary clone, check under {root} "
+        "for a local checkout of this same repository (verify its origin remote "
+        "actually matches this PR's owner/repo — don't just match on directory "
+        "name) and, if found, use a detached git worktree from it per the "
+        "isolated-checkout strategy instead of cloning again. Only fall back to "
+        "a temporary clone when no matching local checkout is found."
+    )
 
 
 def explainer_prompt(pr_url: str) -> str:
@@ -711,7 +711,7 @@ def full_review_prompt(pr_url: str) -> str:
     return (
         f"Follow the installed pr-review skill to fully review and explain "
         f"this pull request: {pr_url}\n\n"
-        f"{LOCAL_CHECKOUT_HINT}\n\n"
+        f"{local_checkout_hint()}\n\n"
         "Review every changed file and relevant callers/contracts. Produce one "
         "self-contained review.html: explain the change at the top, then include "
         "verified findings, copyable draft comments, and validation evidence. "

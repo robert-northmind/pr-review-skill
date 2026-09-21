@@ -90,8 +90,8 @@ class Rendering(unittest.TestCase):
         self.assertIn('Parent continuation', rendered)
 
     def test_local_artifact_link_routes_through_server(self):
-        result = dashboard.markdown_to_html('[Checks](/Users/example-user/.local/share/pr-review-tracker/runs/x/verification.md)')
-        self.assertIn('href="/artifact?path=%2FUsers', result)
+        result = dashboard.markdown_to_html('[Checks](/tmp/pr-review-example/runs/x/verification.md)')
+        self.assertIn('href="/artifact?path=%2Ftmp%2Fpr-review-example%2Fruns%2Fx%2Fverification.md"', result)
         self.assertNotIn('<a ', dashboard.markdown_to_html('[Bad](javascript:alert)'))
 
     def test_existing_corpus_renders(self):

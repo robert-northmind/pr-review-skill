@@ -288,9 +288,13 @@ identify the new run's exact reviewed SHAs.
 
 ## Draft review comments
 
-Read the installed `my-feedback-voice` skill and its verbatim examples, normally
-at `~/.agents/skills/my-feedback-voice/`, after synthesis. Then read
-[Review note format](references/review-notes.md) before writing the artifact.
+After synthesis, use the user's chosen writing-style skill if available. For
+installations using `my-feedback-voice`, read that skill and its examples before
+drafting. Custom voice is optional: when no style skill is configured or available,
+continue with the neutral guidance below. Do not require an installation or personal
+examples to complete the review. Explicit user instructions to use a particular
+skill still take precedence. Read [Review note format](references/review-notes.md)
+before writing the artifact.
 
 - Put each finding in a collapsible section with severity and a descriptive
   title visible when closed. Keep the overall assessment outside these sections;
@@ -304,9 +308,9 @@ at `~/.agents/skills/my-feedback-voice/`, after synthesis. Then read
 - Keep one concern per comment, with a concrete example or consequence and a
   focused question or suggestion. Often 40–100 words suffice; longer comments
   are useful when a reproduction or nuanced contract genuinely needs them.
-- Match Robert's varied conversational rhythm. Do not mechanically add a hedge,
+- Use a clear, collegial tone. Do not mechanically add a hedge,
   emoji, confusion story and closing question to every comment. State evidence
-  directly and hedge interpretations or preferences. Do not invent Robert's
+  directly and hedge interpretations or preferences. Do not invent the user's
   feelings, prior actions, agreement, apologies or promises to open an issue.
 - Keep severity, confidence, agent identities, placement and audit rationale
   outside the copyable body. Preserve the uncertainty of the verified finding:
@@ -359,7 +363,7 @@ Never publish to GitHub without an explicit user request.
 ## PR inbox dashboard
 
 The local inbox is served at `http://127.0.0.1:8765/` by `scripts/pr_server.py`.
-It separates requests from watched-repository PRs and PRs Robert created,
+It separates requests from watched-repository PRs and PRs the user created,
 with search, repository/review/draft filters, PR age, snoozing, hiding, and run history.
 GitHub participation and AI review progress are separate states. Optional background
 effort estimates help choose a PR; they do not replace review coverage or establish

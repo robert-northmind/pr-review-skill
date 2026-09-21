@@ -137,10 +137,9 @@ function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;
  const workspaceLink=codeWorkspaceLink(pr);
  const organize=hidden?'':`<p class="detail-heading">Organize</p>${snoozeControl(pr)}<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}">Hide from inbox</button>`;
- const extra=`${organize}${hasNotes?'<p class="detail-heading">AI tools</p>'+aiReviewActions(pr):''}`;
+ const extra=`${organize}<p class="detail-heading">AI tools</p>${aiReviewActions(pr)}`;
  const buttons=hidden?`<button class="button primary" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
-  queueCaptureButton(pr)+(workspaceLink||artifactLink(notesArtifact(arts),'Open AI notes',pr))+
-  (!hasNotes&&!workspaceLink?actionDisclosure(pr,'AI review',aiReviewActions(pr),'pr-ai-menu'):'')+actionDisclosure(pr,'•••',extra);
+  queueCaptureButton(pr)+workspaceLink+actionDisclosure(pr,'•••',extra);
  let status=run?`<span class="chip ${isActive?'run-live':attention(run)?'warn':''}">AI: ${esc(statusLabels[run.status]||run.status)}</span>`:'';
  if(hasNotes&&!run)status+='<span class="chip good">AI notes ready</span>';
  if(pr.mixed_artifacts)status+='<span class="chip warn">Results from different runs</span>';

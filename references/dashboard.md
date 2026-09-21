@@ -6,11 +6,39 @@ Open `http://127.0.0.1:8765/`, or run:
 python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py open
 ```
 
-The launchd job `com.pr-review.dashboard-server` runs `pr_server.py`.
+The optional launchd job `com.pr-review.dashboard-server` runs `pr_server.py`.
 The current HTML/CSS/JavaScript shell is in `assets/dashboard.*`. The page
 reads local tracker state through `/api/state`, including newly registered
 artifacts. Saved personal reviews are refreshed on opening/refocusing the page
 and every five minutes while it is visible; no retention cleanup runs on page load.
+
+## Automatic startup on macOS
+
+From the repository root, generate a service configuration using the Python
+environment that will run the server. For AI features, install
+`requirements-triage.txt` in that environment first.
+
+```sh
+mkdir -p "$HOME/Library/LaunchAgents" "${PR_REVIEW_TRACKER_HOME:-$HOME/.local/share/pr-review-tracker}"
+python3 scripts/render_launchd.py > "$HOME/Library/LaunchAgents/com.pr-review.dashboard-server.plist"
+plutil -lint "$HOME/Library/LaunchAgents/com.pr-review.dashboard-server.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.pr-review.dashboard-server.plist"
+```
+
+Use `.venv/bin/python` in place of `python3` if that is your server environment,
+or select an interpreter with `--python` / `PR_REVIEW_PYTHON`. The generator
+records absolute installation, state, log, and checkout-discovery paths. Set
+`PR_REVIEW_TRACKER_HOME` and `PR_REVIEW_LOCAL_DEV_ROOT` before generating to
+customize them. It carries the current `PATH` but does not copy API keys or the
+rest of your environment into the plist. Regenerate and reload the service
+after changing these values or moving the installation.
+
+For an existing service, use `--label` with its installed label and write to
+the matching plist filename. Unload that service with `launchctl bootout`
+before replacing its plist, then bootstrap it again. Do not install a second
+service alongside a running one on the same port. Keep generated plists local;
+they contain paths from your machine. The generator itself does not install,
+start, stop, or modify any service.
 
 ## Workspace navigation
 
@@ -19,6 +47,8 @@ Requested, Watching, Snoozed and Hidden. Filters opens a drawer; active filters
 remain visible above the cards. Cards keep author avatars, usernames and effort
 badges visible. The primary action advances the personal review workflow; AI
 notes and the action menu sit together on the right (below the title on mobile).
+The card's **••• → AI tools** menu can start a first AI review or rerun existing
+notes in both Inbox and My reviews. **Open review** opens the code/report workspace.
 
 Settings is a persistent drawer with Review agent, Effort estimates, Repositories
 and Appearance sections. AI activity contains running reviews and estimate progress.
@@ -34,7 +64,7 @@ GitHub history or run models. Existing automatic saved-review checks still apply
 
 Requested from you includes direct reviewer requests and assignments.
 Watching includes open PRs from watched repositories. Your PRs includes
-Robert's authored PRs. Hidden PRs can be restored. Filters are saved in the
+your authored PRs. Hidden PRs can be restored. Filters are saved in the
 browser, independently from the registry. Legacy star filters are ignored.
 Cards emphasize the PR title with repository and PR number above it, plus age since GitHub
 creation alongside recent activity. Missing opening dates show “Age unknown”
@@ -178,8 +208,8 @@ pr-review workflow. Register one combined HTML as `review-html`; only completed
 artifacts remain accessible in run history. Requests from an old explainer button
 or copied-prompt client now route to the full review.
 
-The prompt prefers a verified local clone under
-`/Users/example-user/Development`, using an isolated worktree. Follow the
+The prompt prefers a verified local clone under `PR_REVIEW_LOCAL_DEV_ROOT`
+(default `~/Development`), using an isolated worktree. Follow the
 existing checkout and verification sandbox instructions.
 
 Claude launches `claude` in Terminal with optional `--model` and `--effort`.
@@ -207,7 +237,7 @@ CLI or early termination. A forcibly closed terminal may not run that callback;
 after the activity window expires the dashboard shows No recent activity.
 
 For Terminal launches, an explicit retry releases tracking of previous active runs; it does not kill
-their terminal processes. The UI asks Robert to close the previous session
+their terminal processes. The UI asks the user to close the previous session
 first. Session references are displayed when recorded and can be copied or
 opened if they are HTTPS URLs. Earlier artifacts remain available during a
 retry. Run history includes partial and completed results with their origin.
@@ -246,6 +276,9 @@ Asset-only changes are picked up on page reload. Validate with the
 modules, plus browser interaction and responsive checks. HTTP tests use a
 random loopback port and disposable data; never point test mutations at the
 live tracker.
+`node scripts/test_inbox_review_browser.cjs` checks first launches, reruns,
+active-run disabling, failure recovery, and desktop/mobile controls with
+synthetic state and intercepted AI launch requests.
 
 
 ## Reporting

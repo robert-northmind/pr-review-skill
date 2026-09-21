@@ -11,3 +11,5 @@ venv/
 .env
 .env.*
 !.env.example
+# Generated machine-specific service configuration
+*.plist

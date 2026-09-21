@@ -66,13 +66,16 @@ After recovering dashboard server code, restart the local service:
 launchctl kickstart -k "gui/$(id -u)/com.pr-review.dashboard-server"
 ```
 
-Reload the browser after restoring frontend assets.
+Use your installed service label if it differs from this default. See
+[service setup](references/dashboard.md#automatic-startup-on-macos) to regenerate
+the plist after moving the installation. Reload the browser after restoring
+frontend assets.
 
 ## Scope
 
 Review runs and dashboard state live separately under
 `~/.local/share/pr-review-tracker/`. Git recovery here restores the skill's
-code, not that runtime data. The separate
+code, not that runtime data. The optional separate
 `my-feedback-voice` skill has its own folder and is not tracked here.
 
 Commits pushed to the private GitHub remote can be recovered if this local

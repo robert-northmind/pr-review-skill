@@ -11,6 +11,14 @@ import pr_dashboard as dashboard
 
 
 class DashboardLaunch(unittest.TestCase):
+    def test_checkout_discovery_uses_environment_and_current_home(self):
+        with patch.dict(os.environ, {'PR_REVIEW_LOCAL_DEV_ROOT': '~/Source projects'}):
+            prompt = dashboard.full_review_prompt('https://github.com/example/repo/pull/1')
+            self.assertIn(str(Path('~/Source projects').expanduser()), prompt)
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(Path, 'home', return_value=Path('/tmp/example-user')):
+            self.assertIn('/tmp/example-user/Development', dashboard.local_checkout_hint())
+
     def test_codex_launcher_preserves_arguments_and_creates_output_roots(self):
         with tempfile.TemporaryDirectory(prefix='review launch ') as tmp:
             root = Path(tmp)

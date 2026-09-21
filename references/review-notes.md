@@ -1,6 +1,6 @@
 # Review notes
 
-Read when synthesizing a full review. `review.md` helps Robert decide what to
+Read when synthesizing a full review. `review.md` helps the user decide what to
 send and what to do next. Keep investigation detail in `verification.md` and
 the change explanation at the top of the same HTML report. `review.md` is
 renderer input; the reader opens `review.html`.

@@ -75,7 +75,7 @@ See [screenshot provenance](docs/screenshots/README.md).
 
 ## Requirements and current scope
 
-- Python 3.10 or newer, Git, and the [GitHub CLI](https://cli.github.com/).
+- Python 3.11 or newer, Git, and the [GitHub CLI](https://cli.github.com/).
 - A GitHub login with access to the repositories you want to review.
 - macOS for Claude review launches, which open Terminal. The Python backend
   uses Unix facilities; Windows support is not provided.
@@ -95,22 +95,16 @@ Completed estimates are retained when a PR changes and marked Outdated; use
 Re-estimate on its card to update one manually. Incomplete
 diffs are marked Uncertain. See [effort configuration and limits](references/dashboard.md#initial-review-effort).
 
-This is a personal workflow shared for reuse, with some personal defaults
-still in the source. Before adopting it, review the customization notes below.
+Before adopting this workflow, review the customization notes below.
 The inbox and reporting can be used without running an AI agent.
 
 ### Full-review dependencies
 
-The combined report renderer is bundled; no separate PR-explainer skill is
-needed. Draft comments use this additional skill:
-
-| Skill | Purpose |
-| --- | --- |
-| `my-feedback-voice` | Shape the draft review comments using your writing examples. |
-
-Install it in your agent's skill search path before running a full review.
-The default location referenced here is `~/.agents/skills/my-feedback-voice/`.
-The current voice instructions are written for Robert; adapt them for yourself.
+The combined report renderer and neutral comment-writing guidance are bundled.
+No additional skill is required. You can optionally configure your agent to use
+a personal writing-style skill, such as `my-feedback-voice`, for draft comments.
+Without one, reviews use clear, collegial wording. Keep personal writing examples
+outside this repository.
 Read [SKILL.md](SKILL.md) for the complete review and sandboxed verification
 workflow. An agent needs a suitable disposable sandbox to execute PR code.
 Full report validation also needs Node.js, Playwright, and an available
@@ -122,15 +116,15 @@ for the commands and runtime-path overrides.
 Clone into the shared skill directory used by this installation:
 
 ```sh
-git clone git@github.com:robert-northmind/pr-review-skill.git \
+git clone https://github.com/robert-northmind/pr-review-skill.git \
   ~/.agents/skills/pr-review
 cd ~/.agents/skills/pr-review
 gh auth login
 python3 scripts/pr_server.py
 ```
 
-Cloning requires repository access and GitHub SSH authentication. If you
-already have this checkout, use it instead of cloning over it.
+While the repository is private, cloning requires authenticated repository access.
+If you already have this checkout, use it instead of cloning over it.
 
 Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
 Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
@@ -146,7 +140,7 @@ session settings and the report records that limitation.
 
 ### Run a review
 
-Make this skill and its dependencies discoverable by your agent. Skill search
+Make this skill discoverable by your agent. Skill search
 paths depend on the agent; placing the folder here alone does not configure
 every CLI. You can also give an agent the explicit instruction:
 
@@ -217,16 +211,25 @@ averages; weekly counts remain distinct PRs for the week.
 
 ## Personalize the installation
 
-- Update `LOCAL_DEV_ROOT` in [scripts/pr_dashboard.py](scripts/pr_dashboard.py)
-  to your checkout directory. It is used as a hint for finding existing clones.
-- Adapt the personal wording in [SKILL.md](SKILL.md) and the separate feedback
-  voice skill to your own review style.
+- Set `PR_REVIEW_LOCAL_DEV_ROOT` to the directory containing your existing clones.
+  It defaults to `~/Development` and is used as a checkout discovery hint.
+- Optionally configure a writing-style skill in your agent for personalized comments.
 - Reporting's Europe/Berlin timezone is currently fixed in the backend and UI;
   it is not a dashboard setting.
-- For automatic startup on macOS, the included
-  [launchd plist](scripts/com.pr-review.dashboard-server.plist) is an
-  example with machine-specific paths. Adjust it before installing it.
+- For automatic startup on macOS, generate a launchd plist for your installation
+  using [the service setup instructions](references/dashboard.md#automatic-startup-on-macos).
   Running the server manually is sufficient to get started.
+
+For example, start with a different checkout directory:
+
+```sh
+export PR_REVIEW_LOCAL_DEV_ROOT="$HOME/Projects"
+python3 scripts/pr_server.py
+```
+
+`PR_REVIEW_TRACKER_HOME` selects the state directory. `PR_REVIEW_PYTHON` selects
+the Python interpreter for background workers. Set these before starting the
+server or generating its launchd configuration.
 
 ## Local data and privacy
 
@@ -236,10 +239,22 @@ review files live separately from this Git repository. The
 home, which is useful for isolated testing. Use the provided commands instead
 of editing registry JSON by hand.
 
-The server binds to loopback. Refreshing reads GitHub through your authenticated
-CLI, and the dashboard normally loads author avatars from GitHub. AI reviews
-use the selected agent and its configured provider. This is a local dashboard,
-not a guarantee that review data stays offline.
+The dashboard runs on your machine, but AI features send data off your machine:
+
+- **GitHub sync:** reads PR information using your GitHub login. Author avatars
+  normally load from GitHub.
+- **AI features:** send PR descriptions, code/diffs, and your questions to the
+  selected AI provider as needed. Effort estimates also send descriptions and
+  patches. Only enable these features for repositories you are allowed to share
+  with that provider.
+- **Saved copies:** review reports, downloaded source, notes, and chat data can
+  remain in the tracker directory. Persistent Codex conversations also use
+  Codex-managed history outside that directory. Deleting tracker files does not
+  delete Codex history or copies retained by a provider; manage those separately
+  through the relevant product's data controls.
+
+The server listens only on your machine's loopback interface. Treat generated
+reports and screenshots as potentially containing private code and review data.
 
 Dashboard GitHub operations are read-only: they do not post comments, approve,
 or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
@@ -295,6 +310,32 @@ Reload the page after asset changes. Restart the server after Python changes.
 See [dashboard details](references/dashboard.md),
 [review-note conventions](references/review-notes.md), and
 [Git recovery instructions](RECOVERY.md) for more.
+
+### Commit identity and secret scanning
+
+Git stores an author's and committer's email in each commit. To use a different
+address for future commits, set repository-local `user.email` to your chosen
+public address or GitHub noreply address. You can also set `GIT_AUTHOR_EMAIL`
+and `GIT_COMMITTER_EMAIL` in the shell that creates commits. Git stores the
+resolved addresses, not the environment-variable names. Neither method changes
+existing commits or annotated tags; those need a separate history rewrite or
+a fresh public repository if their identity metadata must remain private.
+
+The **Secret scan** GitHub Actions workflow runs Gitleaks on full fetched history
+for pushes and pull requests, with redacted output and read-only repository
+permissions. Run the same check locally with Gitleaks 8.30.1:
+
+```sh
+gitleaks git . --log-opts="--all" --redact --no-banner
+# Also check new and uncommitted files before committing:
+gitleaks dir . --redact --no-banner
+```
+
+A scan failure needs investigation. Revoke any real credential, remove it from
+the affected history when necessary, and rerun the check. CI runs after a push;
+use local scans and GitHub push protection to catch secrets before they reach
+the remote. Scanners do not detect every kind of private information, so review
+screenshots, examples, and generated artifacts before committing them.
 
 ## License
 
