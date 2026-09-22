@@ -866,7 +866,7 @@ def cleanup_archived_checkouts(*, force: bool) -> tuple[list[str], list[str]]:
 
 
 def purge_archived(
-    retention_days: float, *, dry_run: bool
+    retention_days: float, *, dry_run: bool, pr_urls: set[str] | None = None
 ) -> tuple[list[str], list[str]]:
     if retention_days < 0:
         raise TrackerError("Retention period cannot be negative")
@@ -886,6 +886,8 @@ def purge_archived(
 
     for directory in directories:
         try:
+            if directory.is_symlink():
+                raise TrackerError(f"Refused to purge run through symlink: {directory}")
             records.append(
                 (
                     directory,
@@ -908,12 +910,15 @@ def purge_archived(
         tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]
     ] = []
     for record in records:
-        directory, _, github, _ = record
+        directory, run, github, _ = record
+        if pr_urls is not None and run["pr_url"] not in pr_urls:
+            continue
         try:
-            archived_at = github.get("archived_at")
+            archived_at = github.get("merged_at") or github.get("closed_at")
             expired = (
                 github.get("state") in {"closed", "merged"}
                 and archived_at
+                and not github.get("last_error")
                 and now - parse_time(archived_at)
                 >= timedelta(days=retention_days)
             )
@@ -986,7 +991,7 @@ def purge_archived(
 def command_refresh(args: argparse.Namespace) -> None:
     updates, errors = refresh_github_states(0, force=True)
     released, checkout_errors = cleanup_archived_checkouts(force=True)
-    purged, purge_errors = purge_archived(30, dry_run=False)
+    purged, purge_errors = purge_archived(20, dry_run=False)
     if updates:
         print("\n".join(updates))
     else:
@@ -1020,7 +1025,7 @@ def command_list(args: argparse.Namespace) -> None:
             args.refresh_after_hours, force=False
         )
     _, checkout_errors = cleanup_archived_checkouts(force=False)
-    _, purge_errors = purge_archived(30, dry_run=False)
+    _, purge_errors = purge_archived(20, dry_run=False)
     runs, errors = load_all_runs(args.stale_after_hours)
     cached_refresh_errors = sorted(
         {
@@ -1137,7 +1142,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.set_defaults(handler=command_refresh)
 
     purge = commands.add_parser("purge", help="Purge expired archived runs")
-    purge.add_argument("--retention-days", type=float, default=30.0)
+    purge.add_argument("--retention-days", type=float, default=20.0)
     purge.add_argument("--dry-run", action="store_true")
     purge.set_defaults(handler=command_purge)
 

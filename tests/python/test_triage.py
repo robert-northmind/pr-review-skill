@@ -222,7 +222,7 @@ class Triage(Isolated):
   self.assertEqual(t.load()['prs'][URL]['feedback']['rating'],'about_right')
  def test_personal_history_closed_own_hidden_and_snoozed_are_excluded(self):
   d.save_dashboard({'prs':{}})
-  for stage in ('done','removed'):
+  for stage in ('removed',):
    self.save_personal(URL,stage=stage);self.assertNotIn(URL,t.triage_entries())
   for extra in ({'pr_state':'closed'},{'pr_state':'merged'},{'author_login':'me'},{'hidden':True},{'snoozed_until':'2027-01-01T00:00:00Z'}):
    self.save_personal(URL,{**self.entry,'pr_state':'open',**extra})

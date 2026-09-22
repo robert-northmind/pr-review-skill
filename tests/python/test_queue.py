@@ -74,11 +74,11 @@ class Queue(unittest.TestCase):
   self.action('acknowledge');self.assertEqual(self.view()['bucket'],'waiting')
  def test_removal_survives_refresh_and_undo(self):
   result=self.action('remove');self.fetch(B,T3,[self.event()])
-  self.assertEqual(self.view()['bucket'],'history');self.assertEqual(self.record()['metadata']['head_sha'],A)
+  self.assertEqual(self.view()['bucket'],'removed');self.assertEqual(self.record()['metadata']['head_sha'],B)
   self.action('undo',token=result['undo_token']);self.assertEqual(self.view()['bucket'],'up_next')
- def test_done_only_returns_for_new_direct_request(self):
+ def test_legacy_done_action_waits_and_returns_for_replies(self):
   with patch.object(tracker,'utc_now',return_value=T1):self.action('done')
-  self.fetch(B,T3,[self.event()]);self.assertEqual(self.view()['bucket'],'history')
+  self.fetch(B,T3,[self.event()]);self.assertEqual(self.view()['bucket'],'attention')
   self.fetch(B,T3,[self.event('requested')]);self.assertEqual(self.view()['bucket'],'attention')
   self.action('start');self.action('wait');self.assertEqual(self.view()['bucket'],'waiting')
  def test_error_retains_item_and_closed_requires_confirmed_fetch(self):
@@ -107,9 +107,56 @@ class Queue(unittest.TestCase):
   second='https://github.com/example/repo/pull/2';q.mutate(second,'enqueue')
   r=q.load()['prs'][second];q.mutate(second,'move_up',{'revision':r['revision']})
   self.assertLess(q.load()['prs'][second]['position'],self.record()['position'])
- def test_recovery_does_not_silently_enroll(self):
-  with patch.object(q,'api',return_value={'total_count':1,'items':[{'html_url':'https://github.com/other/repo/pull/2','title':'Candidate'}]}):q.recover()
-  self.assertEqual(len(q.load()['prs']),1);self.assertEqual(len(q.load()['candidates']),1)
+ def test_history_discovery_is_automatic_but_does_not_enroll_active_work(self):
+  import dashboard_reporting as reporting
+  candidate={'url':'https://github.com/other/repo/pull/2','title':'Candidate','state':'OPEN',
+   'closedAt':None,'mergedAt':None,'createdAt':T0,'updatedAt':T3,'isDraft':False,
+   'headRefOid':A,'baseRefOid':B,'author':{'login':'other'}}
+  result={'search':{'issueCount':1,'nodes':[candidate],'pageInfo':{'hasNextPage':False,'endCursor':None}}}
+  with patch.object(reporting,'graphql',return_value=result) as search:q.discover_history('me',T3)
+  record=q.load()['prs'][candidate['url']]
+  self.assertEqual(record['stage'],'waiting');self.assertFalse(q.presentation(record)['in_history'])
+  self.assertEqual(self.record()['stage'],'up_next')
+  self.assertEqual(search.call_count,4)
+ def test_incomplete_search_preserves_history(self):
+  import dashboard_reporting as reporting
+  before=q.load()
+  with patch.object(reporting,'graphql',return_value={'search':{'issueCount':1001}}):
+   with self.assertRaises(dashboard.DashboardError):q.discover_history('me',T3)
+  self.assertEqual(q.load(),before)
+ def test_history_search_paginates_and_deduplicates(self):
+  import dashboard_reporting as reporting
+  def result(number,more=False):
+   return {'search':{'issueCount':101,'nodes':[{'url':f'https://github.com/other/repo/pull/{number}',
+    'title':str(number),'state':'OPEN','createdAt':T0,'updatedAt':T3,'isDraft':False,
+    'headRefOid':A,'baseRefOid':B,'author':None}],
+    'pageInfo':{'hasNextPage':more,'endCursor':'next' if more else None}}}
+  with patch.object(reporting,'graphql',side_effect=[result(2,True),result(3),result(2),result(3),result(2)]) as search:
+   q.discover_history('me',T3)
+  self.assertEqual(len(q.load()['prs']),3)
+  self.assertEqual(search.call_args_list[1].args[1]['cursor'],'next')
+ def test_expired_search_hit_is_not_reintroduced(self):
+  import dashboard_reporting as reporting
+  from datetime import datetime,timedelta,timezone
+  stamp=(datetime.now(timezone.utc)-timedelta(days=21)).isoformat()
+  result={'search':{'issueCount':1,'nodes':[{'url':'https://github.com/other/repo/pull/2',
+   'title':'Old','state':'MERGED','mergedAt':stamp,'closedAt':stamp,'createdAt':T0,
+   'updatedAt':T3,'isDraft':False,'headRefOid':A,'baseRefOid':B,'author':None}],
+   'pageInfo':{'hasNextPage':False,'endCursor':None}}}
+  with patch.object(reporting,'graphql',return_value=result):q.discover_history('me',T3)
+  self.assertEqual(len(q.load()['prs']),1)
+ def test_open_participation_stays_out_of_closed_section(self):
+  self.assertFalse(self.view()['in_history']);self.assertEqual(self.view()['bucket'],'up_next')
+ def test_legacy_done_and_history_migrate_to_waiting(self):
+  for stage in ('done','history'):
+   data=q.load();data['prs'][URL]['stage']=stage;q.save(data)
+   self.assertEqual(self.record()['stage'],'waiting')
+   self.assertEqual(self.view()['bucket'],'waiting')
+ def test_wait_from_up_next_keeps_unseen_updates(self):
+  seen=self.view()['observed'];self.fetch(B,T3,[self.event()])
+  self.action('wait',observed=seen)
+  self.assertEqual(self.record()['stage'],'waiting')
+  self.assertEqual(self.view()['bucket'],'attention')
  def test_older_fetch_cannot_replace_newer_snapshot(self):
   self.fetch(B,T3);self.fetch(A,T2);self.assertEqual(self.record()['metadata']['head_sha'],B)
  def test_wrong_account_preserves_queue(self):

@@ -62,7 +62,7 @@ def active_urls():
     import dashboard_queue
     saved = dashboard_queue.load()['prs']
     return set(dashboard.load_dashboard()['prs']) | {
-        url for url, record in saved.items() if record.get('stage') not in ('done', 'removed')}
+        url for url, record in saved.items() if record.get('stage') in ('up_next', 'reviewing', 'waiting')}
 
 
 def save(data):

@@ -10,7 +10,7 @@ The optional launchd job `com.pr-review.dashboard-server` runs `pr_server.py`.
 The current HTML/CSS/JavaScript shell is in `assets/dashboard.*`. The page
 reads local tracker state through `/api/state`, including newly registered
 artifacts. Saved personal reviews are refreshed on opening/refocusing the page
-and every five minutes while it is visible; no retention cleanup runs on page load.
+and every five minutes while it is visible; retention runs after successful background GitHub checks.
 
 ## Automatic startup on macOS
 
@@ -105,9 +105,9 @@ rerenders do not advance GitHub freshness. Searches currently cap at 100
 results per source; hitting that cap is visible and prevents absence-based
 removal. The dashboard does not claim to have fetched beyond the cap.
 
-Refresh does not delete review artifacts or checkouts. Retention and cleanup
-remain part of the tracker's explicit `list`/`refresh` workflow described in
-SKILL.md. Dashboard state/config transactions are serialized across CLI and
+Inbox discovery does not delete artifacts. The accompanying personal-history
+refresh applies the 20-day retention policy below. Tracker CLI retention remains
+available as described in SKILL.md. Dashboard state/config transactions are serialized across CLI and
 HTTP callers; a refresh merges fetched data into current local preferences.
 
 ## Snooze
@@ -141,23 +141,39 @@ completes the human review.
 - **Reviewing** records the displayed commit and activity observation. Waiting
   for author acknowledges that observation, so commits or replies arriving
   during the review remain pending.
-- **Waiting** retains the PR until it needs another look.
+- **Waiting for author** retains the PR until it needs another look.
 - **Needs another look** shows head changes, human replies in review threads
   you participated in, author comments after your feedback, mentions, and
   direct review re-requests. Links open the relevant conversation or comparison.
   Merely opening a PR does not acknowledge its updates. Mark updates checked
   acknowledges only the observation displayed in that browser.
-- **Done for now** moves the PR to History; a subsequent direct re-request
-  returns it. Remove stops personal tracking. Both offer Undo; removed entries
-  can also be restored from History and are never automatically re-enrolled.
+- **Waiting for author** acknowledges the displayed review observation and keeps
+  following commits and replies. It is available from Up next and Reviewing.
+- **Remove from My reviews** stops active tracking and offers Undo. Add PR can
+  enroll it again. Removed open PRs do not appear in Merged or closed.
+- GitHub sync automatically moves confirmed closed/merged PRs to **Merged or
+  closed**. Reopened tracked PRs return to their active stage.
 - Add a private note to retain context or where you stopped. It stays local.
 
-Find reviews you already started shows unsaved local runs and cached GitHub
-participation. Find on GitHub adds candidates from open reviewed/commented PRs;
-choose Follow this review to enroll one. Recovery initializes the baseline from
-its latest submitted review when available. It never enrolls every past comment.
-Recovery reports incomplete searches or more than 100 results per source rather
-than silently claiming complete coverage.
+GitHub sync automatically discovers PRs you commented on or submitted a review for,
+including approvals and requested changes, using paginated `commenter` and
+`reviewed-by` GitHub searches. Requests, mentions and AI runs alone do not count.
+Open participated PRs enter Waiting for author unless already tracked or removed.
+Only closed/merged PRs appear in Merged or closed, newest GitHub update first.
+Discovery never starts an AI review. Legacy done/history stages become waiting
+without acknowledging any unseen changes. The retired done action routes to wait. Search failures preserve existing data; the GitHub
+1,000-result limit is reported rather than silently truncating history.
+
+Closed/merged PR entries expire 20 days after their actual GitHub `closedAt` or
+`mergedAt`, not their latest comment, first discovery or sync date. Open PRs remain.
+Expiration runs after successful observations during the visible page's automatic
+refresh and Sync GitHub. Reopened PRs are kept. Failed checks never authorize
+cleanup. `dashboard_retention.py` removes the personal entry, workflow-owned
+reports/runs, workspace diffs, code checkouts, notes/chats and effort metadata.
+Active reviews, chats, estimates and cleanup failures defer deletion with a visible
+error. Checkout cleanup keeps the tracker's ownership and non-force rules;
+unmanaged external files are never deleted. The workspace lock file is retained
+for synchronization. Reporting maintains its independent activity window.
 
 `dashboard_queue.py` owns `my-reviews.json`, separate from `dashboard.json` and
 the run registry. It uses the existing dashboard lock and atomic writes. UI
@@ -172,9 +188,9 @@ moves the PR to Waiting at that review's commit, retaining later updates. Ordina
 comments do not automatically finish the review; use Waiting for author.
 
 Every saved PR shows its last successful check and any error. Automatic refresh
-checks open tracked PRs, including Done items for re-requests, while the page is
-visible. Explicit Check for updates also checks closed history for reopening.
-Only a confirmed closed/merged status moves a PR to History; an unavailable PR
+checks open tracked PRs, including waiting items for replies and re-requests, while the page is
+visible. Sync also checks closed entries for reopening before expiration.
+Only a confirmed closed/merged status moves a PR to Merged or closed; an unavailable PR
 stays saved. There are no notifications or checks while the page is closed.
 The personal queue is bound to the first GitHub login that refreshes it; changing
 accounts yields an explicit error instead of interpreting another user's activity.
@@ -182,7 +198,7 @@ accounts yields an explicit error instead of interpreting another user's activit
 New authenticated JSON POST actions: `/queue` (enqueue/start/wait/acknowledge/
 done/remove/restore/undo/note/move_up), `/refresh-queue`, and `/recover-reviews`.
 The page and `/api/state` include `assets/queue.js`, workflow observations,
-recovery candidates, and queue refresh status. Do not edit the JSON by hand.
+participation history, and queue refresh status. Do not edit the JSON by hand.
 
 Validate changes with `test_queue` plus the existing dashboard, launch, reporting,
 and notes suites. Browser checks must use disposable tracker data; cover capture,

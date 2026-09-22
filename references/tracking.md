@@ -169,8 +169,8 @@ When GitHub reports a PR closed or merged:
   user when a worktree is dirty or cannot be verified;
 - continue refreshing a closed PR during retention so a reopened PR is restored;
 - treat merged PRs as terminal;
-- retain archived data for 30 days;
-- after 30 days, remove the run directory and tracker-owned artifacts.
+- retain archived data for 20 days from GitHub’s actual closure/merge timestamp;
+- after 20 days, remove the run directory and tracker-owned artifacts.
 
 Automatic cleanup may delete managed files only under
 `~/.local/share/pr-review-tracker/` or

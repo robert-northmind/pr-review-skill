@@ -249,7 +249,7 @@ function renderList(force=false){if(!state)return;const prs=visiblePrs();const s
 function showConfig(config){configSignature=JSON.stringify(config);profiles=structuredClone(config.agent_profiles);editingAgent=config.agent;$('agent').value=editingAgent;fillAgent();settingsDirty=false;markDirty();}
 function fillAgent(){const profile=profiles[editingAgent]||{model:'',effort:''};$('model').value=profile.model;$('effort').value=profile.effort;$('model-options').innerHTML=state.models[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');$('effort-options').innerHTML=state.efforts[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');}
 function markDirty(){if(!state)return;const config=state.config;settingsDirty=editingAgent!==config.agent||$('model').value!==config.model||$('effort').value!==config.effort;$('save-state').textContent=settingsDirty?'Unsaved changes — save before starting a review.':'Saved. Blank fields use the CLI defaults.';$('discard').hidden=!settingsDirty;}
-function queueCaptureButton(pr){return `<button class="button ${pr.workflow?'':'primary'}" data-queue-action="${pr.workflow?'show':'enqueue'}" data-url="${esc(pr.url)}">${pr.workflow?'My reviews':'Add to Up next'}</button>`;}
+function queueCaptureButton(pr){const tracked=pr.workflow&&pr.workflow.bucket!=='removed';return `<button class="button ${tracked?'':'primary'}" data-queue-action="${tracked?'show':'enqueue'}" data-url="${esc(pr.url)}">${tracked?'My reviews':'Add to Up next'}</button>`;}
 function renderState(){
  const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · in app':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
  const runs=state.prs.filter(pr=>active(pr.run)||attention(pr.run));$('active-runs').textContent=runs.length?'('+runs.length+')':'';
@@ -367,8 +367,8 @@ function renderFilterSummary(){
 }
 function rememberCardFocus(container){
  const el=document.activeElement,card=el?.closest('.pr-card');if(!card||!container.contains(card))return ()=>{};
- const identity=card.dataset.pr||card.dataset.queuePr, tag=el.tagName, data=JSON.stringify(el.dataset), text=el.textContent;
- return ()=>{const next=[...container.querySelectorAll('.pr-card')].find(c=>(c.dataset.pr||c.dataset.queuePr)===identity);
+ const identity=card.dataset.pr||card.dataset.queuePr, queueHistory=card.dataset.queueHistory, tag=el.tagName, data=JSON.stringify(el.dataset), text=el.textContent;
+ return ()=>{const next=[...container.querySelectorAll('.pr-card')].find(c=>(c.dataset.pr||c.dataset.queuePr)===identity&&c.dataset.queueHistory===queueHistory);
   const replacement=next&&[...next.querySelectorAll('button,a,summary')].find(n=>n.tagName===tag&&JSON.stringify(n.dataset)===data&&n.textContent===text);
   if(replacement)replacement.focus({preventScroll:true});
  };

@@ -183,9 +183,20 @@ about what to check next. New commits or relevant replies appear in
 **Needs another look**. **Mark updates checked** acknowledges the displayed
 updates; opening a PR alone does not clear them.
 
-**Done for now** moves a review to History. These stages track your own work;
-completing an AI run does not submit a GitHub review or mark your work done.
-Saved PRs are checked every five minutes while the dashboard is visible.
+**Waiting for author** keeps the PR tracked after your feedback. New commits or
+relevant replies move it to **Needs another look**. **Remove from My reviews**
+stops active tracking and offers Undo; use Add PR to follow it again later.
+Completing an AI run does not submit a GitHub review or finish your work.
+
+GitHub sync automatically places confirmed closed/merged PRs in **Merged or
+closed**, sorted by latest activity. Open PRs you commented on or reviewed are
+followed in Waiting for author unless already tracked or explicitly removed.
+Closed/merged entries, reports, private notes, code conversations and PR caches
+expire 20 days after GitHub's close/merge date, on the next successful check.
+Running work and cleanup failures defer deletion and show an error.
+Reporting keeps its separate activity window.
+
+Saved PRs and participation history are checked every five minutes while the dashboard is visible.
 There are no checks or notifications while the page is closed.
 
 ### See your activity

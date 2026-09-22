@@ -8,13 +8,13 @@ import secrets
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 
-STAGES = {'up_next', 'reviewing', 'waiting', 'done', 'removed'}
+STAGES = {'up_next', 'reviewing', 'waiting', 'done', 'removed', 'history'}
 ACTIVE = {'up_next', 'reviewing', 'waiting'}
 _guard = threading.Lock()
 _status = {'status': 'idle'}
@@ -26,6 +26,9 @@ def load():
     data.setdefault('version', 1)
     data.setdefault('prs', {})
     data.setdefault('candidates', {})
+    for record in data['prs'].values():
+        if record.get('stage') in ('done', 'history'):
+            record['stage'] = 'waiting'
     return data
 
 
@@ -71,6 +74,8 @@ def acknowledge(record, observation):
 def mutate(url, action, payload=None):
     payload = payload or {}
     canonical, fallback = identity(url)
+    if action == 'done':
+        action = 'wait'  # Compatibility with an already-open older dashboard.
     with dashboard.state_lock():
         data = load()
         record = data['prs'].get(canonical)
@@ -105,11 +110,11 @@ def mutate(url, action, payload=None):
         if action == 'undo':
             undo = record.get('undo')
             if not undo or not secrets.compare_digest(str(payload.get('token', '')), undo['token']):
-                raise dashboard.DashboardError('Undo is no longer available. Restore the PR from History.')
+                raise dashboard.DashboardError('Undo is no longer available. Use Add PR to track it again.')
             for key, value in undo['before'].items():
                 record[key] = value
             record.pop('undo', None)
-        elif action in ('start', 'wait', 'acknowledge', 'done', 'remove', 'note', 'restore', 'move_up'):
+        elif action in ('start', 'wait', 'acknowledge', 'remove', 'note', 'restore', 'move_up'):
             if action == 'note':
                 note = payload.get('note', '')
                 if not isinstance(note, str) or len(note) > 4000:
@@ -129,10 +134,10 @@ def mutate(url, action, payload=None):
                 acknowledge(record, payload.get('observed'))
                 if record['stage'] == 'reviewing':
                     record['review_observation'] = copy.deepcopy(payload['observed'])
-            elif action in ('done', 'remove'):
+            elif action == 'remove':
                 record['undo'] = {'token': secrets.token_urlsafe(16), 'before': {
                     key: record.get(key) for key in ('stage', 'done_at')}}
-                record['stage'] = 'done' if action == 'done' else 'removed'
+                record['stage'] = 'removed'
                 record['done_at'] = tracker.utc_now()
             elif action == 'restore':
                 record['stage'] = 'up_next'
@@ -157,12 +162,10 @@ def mutate(url, action, payload=None):
 
 def presentation(record):
     metadata = record.get('metadata', {})
-    stage = record['stage']
+    stage = 'waiting' if record['stage'] in ('done', 'history') else record['stage']
     closed = metadata.get('pr_state') in ('closed', 'merged')
     events = [e for e in record.get('events', []) if epoch(e['at']) >= epoch(record.get('ack_at'))
               and e['id'] not in record.get('ack_event_ids', [])]
-    if stage == 'done':
-        events = [e for e in events if e['kind'] == 'requested' and epoch(e['at']) > epoch(record.get('done_at'))]
     reasons = []
     head = metadata.get('head_sha', '')
     if stage in ACTIVE and head and record.get('ack_head') and head != record['ack_head']:
@@ -173,13 +176,14 @@ def presentation(record):
         matching = [e for e in events if e['kind'] == kind]
         if matching:
             reasons.append({'kind': kind, 'label': label, 'url': matching[-1]['url']})
-    if closed or stage == 'removed':
+    if closed or stage in ('removed', 'history'):
         reasons = []
-    bucket = 'history' if closed or stage == 'removed' or (stage == 'done' and not reasons) else (
+    bucket = 'history' if closed else 'removed' if stage == 'removed' else (
         'attention' if reasons and stage != 'up_next' else stage)
     return {key: record.get(key) for key in ('stage', 'revision', 'note', 'created_at', 'position',
             'checked_at', 'attempted_at', 'error', 'review_observation')} | {
-                'bucket': bucket, 'reasons': reasons, 'observed': observed(record), 'closed': closed}
+                'bucket': bucket, 'reasons': reasons, 'observed': observed(record), 'closed': closed,
+                'stage': stage, 'in_history': closed}
 
 
 def merged_entries(entries, data=None):
@@ -224,13 +228,14 @@ def classify(url, login, pr, comments, discussion, requests, reviews):
                     is_draft=bool(pr.get('draft')), head_sha=pr.get('head', {}).get('sha', ''),
                     base_sha=pr.get('base', {}).get('sha', ''),
                     pr_updated_at=pr.get('updated_at', ''), pr_created_at=pr.get('created_at', ''),
-                    pr_state='merged' if pr.get('merged_at') else pr.get('state', ''))
+                    pr_state='merged' if pr.get('merged_at') else pr.get('state', ''),
+                    closed_at=pr.get('closed_at') or '', merged_at=pr.get('merged_at') or '')
     import dashboard_triage
     metadata['triage_context_hash'] = dashboard_triage.context_hash(pr.get('title') or metadata['title'], pr.get('body') or '')
     mine = lambda item: (item.get('user') or {}).get('login', '').lower() == login.lower()
     my_reviews = [r for r in reviews if mine(r) and r.get('submitted_at') and r.get('state') != 'PENDING']
     latest = max(my_reviews, key=lambda r: epoch(r['submitted_at']), default={})
-    my_comments = [c for c in discussion if mine(c)]
+    my_comments = [c for c in [*discussion, *comments] if mine(c)]
     metadata.update(my_review_at=latest.get('submitted_at', ''), my_review_state=latest.get('state', ''),
                     my_comment_at=max((c.get('created_at', '') for c in my_comments), key=epoch, default=''))
     events, threads = [], {}
@@ -283,7 +288,7 @@ def apply_fetch(url, payload, started, error=None):
     with dashboard.state_lock():
         data = load()
         record = data['prs'].get(url)
-        if not record or record['stage'] == 'removed':
+        if not record:
             return
         if epoch(record.get('created_at')) > epoch(started):
             return
@@ -312,13 +317,80 @@ def apply_fetch(url, payload, started, error=None):
         save(data)
 
 
-def refresh(include_closed=False):
-    started = tracker.utc_now()
+HISTORY_DAYS = 20
+
+
+def participated(metadata):
+    return bool(metadata.get('history_participated') or metadata.get('my_review_at') or metadata.get('my_comment_at'))
+
+
+def expired(metadata, now=None):
+    if metadata.get('pr_state') not in ('closed', 'merged'):
+        return False
+    closed = epoch(metadata.get('merged_at') or metadata.get('closed_at'))
+    return bool(closed and (now or datetime.now(timezone.utc).timestamp()) - closed >= HISTORY_DAYS * 86400)
+
+
+def discover_history(login, started):
+    """Search actual participation; requests, mentions and AI runs alone do not count."""
+    import dashboard_reporting as reporting
+    since = (datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)).date().isoformat()
+    query = """query($query:String!,$cursor:String){
+      search(query:$query,type:ISSUE,first:100,after:$cursor){issueCount
+        pageInfo{hasNextPage endCursor} nodes{... on PullRequest{
+          url title state closedAt mergedAt createdAt updatedAt isDraft
+          headRefOid baseRefOid author{login avatarUrl}
+        }}}}"""
+    found = {}
+    for qualifier in ('reviewed-by', 'commenter'):
+        for scope in ('is:open', 'is:closed closed:>=' + since):
+            cursor = None
+            while True:
+                result = reporting.graphql(query, {'query': f'is:pr {scope} {qualifier}:{login} -author:{login}', 'cursor': cursor})['search']
+                if result['issueCount'] > 1000:
+                    raise dashboard.DashboardError('Participation history exceeds GitHub’s search limit. Previous history kept; search needs a narrower range.')
+                for item in result['nodes']:
+                    if not item or not item.get('url'):
+                        continue
+                    url, metadata = identity(item['url'])
+                    metadata.update(title=item['title'], author_login=(item.get('author') or {}).get('login', ''),
+                        author_avatar_url=(item.get('author') or {}).get('avatarUrl', ''),
+                        pr_state=item['state'].lower(), closed_at=item.get('closedAt') or '',
+                        merged_at=item.get('mergedAt') or '', pr_updated_at=item['updatedAt'],
+                        pr_created_at=item['createdAt'], is_draft=item['isDraft'],
+                        head_sha=item['headRefOid'], base_sha=item['baseRefOid'], history_participated=True)
+                    found[url] = metadata
+                page = result['pageInfo']
+                if not page['hasNextPage']:
+                    break
+                if not page['endCursor'] or page['endCursor'] == cursor:
+                    raise dashboard.DashboardError('Incomplete participation history. Previous history kept; retry sync.')
+                cursor = page['endCursor']
+    # Commit only after every search/page succeeds, merging concurrent local choices.
     with dashboard.state_lock():
         data = load()
-    urls = [u for u, r in data['prs'].items() if r['stage'] != 'removed' and (include_closed or r.get('metadata', {}).get('pr_state') not in ('closed', 'merged'))]
-    if not urls:
-        return
+        for url, metadata in found.items():
+            record = data['prs'].get(url)
+            if expired(metadata) and not record:
+                continue
+            if not record:
+                record = {'stage': 'waiting', 'created_at': started, 'action_at': started,
+                          'revision': 1, 'position': 0, 'note': '', 'ack_at': started,
+                          'ack_head': metadata['head_sha'], 'ack_event_ids': []}
+                data['prs'][url] = record
+            if epoch(record.get('checked_at')) > epoch(started):
+                continue
+            record['metadata'] = {**record.get('metadata', {}), **metadata}
+            # Active records still need the detailed follow-up observation below.
+            if record['stage'] == 'removed' or metadata['pr_state'] in ('closed', 'merged'):
+                record.update(checked_at=started, attempted_at=started, error='')
+        data.pop('candidates', None)
+        save(data)
+    return set(found)
+
+
+def refresh(include_closed=False):
+    started = tracker.utc_now()
     login = api('user').get('login')
     if not login:
         raise dashboard.DashboardError('Could not identify your GitHub account.')
@@ -328,6 +400,18 @@ def refresh(include_closed=False):
             raise dashboard.DashboardError('GitHub account changed. Sign in with ' + current['login'] + ' to refresh this personal queue.')
         current['login'] = login
         save(current)
+    failures = []
+    try:
+        discovered = discover_history(login, started)
+    except (dashboard.DashboardError, KeyError, TypeError) as error:
+        failures.append(str(error))
+        discovered = set()
+    with dashboard.state_lock():
+        data = load()
+    # Search refreshes history cheaply. Missing records are checked directly so
+    # removed/manual items still expire, and search-index lag cannot imply closure.
+    urls = [u for u, r in data['prs'].items() if u not in discovered or
+            (r['stage'] != 'removed' and r.get('metadata', {}).get('pr_state') not in ('closed', 'merged'))]
     def fetch(url):
         try:
             apply_fetch(url, fetch_pr(url, login), started)
@@ -336,28 +420,16 @@ def refresh(include_closed=False):
             apply_fetch(url, None, started, error)
             return str(error)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        failures = [error for error in pool.map(fetch, urls) if error]
+        failures.extend(error for error in pool.map(fetch, urls) if error)
+    import dashboard_retention
+    failures.extend(dashboard_retention.cleanup(started))
     if failures:
-        raise dashboard.DashboardError(f'{len(failures)} saved PRs could not be checked. Previous data kept; see each PR for details.')
+        raise dashboard.DashboardError(' '.join(dict.fromkeys(failures)))
 
 
 def recover():
-    """Discover historical participation without enrolling or changing PRs."""
-    items = {}
-    for qualifier in ('reviewed-by', 'commenter'):
-        result = api('search/issues?q=' + quote(
-            f'is:pr is:open {qualifier}:@me -author:@me') + '&per_page=100')
-        if result.get('incomplete_results') or result.get('total_count', 0) > 100:
-            raise dashboard.DashboardError('Recovery search exceeds 100 results or is incomplete. Existing candidates kept; use GitHub search to narrow it down.')
-        for item in result.get('items', []):
-            url, metadata = identity(item.get('html_url', ''))
-            metadata.update(title=item.get('title', metadata['title']), author_login=(item.get('user') or {}).get('login', ''),
-                            pr_updated_at=item.get('updated_at', ''), pr_created_at=item.get('created_at', ''))
-            items[url] = metadata
-    with dashboard.state_lock():
-        data = load()
-        data['candidates'] = items
-        save(data)
+    # Compatibility for old tabs: participation now populates History automatically.
+    refresh(include_closed=True)
 
 
 def start_refresh(force=False, recovery=False, triage_after=False):
@@ -374,8 +446,6 @@ def start_refresh(force=False, recovery=False, triage_after=False):
     def worker():
         global _status, _triage_after_refresh
         try:
-            if recovery:
-                recover()
             refresh(include_closed=force)
             _status = {**_status, 'status': 'completed', 'finished_at': tracker.utc_now()}
         except Exception as error:

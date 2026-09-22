@@ -155,16 +155,7 @@ def snapshot():
             'run':summarize_run(history[0], checked_sha) if history else None,
             'history':[summarize_run(r, checked_sha) for r in history],
             'history_total':len(history)})
-    candidates = dict(personal.get('candidates', {}))
-    for url, entry in data['prs'].items():
-        if 'author' not in entry.get('reasons', []) and (entry.get('my_review_at') or entry.get('my_comment_at')):
-            candidates[url] = entry
-    for url, history in grouped.items():
-        if url not in candidates:
-            _, fallback = queue.identity(url)
-            candidates[url] = {**fallback, 'title': history[0].get('title') or fallback['title']}
-    candidates = [{'url':url, **entry} for url, entry in candidates.items() if url not in personal['prs']]
-    return {'prs':prs, 'config':config, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(), 'queue_candidates':candidates,
+    return {'prs':prs, 'config':config, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(),
         'last_github_refresh_at':data.get('last_github_refresh_at', ''),
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,
