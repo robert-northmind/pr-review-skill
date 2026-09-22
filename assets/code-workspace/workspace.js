@@ -522,6 +522,17 @@ import { chatProgress, activityHTML } from "./progress.mjs";
     renderProgress();
   }
   let editingNote = null;
+  function syncReportTheme() {
+    const frame = document.querySelector(".review-frame");
+    if (!frame) return;
+    const style = getComputedStyle(document.body);
+    const colors = {};
+    for (const [key, source] of Object.entries({bg:"surface",panel:"surface",fg:"fg",muted:"muted",line:"line",accent:"selection",soft:"soft"})) {
+      colors[key] = style.getPropertyValue("--" + source).trim();
+    }
+    frame.contentWindow?.postMessage({type:"workspace-report-theme",theme:document.documentElement.dataset.theme,colors}, "*");
+  }
+  new MutationObserver(syncReportTheme).observe(document.documentElement, {attributes:true,attributeFilter:["data-theme"]});
   function renderReview() {
     $("review-count").textContent = data.review?.artifact ? "Ready" : "Not run";
     const next = JSON.stringify(data.review);
@@ -916,7 +927,9 @@ import { chatProgress, activityHTML } from "./progress.mjs";
         if (isRunning(selected)) pollChat(threadId);
       }
       reviewTimer = setTimeout(updateReview, 15000);
-      $("pr-identity").textContent = `${data.repository} #${data.number}`;
+      $("pr-identity").textContent = `${data.repository} #${data.number} ↗`;
+      $("pr-identity").href = data.url;
+      $("pr-identity").setAttribute("aria-label", `Open ${data.repository} #${data.number} on GitHub (new tab)`);
       $("pr-title").textContent = data.title;
       $("pr-author").textContent = data.author;
       $("pr-state").textContent = data.prState || "Open";
@@ -960,12 +973,22 @@ import { chatProgress, activityHTML } from "./progress.mjs";
   }
   window.addEventListener("message", async (event) => {
     const frame = document.querySelector(".review-frame");
-    if (
-      !frame ||
-      event.source !== frame.contentWindow ||
-      event.data?.type !== "workspace-code"
-    )
+    if (!frame || event.source !== frame.contentWindow) return;
+    if (event.data?.type === "workspace-report-ready") { syncReportTheme(); return; }
+    if (event.data?.type === "workspace-report-size") {
+      const height = event.data.height;
+      if (Number.isFinite(height) && height > 0 && height <= 1000000) frame.style.height = Math.ceil(height) + "px";
       return;
+    }
+    if (event.data?.type === "workspace-report-scroll") {
+      const top = event.data.top;
+      if (Number.isFinite(top) && top >= 0 && top <= frame.offsetHeight) {
+        const view = $("ai-view");
+        view.scrollTop += frame.getBoundingClientRect().top - view.getBoundingClientRect().top + top;
+      }
+      return;
+    }
+    if (event.data?.type !== "workspace-code") return;
     const target = sourceTarget(event.data.url, data);
     if (!target) {
       notify(

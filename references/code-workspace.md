@@ -3,7 +3,11 @@
 Each inbox or My reviews card has one **Open review** entry and an AI status pill
 beside the effort estimate. It opens the AI review tab when a report exists,
 otherwise Code changes. Registered HTML/legacy Markdown reports are embedded in
-an opaque sandbox. They cannot access the dashboard or its action token. Review
+an opaque sandbox. They cannot access the dashboard or its action token. Embedded
+reports inherit the workspace theme, hide their standalone theme/PR controls,
+and expand to their content height so the AI review tab has one scroll area.
+Standalone report files retain their own controls and layout. The repository/PR
+identity in the workspace header opens the GitHub PR in a new tab. Review
 generation uses the existing configured provider and live activity flow; report
 completion never launches an external browser.
 Codex reviews expose live activity in the dashboard; terminal reviews run in the

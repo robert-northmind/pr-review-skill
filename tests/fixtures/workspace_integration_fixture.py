@@ -34,7 +34,7 @@ def main():
             f['fingerprint']=hashlib.sha256(json.dumps(f['rows']).encode()).hexdigest()
             f['patch']='\n'.join(r['text'] for r in f['rows'] if r['kind']!='context')
         tracker.atomic_write(store.directory(URL)/(comparison['revision']+'.json'),comparison)
-        report=Path(root)/'report.html';report.write_text('<!doctype html><h1>Fixture AI review</h1><p>A registered report rendered inside the workspace.</p><a href="https://github.com/example/telemetry-sdk/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/transports/batch.ts#L40">Inspect guard</a><script>document.body.dataset.script="works"</script>')
+        report=Path(root)/'report.html';report.write_text('<!doctype html><style>'+ (Path(__file__).resolve().parents[2]/'assets/review.css').read_text() + '</style><main><div class="topbar"><button id="theme">Theme: System</button></div>' + '<h1>Fixture AI review</h1><p>A registered report rendered inside the workspace.</p><a href="https://github.com/example/telemetry-sdk/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/transports/batch.ts#L40">Inspect guard</a><script>document.body.dataset.script="works"</script>' + '<details><summary>Validation details</summary>' + '<p>Verification evidence and review context.</p>'*40 + '</details></main>')
         artifact={'path':str(report),'version':'fixture-v1','head_sha':comparison['head'],'status':'completed','name':'review-html','run_id':'fixture'}
         def load_manifest(url):
             result=copy.deepcopy(comparison)

@@ -49,6 +49,11 @@
   text-decoration: none;
   color: var(--muted);
 }
+#pr-identity[href] {
+  color: var(--selection);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .appearance {
   margin-left: auto;
 }
@@ -1113,10 +1118,10 @@
 }
 .review-frame {
   width: 100%;
-  height: calc(100vh - 330px);
-  min-height: 400px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  display: block;
+  height: 400px;
+  border: 0;
+  border-radius: 0;
   background: var(--surface);
 }
 #chat-status {

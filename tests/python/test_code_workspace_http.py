@@ -35,6 +35,9 @@ class WorkspaceHTTP(test_dashboard.HTTP):
             self.assertIn("frame-ancestors 'self'",csp)
             self.assertIn('sandbox allow-scripts',csp)
             self.assertNotIn('allow-same-origin',csp)
+            self.assertIn(b'workspace-report-theme',body)
+            self.assertIn(b'workspace-report-size',body)
+            self.assertIn(b'workspace-report-style',body)
             self.assertEqual(self.request('/workspace-report?'+urlencode({'url':URL,'version':'old'}))[0],404)
 
     def test_chat_mutation_is_not_available_to_cross_origin(self):

@@ -137,3 +137,5 @@ assert.equal(sourceLinksHTML([{title:'bad',url:'javascript:alert(1)'}]), '');
 assert.equal(sourceLinksHTML([{title:'bad',url:'https://user:password@example.com/'}]), '');
 assert.ok(sourceLinksHTML([{title:'<script>',url:'https://example.com/?a=1&b=2'}]).includes('&lt;script&gt;'));
 assert.ok(sourceLinksHTML([{title:'Spec',url:'https://example.com'}]).includes('rel="noopener noreferrer"'));
+
+assert.ok(!reviewHTML({run}, pinned, esc).includes("Explore code</button>"));
