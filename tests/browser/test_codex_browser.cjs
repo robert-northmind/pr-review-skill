@@ -2,7 +2,7 @@
 const {spawn}=require('node:child_process'),{once}=require('node:events'),path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
 const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
- const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'codex_browser_fixture.py')],{stdio:['ignore','pipe','inherit']});let browser;
+ const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'../fixtures/codex_browser_fixture.py')],{stdio:['ignore','pipe','inherit']});let browser;
  try{
   const [chunk]=await once(fixture.stdout,'data'),url=chunk.toString().trim();
   browser=await chromium.launch({headless:true,channel:'chrome'});

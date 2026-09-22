@@ -1,4 +1,6 @@
 """Exercise production workspace routes using synthetic GitHub/model boundaries."""
+import _bootstrap  # Make this checkout's scripts and test helpers importable.
+
 import argparse
 from contextlib import ExitStack
 import copy

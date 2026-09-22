@@ -3,15 +3,15 @@ import {
   diffEntries,
   splitPairs,
   selectionFor,
-} from "../assets/code-workspace/diff.mjs";
+} from "../../assets/code-workspace/diff.mjs";
 import {
   attach,
   removeContext,
   hydrate,
   uiState,
   isOlder,
-} from "../assets/code-workspace/model.mjs";
-import { SaveQueue } from "../assets/code-workspace/api.mjs";
+} from "../../assets/code-workspace/model.mjs";
+import { SaveQueue } from "../../assets/code-workspace/api.mjs";
 const rows = Array.from({ length: 20 }, (_, id) => ({
   id,
   kind: id === 10 ? "add" : "context",
@@ -100,20 +100,20 @@ console.log(
   "Workspace model checks passed: diff projections, selections, attachment history, revisions and serialized saves.",
 );
 
-const {renderFileRows,contextHTML}=await import('../assets/code-workspace/views.mjs');
+const {renderFileRows,contextHTML}=await import('../../assets/code-workspace/views.mjs');
 const unsafe={...file,rows:[{id:0,old:null,new:1,kind:'add',text:'<img src=x onerror=alert(1)>'}]};
 const rendered=renderFileRows(unsafe,0,{layout:'split',base:'a',head:'b'});
 assert.ok(!rendered.includes('<img'));assert.ok(rendered.includes('&lt;img'));
 assert.ok(contextHTML({...selection,path:'<img>.ts',snippet:'<script>bad()</script>'},0).includes('&lt;script&gt;'));
 console.log('Workspace rendering checks passed: source and context escaping.');
-const {sourceTarget}=await import('../assets/code-workspace/model.mjs');
+const {sourceTarget}=await import('../../assets/code-workspace/model.mjs');
 const pinned={repository:'owner/repo',head:'b'.repeat(40),base:'a'.repeat(40),files:[{path:'src/a.ts'}]};
 assert.deepEqual(sourceTarget('https://github.com/owner/repo/blob/'+pinned.head+'/src/a.ts#L4-L7',pinned),{path:'src/a.ts',side:'head',start:4,end:7});
 assert.equal(sourceTarget('https://github.com/elsewhere/repo/blob/'+pinned.head+'/src/a.ts#L4',pinned),null);
 assert.equal(sourceTarget('https://github.com/owner/repo/blob/main/src/a.ts#L4',pinned),null);
 
-const {reviewHTML, unavailableHTML} = await import('../assets/code-workspace/review.mjs');
-const {esc} = await import('../assets/code-workspace/views.mjs');
+const {reviewHTML, unavailableHTML} = await import('../../assets/code-workspace/review.mjs');
+const {esc} = await import('../../assets/code-workspace/views.mjs');
 const run = {run_id: 'saved-run', status: 'running', transport: 'terminal'};
 assert.ok(!reviewHTML({run}, pinned, esc).includes('Review activity'));
 assert.ok(reviewHTML({run: {...run, transport: 'codex-sdk'}}, pinned, esc).includes('/?review=saved-run'));
@@ -123,16 +123,16 @@ assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));
 assert.ok(fallback.includes('Its commit could not be checked'));
 assert.equal(unavailableHTML(new Error('Offline'), null, esc), 'Offline');
 
-const {chatProgress, activityHTML} = await import('../assets/code-workspace/progress.mjs');
+const {chatProgress, activityHTML} = await import('../../assets/code-workspace/progress.mjs');
 const progressThread = {status:'running', started_at:100, progress:'Reading file…', activity:[{at:102,text:'<source>'}]};
 assert.equal(chatProgress(progressThread, 165000), 'Reading file… · 1m 5s');
 assert.equal(chatProgress({...progressThread,status:'stopping'}), 'Stopping…');
 assert.equal(chatProgress({...progressThread,status:'completed'}), '');
 assert.ok(activityHTML(progressThread).includes('&lt;source&gt;'));
-const {contextReadLabel} = await import('../assets/code-workspace/model.mjs');
+const {contextReadLabel} = await import('../../assets/code-workspace/model.mjs');
 assert.equal(contextReadLabel({kind:'search_code',query:'flush',side:'head',path:''}), 'Search “flush” · head · /');
 assert.equal(contextReadLabel({kind:'open_page',url:'https://example.com'}), 'Open page · https://example.com');
-const {sourceLinksHTML} = await import('../assets/code-workspace/views.mjs');
+const {sourceLinksHTML} = await import('../../assets/code-workspace/views.mjs');
 assert.equal(sourceLinksHTML([{title:'bad',url:'javascript:alert(1)'}]), '');
 assert.equal(sourceLinksHTML([{title:'bad',url:'https://user:password@example.com/'}]), '');
 assert.ok(sourceLinksHTML([{title:'<script>',url:'https://example.com/?a=1&b=2'}]).includes('&lt;script&gt;'));

@@ -1,10 +1,8 @@
 import html
 from html.parser import HTMLParser
 from pathlib import Path
-import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pr_dashboard as dashboard
 from validate_review_notes import validate
 

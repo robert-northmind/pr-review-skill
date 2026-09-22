@@ -3,6 +3,8 @@
 Use --report-failure to exercise a partial GitHub sync failure. No GitHub CLI,
 provider, or terminal launch is permitted by this fixture.
 """
+import _bootstrap  # Make this checkout's scripts and test helpers importable.
+
 from datetime import timedelta
 from pathlib import Path
 import argparse

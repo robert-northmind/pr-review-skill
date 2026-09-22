@@ -25,8 +25,8 @@ git log --oneline --decorate
 For dashboard changes, run the relevant checks before committing:
 
 ```sh
-(cd scripts && python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes)
-node scripts/test_reporting.cjs
+python3 tests/run.py python test_reporting test_dashboard test_dashboard_launch test_review_notes
+node tests/javascript/test_reporting.cjs
 ```
 
 ## Undo a committed change

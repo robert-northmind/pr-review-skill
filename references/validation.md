@@ -105,7 +105,7 @@ The profile includes two narrowly scoped macOS runtime requirements: an exact
 `(allow signal (target children))` so test runners can stop their compiler
 subprocesses. It does not grant recursive root access or signals to arbitrary
 processes. File, network and child-process boundaries have synthetic regression
-checks in `test_verification_sandbox.py`. If adapting the profile, repeat those
+checks in `tests/python/test_verification_sandbox.py`. If adapting the profile, repeat those
 checks before executing PR code.
 
 For offline Dart checks, resolve the pinned manifest with `dart pub get

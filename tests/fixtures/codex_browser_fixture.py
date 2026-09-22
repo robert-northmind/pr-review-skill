@@ -1,4 +1,6 @@
 """Synthetic in-app review for repeatable UI checks. Never calls a provider."""
+import _bootstrap  # Make this checkout's scripts and test helpers importable.
+
 from argparse import Namespace
 import os
 import tempfile

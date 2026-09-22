@@ -1,4 +1,6 @@
 """Disposable, offline dashboard for the triage browser checks."""
+import _bootstrap  # Make this checkout's scripts and test helpers importable.
+
 import copy
 from datetime import datetime, timezone
 import os

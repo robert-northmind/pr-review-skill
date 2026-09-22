@@ -147,7 +147,7 @@ sys.modules['workspace_checkout']=NS(prepare=lambda _:chat.store.directory(sys.a
 chat.worker(sys.argv[1],sys.argv[2])
 """
         process=subprocess.Popen([sys.executable,'-c',code,URL,thread['id']],
-                                 cwd=Path(__file__).resolve().parent,start_new_session=True)
+                                 cwd=Path(__file__).resolve().parents[2] / 'scripts',start_new_session=True)
         try:
             deadline=time.monotonic()+5
             while not (store.directory(URL)/'provider-ready').exists() and time.monotonic()<deadline:time.sleep(.02)

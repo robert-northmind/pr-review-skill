@@ -125,8 +125,8 @@ does not need to be restarted or replaced.
 Run pure/service tests:
 
 ```sh
-python3 -m unittest discover -s scripts -p 'test_code_workspace*.py'
-node scripts/test_code_workspace.mjs
+python3 tests/run.py python --pattern 'test_code_workspace*.py'
+node tests/javascript/test_code_workspace.mjs
 ```
 
 The HTTP tests bind ephemeral loopback ports. They cover origin/CSRF guards,
@@ -135,11 +135,11 @@ pinned checkouts, renames, binary/size limits, line projection, comparison races
 viewed invalidation, attachment history, context bootstrap, native thread resume
 and durable chat turns.
 
-`python3 scripts/workspace_integration_fixture.py --port 8879` runs production
+`python3 tests/fixtures/workspace_integration_fixture.py --port 8879` runs production
 routes with synthetic GitHub/model boundaries and disposable state. It never
-contacts either provider. Synthetic source lives in `workspace_fixture_data.py`;
+contacts either provider. Synthetic source lives in `tests/fixtures/workspace_fixture_data.py`;
 the fixture uses the production UI, diff projection and persistence paths.
-`node scripts/test_code_workspace_browser.cjs` automates
+`node tests/browser/test_code_workspace_browser.cjs` automates
 that fixture using the existing Playwright/Chrome convention; set
 `PR_REVIEW_PLAYWRIGHT_MODULE` and `PR_REVIEW_BROWSER_CHANNEL` as needed. It exercises
 layouts, selections, chat persistence, notes, viewed state, cancellation, report

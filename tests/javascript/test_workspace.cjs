@@ -1,6 +1,6 @@
 // Exercise the combined sync contract without launching a browser or contacting GitHub.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const source=fs.readFileSync(path.join(__dirname,'../assets/dashboard.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'../../assets/dashboard.js'),'utf8');
 const elements=new Map();
 const $=id=>{if(!elements.has(id))elements.set(id,{disabled:false,hidden:false,textContent:'',innerHTML:'',classList:{toggle(){}},querySelector(){return this.label||(this.label={textContent:''});}});return elements.get(id);};
 const context=vm.createContext({$,state:{prs:[],triage:{config:{enabled:false}},refresh:{status:'completed'},last_github_refresh_at:'2026-09-16T10:00:00Z',queue_refresh:{status:'completed',finished_at:'2026-09-16T10:00:00Z'}},reportingData:{refresh:{status:'completed'},updated_at:'2026-09-16T10:00:00Z'},reportLoadError:'',syncStarting:false,syncRequestErrors:{},esc:s=>String(s??'').replaceAll('<','&lt;'),since:s=>s,post:async()=>{},loadState:async()=>{},loadReporting:async()=>{}});

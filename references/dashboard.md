@@ -273,10 +273,11 @@ GitHub to update its PR membership.
 When changing server Python modules, restart the launchd job after validation.
 Asset-only changes are picked up on page reload. Validate with the
 `test_artifact_state`, `test_snooze`, `test_dashboard`, `test_dashboard_launch`, and `test_review_notes` unittest
-modules, plus browser interaction and responsive checks. HTTP tests use a
+modules using `python3 tests/run.py python <module> ...` from the repository root,
+plus browser interaction and responsive checks. HTTP tests use a
 random loopback port and disposable data; never point test mutations at the
 live tracker.
-`node scripts/test_inbox_review_browser.cjs` checks first launches, reruns,
+`node tests/browser/test_inbox_review_browser.cjs` checks first launches, reruns,
 active-run disabling, failure recovery, and desktop/mobile controls with
 synthetic state and intercepted AI launch requests.
 
@@ -293,7 +294,7 @@ Daily charts overlay a separate trailing average for reviews and merges, using 1
 
 The window and time-off ranges are stored under `pr-inbox-reporting` in browser local storage. Overlapping ranges are merged; invalid saved dates are ignored. Preferences apply across repository selections and do not modify the GitHub cache. Storage failures are visible and leave preferences applied only for the current session. Asset changes take effect on reload without restarting the server.
 
-Validation: `python3 -m unittest test_reporting test_dashboard test_dashboard_launch test_review_notes`, `node test_reporting.cjs`, `node test_workspace.cjs` and `node test_reporting_browser.cjs` from `scripts/`. Browser checks use a disposable local server and synthetic activity to cover trend windows, time off, persistence, repository filtering, chart drill-down, incomplete history, bar/line alignment and light/dark desktop and mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` to the installed Playwright module path when it is not available through normal Node resolution; `PR_REVIEW_BROWSER_CHANNEL` defaults to `chrome`.
+Validation: `python3 tests/run.py python test_reporting test_dashboard test_dashboard_launch test_review_notes`, `node tests/javascript/test_reporting.cjs`, `node tests/javascript/test_workspace.cjs` and `node tests/browser/test_reporting_browser.cjs` from the repository root. Browser checks use a disposable local server and synthetic activity to cover trend windows, time off, persistence, repository filtering, chart drill-down, incomplete history, bar/line alignment and light/dark desktop and mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` to the installed Playwright module path when it is not available through normal Node resolution; `PR_REVIEW_BROWSER_CHANNEL` defaults to `chrome`.
 
 ## Initial review effort
 
@@ -430,7 +431,7 @@ full review reports, checkouts or private review notes. The installed `.venv`
 and bundled SDK runtime are reusable dependencies, not per-PR copies.
 
 Validate with `test_triage` plus the existing dashboard/queue suites. The
-`test_triage_browser.cjs` check starts an offline fixture with disposable state,
+`node tests/browser/test_triage_browser.cjs` check starts an offline fixture with disposable state,
 covering filters, sorting, feedback, settings, persistence, queue order, escaping
 and light/dark 320px/390px/desktop layouts. It uses Playwright and installed Chrome
 by default; PR_REVIEW_PLAYWRIGHT_MODULE and PR_REVIEW_BROWSER_CHANNEL override
@@ -438,7 +439,7 @@ those runtime choices. `evaluate_triage.py --output /tmp/triage-evaluation.json`
 explicitly runs six small synthetic model examples. This uses provider quota;
 it checks rubric behavior, not calibrated review times or broad model accuracy.
 
-For an isolated UI session, run `python3 scripts/workspace_browser_fixture.py`
+For an isolated UI session, run `python3 tests/fixtures/workspace_browser_fixture.py`
 from the skill directory. Add `--report-failure` to exercise partial sync failures.
 The fixture uses disposable state and blocks GitHub, provider and terminal work.
 
@@ -488,8 +489,8 @@ interpreter. Copy inbox/config metadata into the separate state directory if
 wanted; select Codex in that instance's settings. Do not restart the normal
 launchd service to try an isolated worktree.
 
-Run `python3 -m unittest test_codex_review test_dashboard test_dashboard_launch`
-from `scripts/`. `node scripts/test_codex_browser.cjs` uses a disposable synthetic
+Run `python3 tests/run.py python test_codex_review test_dashboard test_dashboard_launch`
+from the repository root. `node tests/browser/test_codex_browser.cjs` uses a disposable synthetic
 review to exercise live progress, reload/reconnect, cancellation, escaped text,
 and light/dark desktop/mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` when
 Playwright is outside Node's normal module path. The fixture never calls a model.

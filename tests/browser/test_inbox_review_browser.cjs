@@ -6,7 +6,7 @@ const path=require('node:path');
 const assert=require('node:assert/strict');
 const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
- const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'workspace_browser_fixture.py')],{stdio:['ignore','pipe','inherit']});
+ const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'../fixtures/workspace_browser_fixture.py')],{stdio:['ignore','pipe','inherit']});
  let browser;
  try{
   const [output]=await once(fixture.stdout,'data'),origin=output.toString().trim();

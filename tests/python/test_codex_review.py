@@ -114,7 +114,7 @@ class Stalled:
 c.run_worker(sys.argv[1],lambda approval:Stalled())
 """
         proc=subprocess.Popen([sys.executable,'-c',code,run],start_new_session=True,
-                              cwd=Path(__file__).resolve().parent)
+                              cwd=Path(__file__).resolve().parents[2] / 'scripts')
         try:
             deadline=time.monotonic()+5
             while c.read_job(run)['status']!='running' and time.monotonic()<deadline:time.sleep(.05)

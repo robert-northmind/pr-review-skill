@@ -6,7 +6,7 @@ const path=require('node:path');
 const assert=require('node:assert/strict');
 const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
- const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'workspace_integration_fixture.py')],{stdio:['ignore','pipe','inherit']});
+ const fixture=spawn(process.env.PYTHON||'python3',[path.join(__dirname,'../fixtures/workspace_integration_fixture.py')],{stdio:['ignore','pipe','inherit']});
  let browser;
  try{
   const [output]=await once(fixture.stdout,'data');
@@ -33,6 +33,8 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(await page.locator('.message-sources a').getAttribute('href'),'https://www.w3.org/TR/trace-context/');
   assert.equal(await page.locator('.message script').count(),0);
   const thread=new URL(page.url()).searchParams.get('chat');assert.ok(thread);
+  // The chat rail hides navigation at this width; reopen Files before switching.
+  await page.locator('#files-toggle').click();
   await page.locator('#file-tree button').nth(1).click();
   await page.locator('#file-1').getByRole('button',{name:'Select head line 20',exact:true}).click();
   await page.locator('#ask-selection').click();
