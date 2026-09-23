@@ -2,6 +2,16 @@
 let queueActive=false, queueSignature='', noteContext=null, queueAutoAt=0;
 const queueLabels={up_next:'Up next',reviewing:'Reviewing',waiting:'Waiting for author',done:'Waiting for author',removed:'Removed',history:'Open'};
 const queueBusy=new Set();
+const queueSectionOpen={attention:true,up_next:true,waiting:false};
+for(const key of Object.keys(queueSectionOpen)){
+ try{const saved=localStorage.getItem(`pr-queue-${key}-open`);if(saved!==null)queueSectionOpen[key]=saved==='true';}catch{}
+}
+document.addEventListener('toggle',event=>{
+ const key=event.target.dataset.queueSection;
+ if(!Object.hasOwn(queueSectionOpen,key)||!event.target.isConnected)return;
+ queueSectionOpen[key]=event.target.open;
+ try{localStorage.setItem(`pr-queue-${key}-open`,String(event.target.open));}catch{}
+},true);
 
 function queueButton(pr,action,label,primary=false){
  return `<button type="button" class="button ${primary?'primary':''}" data-queue-action="${action}" data-url="${esc(pr.url)}" ${queueBusy.has(pr.url)?'disabled':''}>${label}</button>`;
@@ -12,6 +22,7 @@ function queueCard(pr,historyView=false){
  if(history){if(!w.closed&&w.bucket==='history')primary=queueButton(pr,'restore',w.stage==='history'?'Add to Up next':'Restore to Up next',true);}
  else {
   primary=w.stage==='up_next'?queueButton(pr,'start','Start reviewing',true):w.stage==='reviewing'?queueButton(pr,'wait','Waiting for author',true):queueButton(pr,'start','Resume reviewing',true);
+  if(w.stage==='reviewing')secondary+=queueButton(pr,'stop','Stop reviewing');
   if(w.stage==='up_next')secondary+=queueButton(pr,'move_up','Move up');
   if(reasons.length)secondary+=queueButton(pr,'acknowledge','Mark updates checked');
   if(w.stage==='up_next')secondary+=queueButton(pr,'wait','Waiting for author');
@@ -45,12 +56,19 @@ function renderQueue(force=false){
  const signature=JSON.stringify([prs,[...queueBusy],Math.floor(Date.now()/60000)]);
  if(!force&&signature===queueSignature)return;queueSignature=signature;
  const restoreFocus=rememberCardFocus($('queue-view'));
+ let focusedSection=null;
+ for(const section of $('queue-list').querySelectorAll('[data-queue-section]')){
+  queueSectionOpen[section.dataset.queueSection]=section.open;
+  try{localStorage.setItem(`pr-queue-${section.dataset.queueSection}-open`,String(section.open));}catch{}
+  if(section.querySelector('summary')===document.activeElement)focusedSection=section.id;
+ }
  const open=new Map([...$('queue-view').querySelectorAll('.queue-card')].map(el=>[el.dataset.queuePr+el.dataset.queueHistory,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
  const focused=document.activeElement;const focusUrl=focused?.dataset?.url, focusAction=focused?.dataset?.queueAction, focusHistory=focused?.closest('.queue-card')?.dataset.queueHistory;
  const compare=(a,b)=>a.workflow.position-b.workflow.position||a.url.localeCompare(b.url);
  const sections=[['attention','Needs another look','Updates and replies since your last check.'],['up_next','Up next','PRs you chose to review next.'],['reviewing','Reviewing','Reviews you have started.'],['waiting','Waiting for author','New commits or replies bring the review back.']];
  $('queue-list').innerHTML=sections.map(([key,title,description])=>{
   const group=prs.filter(pr=>pr.workflow.bucket===key).sort(compare);
+  if(Object.hasOwn(queueSectionOpen,key))return `<details id="queue-${key}" data-queue-section="${key}" class="queue-section queue-collapsible" ${queueSectionOpen[key]?'open':''}><summary>${title} <span class="count">${group.length}</span></summary>${group.map(pr=>queueCard(pr)).join('')||'<p class="muted">Nothing here right now.</p>'}</details>`;
   if(!group.length)return `<details class="queue-section queue-empty-group"><summary>${title} <span class="count">0</span></summary><p class="muted">Nothing here right now.</p></details>`;
   return `<section class="queue-section" aria-label="${title}"><div class="list-heading"><div><h3>${title} <span class="count">${group.length}</span></h3></div></div>${group.map(pr=>queueCard(pr)).join('')||'<p class="queue-empty muted">Nothing here right now.</p>'}</section>`;
  }).join('');
@@ -58,6 +76,7 @@ function renderQueue(force=false){
  $('queue-history-count').textContent='('+history.length+')';$('queue-history-list').innerHTML=history.map(pr=>queueCard(pr,true)).join('')||'<p class="muted">Reviewed PRs appear here when GitHub confirms they are merged or closed.</p>';
  for(const el of $('queue-view').querySelectorAll('.queue-card'))for(const d of el.querySelectorAll('details'))if(open.get(el.dataset.queuePr+el.dataset.queueHistory)?.includes(d.className))d.open=true;
  restoreFocus();
+ if(focusedSection)$(focusedSection).querySelector('summary').focus({preventScroll:true});
  if(focusUrl&&focusAction){const replacement=[...$('queue-view').querySelectorAll('[data-queue-action]')].find(b=>b.dataset.url===focusUrl&&b.dataset.queueAction===focusAction&&b.closest('.queue-card')?.dataset.queueHistory===focusHistory);replacement?.focus({preventScroll:true});}
 }
 function showQueue(value){
@@ -75,7 +94,7 @@ async function queueAction(url,action,extras={}){
  try {
   const result=await post('/queue',request);
   const undo=result.undo_token&&action==='remove'?async()=>{await post('/queue',{url,action:'undo',revision:result.revision,token:result.undo_token});await loadState();}:null;
-  const messages={enqueue:'Saved in My reviews.',start:'Review started. Opening the PR does not clear pending updates.',wait:'Waiting for the author. Any newer updates remain visible.',acknowledge:'The displayed updates were marked checked.',remove:'Removed from My reviews. The PR and its review artifacts are unchanged.',restore:'Restored to Up next.',move_up:'Queue order updated.',note:'Private note saved.'};
+  const messages={enqueue:'Saved in My reviews.',stop:'Returned to Up next.',start:'Review started. Opening the PR does not clear pending updates.',wait:'Waiting for the author. Any newer updates remain visible.',acknowledge:'The displayed updates were marked checked.',remove:'Removed from My reviews. The PR and its review artifacts are unchanged.',restore:'Restored to Up next.',move_up:'Queue order updated.',note:'Private note saved.'};
   notify(result.existing?'This PR is already in My reviews.':messages[action]||'Saved.',undo);
   await loadState();return result;
  } finally {queueBusy.delete(url);renderQueue(true);}
@@ -83,7 +102,7 @@ async function queueAction(url,action,extras={}){
 document.addEventListener('click',async event=>{
  const button=event.target.closest('[data-queue-action]');if(!button||button.disabled)return;
  const {url,queueAction:action}=button.dataset;
- if(action==='show'){showQueue(true);const w=findQueuePr(url)?.workflow;if(w?.bucket==='history')$('queue-history').open=true;[...$('queue-view').querySelectorAll('[data-queue-pr]')].find(el=>el.dataset.queuePr===url)?.scrollIntoView({block:'center',behavior:'smooth'});return;}
+ if(action==='show'){showQueue(true);const w=findQueuePr(url)?.workflow;if(w?.bucket==='history')$('queue-history').open=true;if(Object.hasOwn(queueSectionOpen,w?.bucket))$(`queue-${w.bucket}`).open=true;[...$('queue-view').querySelectorAll('[data-queue-pr]')].find(el=>el.dataset.queuePr===url)?.scrollIntoView({block:'center',behavior:'smooth'});return;}
  if(action==='note'){
   const pr=findQueuePr(url);noteContext={url,revision:pr.workflow.revision};$('queue-note-title').textContent=pr.title;$('queue-note').value=pr.workflow.note||'';$('queue-note-error').hidden=true;$('queue-note-dialog').showModal();$('queue-note').focus();return;
  }

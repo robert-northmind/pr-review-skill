@@ -183,7 +183,22 @@ about what to check next. New commits or relevant replies appear in
 **Needs another look**. **Mark updates checked** acknowledges the displayed
 updates; opening a PR alone does not clear them.
 
-**Waiting for author** keeps the PR tracked after your feedback. New commits or
+**Resume reviewing** moves a PR from **Needs another look** to **Reviewing**,
+keeping its pending-update indicators. New updates stay visible there while
+you review. Choosing **Waiting for author** returns it to **Needs another look**
+if updates arrived after the saved review observation.
+
+**Stop reviewing** returns a PR to **Up next**, keeping its note and pending
+updates. It does not cancel an AI review run.
+
+Opening a review and returning via **PR reviews** or browser Back restores the
+overview's scroll position after the cards load. Positions stay in the current
+browser tab, separately for My reviews and each Inbox filter selection.
+
+**Up next** and **Needs another look** are collapsible, start expanded, and show
+their PR counts even when collapsed. **Waiting for author** starts collapsed, with its PR count
+visible. The dashboard remembers your choice across refreshes and reloads.
+It keeps the PR tracked after your feedback. New commits or
 relevant replies move it to **Needs another look**. **Remove from My reviews**
 stops active tracking and offers Undo; use Add PR to follow it again later.
 Completing an AI run does not submit a GitHub review or finish your work.

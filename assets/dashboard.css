@@ -132,6 +132,8 @@ main{max-width:1320px;padding:24px 28px}
 .action-menu .snooze-options{position:static;box-shadow:none;border:0;width:100%;max-width:none;padding:0 0 0 10px}
 .queue-section{margin:24px 0}
 .queue-section h3{font-size:15px}
+.queue-collapsible>summary{font-size:15px;font-weight:650;padding:5px 0}
+.queue-collapsible[open]>summary{margin-bottom:16px}
 .queue-empty-group{font-size:13px;color:var(--muted);margin:18px 0}
 .queue-note{background:var(--soft);margin-top:12px}
 .queue-tools{margin-top:8px}

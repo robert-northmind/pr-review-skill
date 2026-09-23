@@ -55,6 +55,41 @@ class Queue(unittest.TestCase):
   self.assertEqual(self.record()['ack_head'],A);self.assertEqual(self.view()['bucket'],'attention')
   self.action('acknowledge');self.assertEqual(self.view()['bucket'],'waiting')
   self.fetch(C,T3);self.assertEqual(self.view()['bucket'],'attention')
+ def test_stop_returns_to_up_next_without_acknowledging_updates(self):
+  self.action('note',note='Check retries');self.action('start')
+  self.fetch(B,T2,[self.event()]);before=self.record()
+  self.action('stop')
+  self.assertEqual(self.view()['bucket'],'up_next')
+  self.assertNotIn('review_observation',self.record())
+  for key in ('ack_head','ack_at','ack_event_ids','note','position'):
+   self.assertEqual(self.record().get(key),before.get(key))
+  self.assertTrue(self.view()['reasons'])
+  self.action('start')
+  self.assertEqual(self.record()['review_observation']['head_sha'],B)
+ def test_stop_requires_reviewing_stage(self):
+  with self.assertRaises(dashboard.DashboardError):self.action('stop')
+ def test_resume_moves_to_reviewing_and_preserves_pending_updates(self):
+  self.action('start');self.action('wait');self.fetch(B,T2,[self.event()])
+  self.assertEqual(self.view()['bucket'],'attention')
+  before=self.record();reasons=self.view()['reasons']
+  self.action('start')
+  self.assertEqual(self.view()['bucket'],'reviewing')
+  self.assertEqual(self.view()['reasons'],reasons)
+  for key in ('ack_head','ack_at','ack_event_ids'):
+   self.assertEqual(self.record().get(key),before.get(key))
+  self.assertEqual(runtime.snapshot()['prs'][0]['workflow']['bucket'],'reviewing')
+  self.fetch(C,T3,[self.event(),self.event(at=T3,id='thread:2')])
+  self.assertEqual(self.view()['bucket'],'reviewing')
+  self.action('wait')
+  self.assertEqual(self.record()['ack_head'],B)
+  self.assertEqual(self.view()['bucket'],'attention')
+  self.assertEqual({r['kind'] for r in self.view()['reasons']},{'head','reply'})
+ def test_resumed_review_without_new_updates_returns_to_waiting(self):
+  self.action('wait');self.fetch(B,T2,[self.event()]);self.action('start')
+  self.assertEqual(self.view()['bucket'],'reviewing')
+  self.action('wait')
+  self.assertEqual(self.view()['bucket'],'waiting')
+  self.assertEqual(self.view()['reasons'],[])
  def test_open_and_local_snapshot_do_not_acknowledge(self):
   self.action('start');self.action('wait');self.fetch(B,T2)
   for _ in range(3):runtime.snapshot()

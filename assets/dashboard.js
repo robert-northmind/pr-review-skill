@@ -30,6 +30,22 @@ for(const [prefix,legacy] of [['repositories','repository'],['statuses','status'
 if(!labels[filters.view])filters.view='requested';
 let reportingData=null, reportingActive=false, state=null, listSignature='', profiles={}, editingAgent='', settingsDirty=false, configSignature='', loading=false, toastTimer, undoAction=null;
 const busy = new Set();
+// Restore only after async PR data has rebuilt the overview's full height.
+let overviewScrollPending=true;
+history.scrollRestoration='manual';
+function overviewScrollKey(){return 'pr-overview-scroll:'+JSON.stringify(queueActive?'queue':filters);}
+window.addEventListener('pagehide',()=>{
+ if(!state||overviewScrollPending||reportingActive)return;
+ try{sessionStorage.setItem(overviewScrollKey(),JSON.stringify({x:scrollX,y:scrollY}));}catch{}
+});
+function restoreOverviewScroll(){
+ if(!overviewScrollPending||reportingActive)return;
+ overviewScrollPending=false;
+ try{
+  const saved=JSON.parse(sessionStorage.getItem(overviewScrollKey())||'null');
+  if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y))window.scrollTo({left:saved.x,top:saved.y,behavior:'instant'});
+ }catch{}
+}
 function saveFilters(){try{localStorage.setItem('pr-inbox-filters',JSON.stringify(filters));}catch{}}
 function when(stamp){if(!stamp)return 'Not yet checked';const date=new Date(stamp);return Number.isNaN(date.valueOf())?'Unknown date':date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function since(stamp){if(!stamp)return 'Unknown';const minutes=Math.max(0,Math.floor((Date.now()-new Date(stamp))/60000));if(!Number.isFinite(minutes))return 'Unknown';if(minutes<1)return 'just now';if(minutes<60)return minutes+'m ago';if(minutes<1440)return Math.floor(minutes/60)+'h ago';return Math.floor(minutes/1440)+'d ago';}
@@ -261,6 +277,7 @@ function renderState(){
  $('watched-repos').innerHTML=config.watched_repos.map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-repo="${esc(repo)}" aria-label="Stop watching ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No watched repositories yet.</li>';
  renderList();
  if(typeof renderQueue==='function')renderQueue();
+ restoreOverviewScroll();
 }
 let stateRequest=null;
 function loadState(){if(stateRequest)return stateRequest;stateRequest=(async()=>{loading=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Could not read the inbox.');state=await response.json();$('connection').hidden=true;renderState();refreshExpiredSnoozes();}catch(error){$('connection').hidden=false;$('connection').textContent='Connection interrupted. Showing the last loaded inbox; retrying automatically. '+error.message;}finally{loading=false;stateRequest=null;}})();return stateRequest;}

@@ -141,6 +141,13 @@ completes the human review.
 - **Reviewing** records the displayed commit and activity observation. Waiting
   for author acknowledges that observation, so commits or replies arriving
   during the review remain pending.
+- **Resume reviewing** moves the PR into Reviewing without acknowledging its
+  pending updates. It stays there with update indicators until you choose
+  another stage; Waiting for author exposes any newer updates in Needs another look.
+- **Stop reviewing** returns the PR to Up next without acknowledging updates
+  or cancelling an AI run. Starting again records a fresh review observation.
+- **Up next**, **Needs another look**, and **Waiting for author** collapse via
+  their headings, with counts always visible. Each remembers its expanded state.
 - **Waiting for author** retains the PR until it needs another look.
 - **Needs another look** shows head changes, human replies in review threads
   you participated in, author comments after your feedback, mentions, and

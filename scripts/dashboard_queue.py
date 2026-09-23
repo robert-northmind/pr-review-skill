@@ -114,7 +114,7 @@ def mutate(url, action, payload=None):
             for key, value in undo['before'].items():
                 record[key] = value
             record.pop('undo', None)
-        elif action in ('start', 'wait', 'acknowledge', 'remove', 'note', 'restore', 'move_up'):
+        elif action in ('start', 'stop', 'wait', 'acknowledge', 'remove', 'note', 'restore', 'move_up'):
             if action == 'note':
                 note = payload.get('note', '')
                 if not isinstance(note, str) or len(note) > 4000:
@@ -126,6 +126,11 @@ def mutate(url, action, payload=None):
                     raise dashboard.DashboardError('Check for updates first so this review starts at a known commit.')
                 record['stage'] = 'reviewing'
                 record['review_observation'] = copy.deepcopy(observation)
+            elif action == 'stop':
+                if record['stage'] != 'reviewing':
+                    raise dashboard.DashboardError('This PR is not currently being reviewed.')
+                record['stage'] = 'up_next'
+                record.pop('review_observation', None)
             elif action == 'wait':
                 acknowledge(record, record.get('review_observation') or payload.get('observed'))
                 record['stage'] = 'waiting'
@@ -179,7 +184,7 @@ def presentation(record):
     if closed or stage in ('removed', 'history'):
         reasons = []
     bucket = 'history' if closed else 'removed' if stage == 'removed' else (
-        'attention' if reasons and stage != 'up_next' else stage)
+        'attention' if reasons and stage == 'waiting' else stage)
     return {key: record.get(key) for key in ('stage', 'revision', 'note', 'created_at', 'position',
             'checked_at', 'attempted_at', 'error', 'review_observation')} | {
                 'bucket': bucket, 'reasons': reasons, 'observed': observed(record), 'closed': closed,
