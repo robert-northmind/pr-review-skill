@@ -41,7 +41,7 @@ function queueCard(pr,historyView=false){
    <p class="muted">${w.checked_at?'GitHub checked '+esc(since(w.checked_at)):'Awaiting first GitHub check'}</p>
    ${reviewed&&w.stage==='reviewing'?`<p class="muted">Review started at commit <code>${esc(reviewed.slice(0,12))}</code>${pr.head_sha&&pr.head_sha!==reviewed?' · newer head available':''}</p>`:''}
    ${run?`<p class="muted">AI activity recorded ${esc(since(run.updated_at))}${run.message?' · '+esc(run.message):''}</p>`:''}
-   ${run?.transport!=='codex-sdk'&&(attention(run)||['starting','queued'].includes(run?.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}
+   ${run?.transport!=='in-app'&&(attention(run)||['starting','queued'].includes(run?.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}
    ${pr.history?.length?renderHistory(pr):''}
   </details>
  </article>`;

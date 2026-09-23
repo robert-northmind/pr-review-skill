@@ -56,7 +56,7 @@ See [screenshot provenance](docs/screenshots/README.md).
 - **Filter:** include or exclude multiple authors, repositories, and review
   statuses. There is a shortcut to exclude Renovate. Preferences are remembered
   in your browser.
-- **Review:** launch Claude Code or Codex CLI from the dashboard. Keep the
+- **Review:** run Claude Code or Codex from the dashboard. Keep the
   combined HTML review notes and run history attached to the PR.
   Existing results remain available during a rerun; outdated results are marked.
 - **Understand and check:** the opening shows the changed outcome and current
@@ -77,15 +77,15 @@ See [screenshot provenance](docs/screenshots/README.md).
 
 - Python 3.11 or newer, Git, and the [GitHub CLI](https://cli.github.com/).
 - A GitHub login with access to the repositories you want to review.
-- macOS for Claude review launches, which open Terminal. The Python backend
-  uses Unix facilities; Windows support is not provided.
-- Claude Code installed and authenticated for Claude reviews, or the pinned
+- The Python backend uses Unix facilities; Windows support is not provided.
+- Claude Code installed and authenticated, Node.js 22.16+ and the pinned
+  JS runtime (`npm ci --prefix scripts/claude-runtime`) for Claude review/chat, or the pinned
   `openai-codex` runtime from `requirements-triage.txt` and an existing Codex
   login for in-app Codex reviews.
 
 Background effort estimates use the optional Python dependencies in
 `requirements-triage.txt`. Install them into `.venv`, then configure
-Settings → Effort estimates. Codex Python SDK uses your existing login;
+Settings → AI settings → Triage. Codex and Claude Code use your existing local login;
 OpenAI API uses `OPENAI_API_KEY` from the server environment and separate billing.
 Initial estimates run after GitHub refresh or Estimate all waiting, continuing
 through eligible inbox and active My reviews PRs until caught up or the daily
@@ -131,10 +131,13 @@ Leave the server running in that terminal; Ctrl-C stops it. If the port is occup
 `python3 scripts/pr_server.py --port 8766` and open that port instead.
 
 In **Settings**, add watched repositories as `owner/repository`, then select Sync
-GitHub. Choose the agent used for reviews; model and reasoning dropdowns include
-an Agent default option.
-Model and effort are saved separately for each agent. Presets are maintained in
-`scripts/agent_options.py`; reasoning choices follow the selected Codex model.
+GitHub. In **AI settings**, configure Triage, AI review and Chat independently.
+Each has provider, model and reasoning dropdowns; providers can be mixed.
+Choices are remembered per feature and provider. Presets are maintained in
+`scripts/agent_options.py`; unsupported reasoning resets to the model default.
+Save all settings applies the three profiles together. Existing conversations keep
+their original settings; new conversations use the current Chat profile.
+Provider errors are shown without automatic fallback.
 These settings select the lead session. The lead chooses reviewer subagent
 models and reasoning levels from the host's supported options, within your
 explicit constraints. If overrides are unavailable, reviewers inherit the
@@ -152,8 +155,8 @@ https://github.com/OWNER/REPOSITORY/pull/123.
 ```
 
 From the dashboard, click **Run AI review** to generate the combined report.
-Codex runs in a background worker with live progress inside the dashboard.
-Claude opens an interactive Terminal session. Both use the skill prompt and
+Both providers run in a background worker with live progress inside the dashboard.
+They use the skill prompt and
 the selected agent's authentication. Use **Copy review prompt** to paste the
 same instructions into another agent session.
 
@@ -276,9 +279,9 @@ The dashboard runs on your machine, but AI features send data off your machine:
   patches. Only enable these features for repositories you are allowed to share
   with that provider.
 - **Saved copies:** review reports, downloaded source, notes, and chat data can
-  remain in the tracker directory. Persistent Codex conversations also use
-  Codex-managed history outside that directory. Deleting tracker files does not
-  delete Codex history or copies retained by a provider; manage those separately
+  remain in the tracker directory. Persistent AI conversations also use
+  provider-managed history outside that directory. Deleting tracker files does not
+  delete provider history or copies retained by a provider; manage those separately
   through the relevant product's data controls.
 
 The server listens only on your machine's loopback interface. Treat generated
@@ -289,17 +292,16 @@ or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
 for PR code. Runtime history and generated review artifacts are not included
 in this repository's Git backup. Keep those out of commits and screenshots.
 
-## In-app Codex reviews
+## In-app AI reviews
 
-Selecting Codex runs AI reviews in a background worker and opens live activity
+Selecting Codex or Claude Code runs AI reviews in a background worker and opens live activity
 in the dashboard. Stage progress follows reviewer checkpoints; it is an estimate,
 not time remaining. Reviews keep running across page reloads and server restarts.
-Stop review cancels the worker and preserves its saved activity. Claude still
-opens Terminal. Full-review sessions do not accept follow-ups; the code workspace
+Stop review cancels the worker and preserves its saved activity. Full-review sessions do not accept follow-ups; the code workspace
 has a separate persistent chat for code questions.
 
 Install `requirements-triage.txt` into the server's Python environment for Codex
-reviews. See [dashboard operations](references/dashboard.md#in-app-codex-reviews)
+reviews. See [dashboard operations](references/dashboard.md#in-app-ai-reviews)
 for isolated state, progress reporting, and validation.
 
 ## Code review workspace
@@ -309,18 +311,16 @@ unified or side-by-side diffs, expand context, open full files, and save viewed
 progress. Checking for new commits resets viewed status only for changed file
 comparisons. Private notes and revision-labeled conversations are saved locally.
 
-Select lines to focus a question, then let Codex investigate beyond the selection.
-Each conversation uses a persistent Codex thread and an isolated Git checkout at
-the PR's pinned revision. Codex can search unchanged source, inspect the base
-version, search public documentation, and read relevant private GitHub issues,
-PRs and comments through your existing `gh` login. Streamed answers, activity and
-source links appear in the conversation. Follow-ups resume the same Codex thread.
+Select lines to focus a question, then let the selected AI investigate beyond it.
+Each conversation pins its provider, model, reasoning and PR revision. Follow-ups
+resume the same native session; switching providers requires a new conversation.
+Both providers can read source, inspect the pinned base version, search public
+documentation, and read GitHub issues/PRs. Codex uses its read-only sandbox and
+automatic approval review. Claude uses a restricted read/web tool set plus bounded
+Git/GitHub read tools; shell, edits, hooks and imported MCP servers are disabled.
+Private notes remain local. Streamed answers, public activity and source links
+appear in the conversation.
 
-Chat uses the local Codex login and dashboard model profile. It starts with a
-read-only filesystem sandbox; Codex automatic approval review handles requested
-permission escalations. Review instructions prohibit edits, repository execution,
-tests and GitHub writes. Native shell commands are enabled for source and GitHub
-reads. Public web search is separate from authenticated GitHub access.
 Finished HTML reviews stay in the dashboard; completion does not open an external
 browser. See [workspace architecture, limits and tests](references/code-workspace.md).
 

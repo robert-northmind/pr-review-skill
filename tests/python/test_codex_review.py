@@ -10,6 +10,7 @@ from unittest.mock import patch
 from urllib.request import urlopen
 import dashboard_reviews as c
 import codex_review
+from provider_codex import Session as CodexSession
 import dashboard_runtime as r
 import pr_dashboard as d
 import pr_review_tracker as t
@@ -23,12 +24,12 @@ class Jobs(Isolated):
 
     def test_codex_launch_deduplicates_without_terminal(self):
         d.save_agent_config('codex','','')
-        with patch.object(c,'start') as start, patch.object(d,'open_interactive_terminal') as terminal:
+        with patch.object(c,'start') as start:
             first=r.start_launch(URL,'review');second=r.start_launch(URL,'review')
-        self.assertEqual(first['transport'],'codex-sdk')
-        self.assertEqual(second['transport'],'codex-sdk')
+        self.assertEqual(first['transport'],'in-app')
+        self.assertEqual(second['transport'],'in-app')
         self.assertEqual(first['run_id'],second['run_id'])
-        self.assertEqual(start.call_count,1);terminal.assert_not_called()
+        self.assertEqual(start.call_count,1)
 
     def test_counts_and_no_premature_completion(self):
         run=self.seed()
@@ -91,7 +92,7 @@ class Jobs(Isolated):
                 clients=[]
                 def factory(approval):
                     client=FakeClient(approval);clients.append(client);return client
-                c.run_worker(run,factory)
+                c.run_worker(run,lambda:CodexSession(factory))
                 expected={'complete':'completed','gaps':'completed-with-gaps','cancel':'cancelled','failure':'failed','incomplete':'failed','approval':'blocked'}[outcome]
                 self.assertEqual(c.snapshot(run)['status'],expected);self.assertTrue(clients[0].closed)
                 self.assertNotIn('sensitive provider text',json.dumps(c.snapshot(run)))
@@ -103,6 +104,7 @@ import sys,time
 from types import SimpleNamespace as NS
 import dashboard_reviews as c
 import codex_review
+from provider_codex import Session as CodexSession
 class Stalled:
  def start(self):pass
  def initialize(self):pass
@@ -111,7 +113,7 @@ class Stalled:
  def next_turn_notification(self,*a):time.sleep(60)
  def turn_interrupt(self,*a):pass
  def close(self):pass
-c.run_worker(sys.argv[1],lambda approval:Stalled())
+c.run_worker(sys.argv[1],lambda:CodexSession(lambda approval:Stalled()))
 """
         proc=subprocess.Popen([sys.executable,'-c',code,run],start_new_session=True,
                               cwd=Path(__file__).resolve().parents[2] / 'scripts')

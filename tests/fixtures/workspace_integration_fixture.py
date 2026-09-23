@@ -70,7 +70,7 @@ def main():
         # Fail closed: the fixture must never reach GitHub or a provider.
         stack.enter_context(patch.object(github,'api',side_effect=AssertionError('Fixture network disabled')))
         stack.enter_context(patch.object(pr_server.runtime,'mark_artifact_opened',return_value={'opened':True}))
-        stack.enter_context(patch.object(pr_server.runtime,'start_launch',return_value={'run_id':'fixture','transport':'codex-sdk'}))
+        stack.enter_context(patch.object(pr_server.runtime,'start_launch',return_value={'run_id':'fixture','transport':'in-app'}))
         dashboard.save_dashboard({'prs':{URL:{'owner':'example','repository':'telemetry-sdk','number':248,'title':comparison['title'],'reasons':['review-requested'],'head_sha':comparison['head']}}})
         server=pr_server.Server(('127.0.0.1',args.port))
         print(f'http://127.0.0.1:{server.server_port}/workspace?url={URL}&tab=code',flush=True)

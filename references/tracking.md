@@ -98,7 +98,7 @@ Update in `finally`-equivalent cleanup when possible so interrupted work is not
 left looking successful. Preserve completed task states when another task
 fails.
 
-For an in-app Codex review, report intermediate checkpoints with optional
+For an in-app AI review, report intermediate checkpoints with optional
 `--completed-units`, `--total-units`, and `--unit` flags on `set-task`. Supply both
 counts together, using the task's real inventory (for example, file groups or
 planned checks). Update the counts and a short nonsensitive message at meaningful

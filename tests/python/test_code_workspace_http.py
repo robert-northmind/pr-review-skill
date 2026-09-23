@@ -40,6 +40,13 @@ class WorkspaceHTTP(test_dashboard.HTTP):
             self.assertIn(b'workspace-report-style',body)
             self.assertEqual(self.request('/workspace-report?'+urlencode({'url':URL,'version':'old'}))[0],404)
 
+    def test_new_chat_profile_refresh_is_origin_guarded(self):
+        import ai_settings
+        self.assertEqual(self.request('/api/workspace-ai',headers={'Origin':'https://example.com'})[0],403)
+        self.assertEqual(json.loads(self.request('/api/workspace-ai')[2]),ai_settings.selected('chat'))
+        settings=ai_settings.load();settings['chat']['provider']='claude';ai_settings.save(settings)
+        self.assertEqual(json.loads(self.request('/api/workspace-ai')[2])['provider'],'claude')
+
     def test_chat_mutation_is_not_available_to_cross_origin(self):
         with patch.object(chat,'start',return_value={'id':'new'}) as start:
             self.assertEqual(self.request('/workspace-chat','POST',{'url':URL})[0],403)

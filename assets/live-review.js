@@ -18,7 +18,7 @@ function reviewOutcome(run) {
 }
 
 function reviewSummary(run) {
-  if (run?.transport !== 'codex-sdk') return '';
+  if (run?.transport !== 'in-app') return '';
   const finished = reviewFinal.has(run.status);
   const percent = run.progress?.percent || 0;
   const label = finished ? reviewOutcome(run) : statusLabels[run.status] || run.status;
@@ -26,7 +26,7 @@ function reviewSummary(run) {
     <progress max="100" value="${percent}" aria-label="Estimated review progress"></progress>`;
   return `<div class="review-summary">
     <div class="review-summary-main">
-      <span class="review-eyebrow">CODEX REVIEW</span>
+      <span class="review-eyebrow">AI REVIEW</span>
       <strong>${esc(label)}${finished ? '' : ` <span class="muted">· ${percent}%</span>`}</strong>
       ${progress}
     </div>
@@ -167,7 +167,7 @@ class ReviewPanel {
     const url = new URL(location.href);
     url.searchParams.set('review', runId);
     history.replaceState(null, '', url);
-    $('review-title').textContent = 'Codex review';
+    $('review-title').textContent = 'AI review';
     $('review-subtitle').textContent = '';
     $('review-stream-status').textContent = 'Connecting…';
     for (const id of ['review-updates', 'review-stages', 'review-result', 'review-tools']) $(id).innerHTML = '';

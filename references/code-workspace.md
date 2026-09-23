@@ -10,8 +10,7 @@ Standalone report files retain their own controls and layout. The repository/PR
 identity in the workspace header opens the GitHub PR in a new tab. Review
 generation uses the existing configured provider and live activity flow; report
 completion never launches an external browser.
-Codex reviews expose live activity in the dashboard; terminal reviews run in the
-configured terminal. If the GitHub comparison cannot load, the error offers a
+Both providers expose live review activity in the dashboard. If the GitHub comparison cannot load, the error offers a
 direct link to any saved report, with its current commit freshness unverified.
 
 Code changes use GitHub's PR head and merge base, pinned by full commit SHA.
@@ -32,23 +31,22 @@ Chat starts with selected lines plus the PR diff. Additional selections join the
 active conversation, duplicates are ignored, and removal changes future questions
 without rewriting earlier messages. Each question retains its source snapshot.
 The server reconstructs attachments from pinned source, ignoring client snippets.
-Codex can investigate the full repository using its native tools. The backend
+The selected AI can investigate the full repository using its native tools. The backend
 prepares an isolated, shallow Git checkout at the comparison's head SHA, with the
 base commit available through `git show` and `git diff`. Setup uses authenticated
 Git fetch, suppresses host hooks/filters, and never runs repository scripts or
 initializes submodules. Source reads and commands appear in chat activity.
 
-Inline chat uses the local Codex login and the Codex model and reasoning effort
-profile in dashboard settings, independently of the provider chosen for full
-reviews. Blank settings inherit Codex defaults. Each dashboard conversation stores
-a persistent Codex thread ID. Follow-ups resume that thread; Codex owns tool
-execution, conversation context and compaction. The dashboard supplies the diff
-and existing history once, then only the question, selected lines and revision
-metadata. Existing chats without a Codex thread bootstrap from their saved history.
-A failed resume reports an error rather than silently discarding context.
+Inline chat uses Settings → AI settings → Chat, independently of Triage and AI
+review. Each conversation stores its provider, model, reasoning and native session
+ID. Follow-ups resume that session. Changing the saved Chat profile affects new
+conversations. Old Codex sessions remain Codex. A failed resume reports an error;
+it never starts another provider or silently discards context. The dashboard
+supplies the diff and history once, then only the current question, selections
+and revision metadata.
 
-Built-in live web search/page opening supports public documentation. Native shell
-tools can read private GitHub issues, PRs and comments with the user's existing
+Built-in live web search/page opening supports public documentation. Codex native shell
+tools and Claude’s bounded github_read tool can read private GitHub issues, PRs and comments with the user's existing
 `gh` login and permissions. No separate dashboard GitHub login is required. The
 worker must inherit access to the configured CLI and its credentials. GitHub
 commands use an explicit repository because the pinned checkout has no remote.
@@ -56,14 +54,18 @@ The assistant is instructed to keep searches relevant, use read-only GitHub
 operations, and never put private code, issue text or identifiers in public web
 queries. Public web access itself does not authenticate to private GitHub pages.
 
-Chat starts in Codex's read-only filesystem sandbox with automatic approval review
+Codex chat starts in its read-only filesystem sandbox with automatic approval review
 for requested permission escalations. Native shell access is enabled for reads;
 review instructions prohibit edits, repository scripts/tests and GitHub writes.
 These instructions do not turn a GitHub token into a read-only token. Configured
 plugins, MCP servers, hooks and subagents remain disabled for this chat profile.
+Claude chat permits Read/Glob/Grep/WebSearch/WebFetch and two SDK MCP read tools:
+`git_read` for pinned files/diffs and `github_read` for issues/PRs in the current
+repository. Shell, edits, subagents, skills, hooks and imported MCP servers are
+disabled. Tool commands use argument arrays and bounded output/timeouts.
 The triage estimator remains a tool-disabled classifier. Full AI reviews retain
 their existing configuration and permissions.
-Source context is sent to the configured Codex provider. Private notes remain local
+Source context is sent to the selected provider. Private notes remain local
 and are not included in AI requests. No feedback posting, approval or merge actions
 are exposed by this workspace.
 
@@ -71,7 +73,7 @@ Chat workers survive browser closure and dashboard restart. Reopening reconnects
 to saved activity without another model call. Stop requests cancel the dedicated
 worker process group. Failures and timeouts preserve the question and prior answers.
 Submitting another question never automatically retries a model request.
-While waiting, chat shows elapsed time, public Codex updates, native tool activity
+While waiting, chat shows elapsed time, public AI updates, native tool activity
 and streamed answer text. Expand **AI activity** for the current question's history.
 Progress refreshes every second. Answers retain clickable external source links. Private reasoning and raw provider output are not displayed.
 
@@ -83,8 +85,10 @@ Progress refreshes every second. Answers retain clickable external source links.
   fingerprint-based viewed invalidation. Concurrent stale saves fail visibly.
 - `workspace_chat.py`: durable turn lifecycle, native thread resume, initial context,
   cancellation and worker supervision.
-- `workspace_chat_provider.py`: streamed provider events and completed responses.
+- `workspace_chat_provider.py`: streamed Codex events and completed responses.
 - `workspace_checkout.py`: isolated Git checkout preparation at pinned revisions.
+- `ai_runtime.py` / `provider_*.py`: shared requests and provider-specific adapters.
+- `claude-runtime/`: pinned JS SDK bridge and bounded chat read tools.
 - `codex_runtime.py`: shared restrictive configuration and native chat profile.
 - `code_workspace.py`: application service for HTTP routes and report selection.
 - `assets/code-workspace/model.mjs`: pure context/history/state transformations.
@@ -101,13 +105,13 @@ A broad dashboard rewrite is not required to test or maintain this feature.
 
 Private state, conversations, cached comparisons and isolated source checkouts live
 under `$PR_REVIEW_TRACKER_HOME/workspaces/<hash-of-PR-URL>/`. User checkouts remain
-untouched. Native conversation context is also persisted by Codex under its normal
+untouched. Native conversation context is also persisted by the selected provider under its normal
 local storage. Removing the dashboard cache alone does not remove those sessions.
 Automatic retention cleanup is not implemented.
 
 GitHub exposes at most 3,000 changed files through the PR files API. Larger PRs
 fail explicitly. Diff previews support UTF-8 files up to 500 KB / 12,000 lines;
-binary files, symlinks and submodules show an unavailable state. Codex can inspect
+binary files, symlinks and submodules show an unavailable state. The AI can inspect
 the checkout independently of the diff preview limits. Shallow history, submodules
 and Git LFS pointers can limit investigations and should be reported as such.
 Checkout commands time out after three minutes. An interrupted initial setup may
@@ -115,14 +119,15 @@ leave a `checkout-download-*` directory; completed checkouts are published atomi
 
 Chat allows 12 attachments, 500 lines per selection, a 60 KB attachment payload,
 180 KB per context submission and five minutes per question, including checkout
-preparation. Codex manages subsequent model context; there is no dashboard-defined
+preparation. The selected runtime manages subsequent model context; there is no dashboard-defined
 file-read loop or six-round limit. Source syntax coloring is lightweight rather
 than a language-aware parser.
 
 ## Development and verification
 
 Use the interpreter containing `requirements-triage.txt`; `PR_REVIEW_PYTHON` can
-select it for detached workers. Start an isolated instance with a separate
+select it for detached workers. Claude review/chat also needs Node.js 22.16+ and
+`npm ci --prefix scripts/claude-runtime`. Start an isolated instance with a separate
 `PR_REVIEW_TRACKER_HOME` and `scripts/pr_server.py --port 8880`. The normal dashboard
 does not need to be restarted or replaced.
 

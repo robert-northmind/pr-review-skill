@@ -9,7 +9,9 @@ import threading
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_queue as queue
-import dashboard_reviews as codex
+import dashboard_reviews as reviews
+import ai_settings
+from agent_options import CATALOG
 
 ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
 TERMINAL = {'completed', 'completed-with-gaps', 'failed', 'blocked', 'cancelled'}
@@ -101,14 +103,14 @@ def summarize_run(run, checked_sha=''):
         status = 'starting' if age_seconds(run['created_at']) < 180 else 'no-activity'
     elif status == 'potentially-stale':
         status = 'no-activity'
-    job = codex.job_state(run['run_id']) if launch.get('transport') == 'codex-sdk' else {}
+    job = reviews.job_state(run['run_id'])
     if job:
         status = job['status']
     return {'run_id': run['run_id'], 'status': status, 'tool': run.get('tool', ''),
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
-        'kind': launch.get('kind', 'review'), 'transport': launch.get('transport', 'terminal'),
-        'progress': codex.progress(run, status) if job else None,
+        'kind': launch.get('kind', 'review'), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
+        'progress': reviews.progress(run, status) if job else None,
         'message': job.get('message', '') or launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
         'artifacts': collect_artifacts([run], checked_sha)}
@@ -118,6 +120,7 @@ def snapshot():
     with dashboard.state_lock():
         data = dashboard.load_dashboard()
         config = dashboard.load_config()
+        ai = ai_settings.load()
         personal = queue.load()
         entries = queue.merged_entries(data['prs'], personal)
     import dashboard_triage
@@ -155,7 +158,7 @@ def snapshot():
             'run':summarize_run(history[0], checked_sha) if history else None,
             'history':[summarize_run(r, checked_sha) for r in history],
             'history_total':len(history)})
-    return {'prs':prs, 'config':config, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(),
+    return {'prs':prs, 'config':config, 'ai': {'settings': ai, 'revision': ai_settings.revision(ai), 'catalog': CATALOG}, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(),
         'last_github_refresh_at':data.get('last_github_refresh_at', ''),
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,
@@ -178,22 +181,22 @@ def start_launch(url, kind, retry=False):
         runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
         active = [r for r in runs if r['pr_url'] == canonical and
                   (summarize_run(r)['status'] not in TERMINAL or
-                   (codex.read_job(r['run_id']) and codex.worker_alive(r['run_id'])))]
+                   (reviews.read_job(r['run_id']) and reviews.worker_alive(r['run_id'])))]
         if active and not retry:
             return {'run_id': active[0]['run_id'], 'existing': True,
                     'transport': summarize_run(active[0])['transport']}
         if active and retry:
             for run in active:
-                if codex.read_job(run['run_id']):
-                    raise dashboard.DashboardError('Stop the active Codex review and wait for it to finish before retrying.')
-                tracker.command_cancel(Namespace(run_id=run['run_id'], message='Tracking released for an explicit retry; terminal is not terminated.'))
-        config = dashboard.load_config()
+                if reviews.read_job(run['run_id']):
+                    raise dashboard.DashboardError('Stop the active AI review and wait for it to finish before retrying.')
+                tracker.command_cancel(Namespace(run_id=run['run_id'], message='Tracking released for an explicit retry; legacy process is not terminated.'))
+        config = ai_settings.selected('review')
         run_id = tracker.command_start(Namespace(pr_url=canonical,
-            tool='codex' if config['agent']=='codex' else 'claude-code',
+            tool=CATALOG[config['provider']]['tracker_tool'],
             title=entry.get('title',''), working_directory=str(tracker.tracker_root()),
             session_reference='', base_sha='', head_sha=''), emit=False)
-        transport = 'codex-sdk' if config['agent'] == 'codex' else 'terminal'
-        meta = {'kind':kind, 'agent':config['agent'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
+        transport = 'in-app'
+        meta = {'kind':kind, 'agent':config['provider'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
         tracker.atomic_write(launch_path(run_id), meta)
         prompt = dashboard.full_review_prompt(canonical)
         prompt += ('\n\nThe dashboard has already registered this exact run. '
@@ -204,35 +207,20 @@ def start_launch(url, kind, retry=False):
             'This request authorizes the complete local review workflow and its local artifacts, '
             'not posting anything to GitHub.')
         try:
-            if transport == 'codex-sdk':
-                codex.start(run_id, prompt, config)
-            else:
-                dashboard.open_interactive_terminal(prompt, run_id=run_id)
+            reviews.start(run_id, prompt, config)
         except (OSError, dashboard.DashboardError) as error:
-            _record_exit(run_id, 1, str(error))
+            record_launch_failure(run_id, str(error))
             raise dashboard.DashboardError(str(error)) from error
     if kind == 'review' and not entry.get('workflow'):
         queue.mutate(canonical, 'enqueue')
     return {'run_id':run_id, 'existing':False, 'transport':transport}
 
 
-def _record_exit(run_id, code, message=''):
-    run = tracker.load_run(tracker.run_dir(run_id), dashboard.STALE_RUN_HOURS)
-    meta = tracker.read_json(launch_path(run_id),required=False)
-    if not meta:
-        raise dashboard.DashboardError('This run was not launched by the dashboard.')
-    meta.update(exit_code=code, exited_at=tracker.utc_now())
-    if run['status'] not in TERMINAL:
-        meta['message'] = message or f'Terminal session ended (exit {code}) before the run completed. Close any remaining session before retrying.'
-        for task in run['tasks']:
-            if task['status'] in ('queued','running'):
-                tracker.command_set_task(Namespace(run_id=run_id, task=task['task'], status='failed',message=meta['message']))
-    tracker.atomic_write(launch_path(run_id),meta)
-
-
-def record_launch_exit(run_id, code):
-    with dashboard.state_lock():
-        _record_exit(run_id, code)
+def record_launch_failure(run_id, message):
+    meta = tracker.read_json(launch_path(run_id), required=False)
+    meta.update(exit_code=1, exited_at=tracker.utc_now(), message=message)
+    reviews.finish_unfinished_tasks(run_id, 'failed', message)
+    tracker.atomic_write(launch_path(run_id), meta)
 
 
 _refresh_guard = threading.Lock()

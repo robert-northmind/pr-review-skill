@@ -376,8 +376,17 @@ import { chatProgress, activityHTML } from "./progress.mjs";
     $("chat-toggle").focus();
     updateLayout();
   }
+  async function refreshChatConfig() {
+    if (!data || threadId) return;
+    try { data.chat_config = await api.get("/api/workspace-ai"); renderChat(); }
+    catch { /* Starting a conversation still validates its saved provider on the server. */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshChatConfig();
+  });
   function selectThread(id) {
     threadId = id;
+    if (!id) refreshChatConfig();
     const url = new URL(location.href);
     if (id) url.searchParams.set("chat", id);
     else url.searchParams.delete("chat");
@@ -417,6 +426,9 @@ import { chatProgress, activityHTML } from "./progress.mjs";
     const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60;
     const thread = currentThread(),
       contexts = activeContexts();
+    const ai = thread?.ai_config || data.chat_config;
+    if ($("chat-provider")) $("chat-provider").textContent = ai
+      ? `${ai.provider === 'claude' ? 'Claude Code' : 'Codex'} · ${ai.model || 'default model'} · ${ai.effort || 'default reasoning'}${thread ? ' · Pinned to this conversation' : ''}` : '';
     $("thread-picker").innerHTML =
       '<option value="">New conversation</option>' +
       saved.threads
@@ -675,8 +687,7 @@ import { chatProgress, activityHTML } from "./progress.mjs";
       button.disabled = true;
       try {
         const result = await api.request("/regenerate-review", {});
-        if (result.transport === "terminal")
-          notify("Review opened in your terminal. Progress will appear here.");
+        notify("AI review started. Follow its activity in the dashboard.");
         clearTimeout(reviewTimer);
         await updateReview();
       } catch (error) {

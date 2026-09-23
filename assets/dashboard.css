@@ -223,7 +223,7 @@ footer{font-size:12px}
  main{padding:16px 12px}.page-header{gap:10px}.page-header h1{font-size:20px}.header-actions .button{padding:7px 9px;font-size:12px}.views{gap:16px}.views button{font-size:13px}.pr-card{padding:14px}.pr-actions .button{min-height:42px}.workspace-dialog{padding:20px 16px}.workspace-dialog input,.workspace-dialog select{font-size:16px}.workspace-dialog .filter-bottom label{align-items:start;white-space:normal}.workspace-dialog .filter-bottom select{max-width:65%}.workspace-dialog .filter-bottom>label{flex:auto}.triage-feedback .button{flex:1 1 auto}.report-metrics{gap:20px}.report-metrics>div{min-width:0;flex:1 1 110px}.report-metrics strong{font-size:28px}
 }
 
-/* In-app Codex reviews. Progress reflects recorded work, never a timer. */
+/* In-app AI reviews. Progress reflects recorded work, never a timer. */
 .review-summary{display:flex;align-items:center;gap:24px;justify-content:space-between;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
 .review-summary-main{display:grid;gap:7px;flex:1;min-width:0}.review-eyebrow{font-size:10px;letter-spacing:.11em;font-weight:700;color:var(--muted)}
 .review-summary progress,.review-overview progress{display:block;width:100%;height:7px;border:0;border-radius:8px;overflow:hidden;background:var(--line);accent-color:var(--brand-orange)}

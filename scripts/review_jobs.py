@@ -34,8 +34,11 @@ STAGES = (
 
 
 
-def path(run_id, name='codex-job.json'):
-    return tracker.run_dir(run_id) / name
+def path(run_id, name='review-job.json'):
+    directory = tracker.run_dir(run_id)
+    name = name.replace('codex-', 'review-')
+    legacy = directory / name.replace('review-', 'codex-', 1)
+    return legacy if legacy.exists() or (directory / 'codex-job.json').exists() else directory / name
 
 
 def read_job(run_id):
@@ -113,12 +116,12 @@ def events(run_id):
 def snapshot(run_id):
     job = job_state(run_id)
     if not job:
-        raise tracker.TrackerError('This is not an in-app Codex review.')
+        raise tracker.TrackerError('This is not an in-app AI review.')
     run = tracker.load_run(tracker.run_dir(run_id), 6)
     # Never expose the stored prompt, raw protocol, tool output or credentials.
     saved_events = events(run_id)
     return {'run_id': run_id, 'status': job['status'], 'message': job.get('message', ''),
-            'updated_at': job.get('updated_at', ''), 'thread_id': job.get('thread_id', ''),
+            'updated_at': job.get('updated_at', ''), 'thread_id': job.get('thread_id', ''), 'provider': job.get('provider', 'codex'),
             'progress': progress(run, job['status']), 'events': saved_events,
             'agent_activity_at': saved_events[-1]['at'] if saved_events else ''}
 

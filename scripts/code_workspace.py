@@ -5,6 +5,7 @@ import pr_review_tracker as tracker
 import workspace_github as github
 import workspace_store as store
 import workspace_chat as chat
+import ai_settings
 
 
 def review(url, head):
@@ -19,7 +20,7 @@ def review(url, head):
 def load(url, rev=None):
     comparison = github.cached(url, rev) if rev else github.manifest(url)
     private = store.read(url) if rev else store.reconcile(url, comparison)
-    return {**comparison, 'saved': {**private, 'viewed': [f['path'] for f in comparison['files'] if private['viewed'].get(f['path']) == f['fingerprint']], 'threads': chat.conversations(url)},
+    return {**comparison, 'chat_config': ai_settings.selected('chat'), 'saved': {**private, 'viewed': [f['path'] for f in comparison['files'] if private['viewed'].get(f['path']) == f['fingerprint']], 'threads': chat.conversations(url)},
             'review': review(comparison['url'], comparison['head'])}
 
 

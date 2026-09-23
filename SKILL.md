@@ -370,4 +370,4 @@ effort estimates help choose a PR; they do not replace review coverage or establ
 that a change is safe to approve.
 
 Read [references/dashboard.md](references/dashboard.md) when operating or
-changing the dashboard, its configuration, or its terminal launcher.
+changing the dashboard, its configuration, or its AI provider runtimes.

@@ -13,3 +13,5 @@ venv/
 !.env.example
 # Generated machine-specific service configuration
 *.plist
+
+node_modules/

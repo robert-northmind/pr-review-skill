@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from codex_runtime import restricted_overrides as codex_overrides
+import ai_runtime
 
 SCHEMA = {
     'type': 'object', 'additionalProperties': False,
@@ -47,29 +47,17 @@ An empty list is valid. No evidence of a defect is not evidence the PR is safe t
 """
 
 def classify(request):
-    provider, model = request['provider'], request['model']
-    content = json.dumps(request['context'], ensure_ascii=False)
-    if provider == 'codex':
-        from openai_codex import Codex, CodexConfig, ApprovalMode, Sandbox, ExternalMessage
-        with Codex(CodexConfig(cwd=os.getcwd(), config_overrides=codex_overrides(),
-                               client_name='pr_inbox_triage', client_title='PR effort estimate')) as codex:
-            thread = codex.thread_start(model=model, ephemeral=True, sandbox=Sandbox.read_only,
-                                        approval_mode=ApprovalMode.deny_all, base_instructions=INSTRUCTIONS)
-            result = thread.run(ExternalMessage(tool_name='pr_context', content=content),
-                                output_schema=SCHEMA)
-            usage = result.usage.model_dump(mode='json') if result.usage else {}
-            return {'assessment': json.loads(result.final_response), 'usage': usage}
-    if provider == 'openai':
-        from openai import OpenAI
-        if not os.environ.get('OPENAI_API_KEY'):
-            raise RuntimeError('OpenAI API key is not configured in the server environment.')
-        with OpenAI(timeout=90, max_retries=0) as client:
-            result = client.responses.create(model=model, instructions=INSTRUCTIONS,
-                input=content, store=False, max_output_tokens=1800,
-                text={'format': {'type': 'json_schema', 'name': 'pr_effort', 'strict': True, 'schema': SCHEMA}})
-            return {'assessment': json.loads(result.output_text),
-                    'usage': result.usage.model_dump(mode='json') if result.usage else {}}
-    raise ValueError('Unknown triage provider.')
+    provider = ai_runtime.create(request['provider'])
+    try:
+        result = provider.run(ai_runtime.Request(
+            mode='triage', cwd=os.getcwd(), prompt=json.dumps(request['context'], ensure_ascii=False),
+            model=request['model'], effort=request.get('reasoning', ''),
+            instructions=INSTRUCTIONS, schema=SCHEMA), ai_runtime.Callbacks())
+        if not result.get('completed'):
+            raise ai_runtime.ProviderError('The estimate did not finish.')
+        return {'assessment': result['structured'], 'usage': result.get('usage', {})}
+    finally:
+        provider.close()
 
 
 if __name__ == '__main__':

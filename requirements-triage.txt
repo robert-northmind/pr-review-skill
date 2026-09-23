@@ -1,3 +1,4 @@
-# Optional Codex review and background triage runtime; install into .venv.
+# Optional Codex review/chat and API triage runtime; install into .venv.
+# Claude review/chat: npm ci --prefix scripts/claude-runtime (Node.js 22.16+).
 openai-codex==0.154.0
 openai==3.14.1

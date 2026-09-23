@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR reviews · AI settings prototype</title>
+  <link rel="stylesheet" href="../../assets/dashboard.css">
+  <link rel="stylesheet" href="prototype.css">
+  <script src="catalog.js" defer></script>
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><h1>PR reviews</h1><span class="chip">Prototype</span></div>
+    <label class="theme-control">Appearance <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  </header>
+  <nav class="views" aria-label="Prototype views">
+    <button id="settings-tab" aria-pressed="true" aria-controls="settings-view">AI settings</button>
+    <button id="workflow-tab" aria-pressed="false" aria-controls="workflow-view">Try the workflow <span aria-hidden="true">↗</span></button>
+  </nav>
+  <section id="settings-view" aria-labelledby="settings-heading">
+    <div class="section-intro"><div><p class="eyebrow">YOUR AI WORKSPACE</p><h2 id="settings-heading">The right AI for each task.</h2><p>Choose independently. Mix Codex and Claude Code however you like.</p></div><span class="quiet-badge">Runs inside PR reviews</span></div>
+    <form id="settings-form">
+      <div id="feature-settings"></div>
+      <div class="save-bar"><div><strong id="save-status" role="status">All changes saved</strong><p>Saved choices apply to new runs and conversations.</p></div><div class="actions"><button id="discard" class="button" type="button" disabled>Discard changes</button><button id="save" class="button primary" type="submit" disabled>Save AI settings</button></div></div>
+    </form>
+    <p class="prototype-note">Interactive preview · settings stay in this prototype. No AI requests or changes to your live dashboard.</p>
+  </section>
+  <section id="workflow-view" aria-labelledby="workflow-heading" hidden>
+    <div class="section-intro"><div><p class="eyebrow">EXAMPLE PULL REQUEST</p><h2 id="workflow-heading">Handle empty search results</h2><p>example / frontend · #142 · 3 files changed</p></div><span class="chip">Simulated activity</span></div>
+    <p id="pending-note" class="notice" hidden>You have unsaved settings. This preview uses your last saved choices.</p>
+    <div class="workflow-grid">
+      <div>
+        <section class="work-card" aria-labelledby="triage-heading"><div class="work-heading"><h3 id="triage-heading">Triage</h3><span id="triage-state" class="chip">Not estimated</span></div><p id="triage-config" class="config-line"></p><p id="triage-result" class="result-text">Estimate the attention this PR needs.</p><button id="estimate" class="button">Estimate effort</button></section>
+        <section class="work-card" aria-labelledby="review-heading"><div class="work-heading"><h3 id="review-heading">AI review</h3><span id="review-state" class="chip">Ready</span></div><p id="review-config" class="config-line"></p><div id="review-progress" aria-live="polite"><p class="result-text">Review the change and follow its progress here.</p></div><div class="actions"><button id="review-start" class="button primary">Start AI review</button><button id="review-stop" class="button" hidden>Stop review</button></div></section>
+        <section class="history-card"><h3>Saved reports</h3><p class="muted">Changing AI settings keeps earlier reports available.</p><div id="report-history"><button class="report-link" data-report="Earlier review"><span>Earlier review <small>Yesterday · Codex · GPT-5.6 Sol</small></span><span aria-hidden="true">↗</span></button></div></section>
+      </div>
+      <section class="work-card chat-card" aria-labelledby="chat-heading"><div class="work-heading"><h3 id="chat-heading">Code chat</h3><button id="new-chat" class="button subtle">New conversation</button></div><p id="chat-config" class="config-line"></p><div id="chat-change" class="chat-change" hidden></div><div class="code-selection"><span>SearchResults.tsx · lines 18–23</span><code>if (results.length === 0) {<br>&nbsp; return &lt;EmptyState /&gt;;<br>}</code></div><div id="chat-messages" aria-live="polite"></div><div class="chat-compose"><button id="ask" class="button">Ask: “What changed here?”</button><small>Example question and response. No model is called.</small></div><p id="new-chat-config" class="muted"></p></section>
+    </div>
+    <p class="prototype-note">This preview demonstrates routing and conversation behavior. Provider failures never switch to another provider.</p>
+  </section>
+</main>
+<dialog id="report-dialog"><div class="work-heading"><h2 id="report-title">Review notes</h2><button id="report-close" class="button">Close</button></div><span class="chip">Example report</span><p>The change adds an explicit empty state before rendering search results.</p><p>No findings in this simulated review. A real review would include verified findings and validation evidence.</p></dialog>
+<div id="toast" role="status" hidden></div>
+</body>
+</html>

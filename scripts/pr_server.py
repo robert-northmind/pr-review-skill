@@ -20,14 +20,15 @@ import dashboard_runtime as runtime
 import dashboard_reporting as reporting
 import dashboard_queue as queue
 import dashboard_triage as triage
-import dashboard_reviews as codex
+import ai_settings
+import dashboard_reviews as reviews
 import code_workspace as workspace
 import workspace_github
 import workspace_chat
 import workspace_report
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
-MUTATIONS = {'/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
+MUTATIONS = {'/ai-config','/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
              '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
 
 
@@ -105,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200,path.read_bytes(),'text/plain; charset=utf-8',"sandbox; default-src 'none'")
 
     def _review_events(self, run_id):
-        current = codex.snapshot(run_id)  # Validate before sending headers.
+        current = reviews.snapshot(run_id)  # Validate before sending headers.
         self.send_response(200)
         self.send_header('Content-Type', 'text/event-stream')
         self.send_header('Cache-Control', 'no-store')
@@ -123,10 +124,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.wfile.write(b': heartbeat\n\n')
                 self.wfile.flush()
-                if current['status'] in codex.FINAL:
+                if current['status'] in reviews.FINAL:
                     return
                 time.sleep(1)
-                current = codex.snapshot(run_id)
+                current = reviews.snapshot(run_id)
         except (BrokenPipeError, ConnectionResetError):
             pass
 
@@ -157,6 +158,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200,workspace_github.file_diff(url,rev,query.get('path',[''])[0]))
                 elif parsed.path == '/api/workspace-chat':
                     self._send(200,workspace_chat.snapshot(url,query.get('thread_id',[''])[0]))
+                elif parsed.path == '/api/workspace-ai':
+                    self._send(200, ai_settings.selected('chat'))
                 elif parsed.path == '/api/workspace-review':
                     self._send(200,workspace.review(url,query.get('head',[''])[0]))
                 elif parsed.path == '/workspace-report':
@@ -170,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
                 self._send(200,page,'text/html; charset=utf-8')
-            elif parsed.path in ('/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js','/assets/live-review.js'):
+            elif parsed.path in ('/assets/ai-settings.js','/assets/ai-settings.css','/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js','/assets/live-review.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')
             elif parsed.path in ('/api/state','/api/reporting','/status','/api/review','/api/review-events'):
@@ -181,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                     if parsed.path == '/api/review-events':
                         self._review_events(run_id)
                     else:
-                        self._send(200, codex.snapshot(run_id))
+                        self._send(200, reviews.snapshot(run_id))
                 elif parsed.path == '/api/reporting':
                     self._send(200,reporting.snapshot())
                 elif parsed.path == '/api/state':
@@ -220,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/workspace-chat-cancel':
                 self._send(200,workspace_chat.cancel(str(data.get('url','')),data.get('thread_id'))); return
             if path == '/review-cancel':
-                self._send(200, codex.cancel(str(data.get('run_id', '')))); return
+                self._send(200, reviews.cancel(str(data.get('run_id', '')))); return
             if path == '/artifact-opened':
                 self._send(200, runtime.mark_artifact_opened(str(data.get('run_id', '')),
                     str(data.get('name', '')), data.get('version'))); return
@@ -231,6 +234,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Choose a review or explainer prompt.')
                 prompt = (dashboard.full_review_prompt if kind == 'review' else dashboard.explainer_prompt)(canonical)
                 self._send(200, {'prompt': prompt}); return
+            if path == '/ai-config':
+                if not isinstance(data.get('revision'), str):
+                    raise ValueError('Reload AI settings before saving.')
+                self._send(200, ai_settings.save(data.get('settings'), data['revision'])); return
             if path == '/triage-config':
                 self._send(200, triage.configure(data)); return
             if path == '/triage-feedback':

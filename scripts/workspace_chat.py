@@ -1,4 +1,4 @@
-"""Durable PR chat backed by persistent Codex conversations."""
+"""Durable PR chat backed by provider-pinned conversations."""
 import json
 import os
 from pathlib import Path
@@ -12,12 +12,14 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import workspace_github as github
 import workspace_store as store
+import ai_settings
+import ai_runtime
 
 FINAL = {'completed', 'failed', 'cancelled'}
 MAX_CONTEXT = 180_000
 INSTRUCTIONS = """You are the PR dashboard's code-review assistant. Help the user understand
 and review this pull request. Selected lines focus the question; they are not a
-limit on your investigation. Use the available Codex tools autonomously to read
+limit on your investigation. Use the available tools autonomously to read
 and search the repository, look up official public documentation, and read relevant
 GitHub issues, pull requests and comments using the authenticated gh CLI.
 
@@ -57,7 +59,14 @@ def thread_path(url, thread_id):
 
 
 def read(url, thread_id):
-    return tracker.read_json(thread_path(url, thread_id))
+    thread = tracker.read_json(thread_path(url, thread_id))
+    # Existing sessions were all Codex; never resume their IDs in another provider.
+    if 'ai_config' not in thread:
+        profile = ai_settings.load()['chat']['profiles']['codex']
+        thread['ai_config'] = {'provider': 'codex', **profile}
+    thread.setdefault('provider_session_id', thread.get('codex_thread_id', ''))
+    thread.setdefault('context_seeded', thread.get('codex_context_seeded', False))
+    return thread
 
 
 def save(url, thread):
@@ -141,7 +150,8 @@ def start(url, request, launcher=None):
         thread_id = request.get('thread_id')
         thread = read(url, thread_id) if thread_id else {
             'id': str(uuid.uuid4()), 'base': comparison['base'], 'head': comparison['head'],
-            'revision': comparison['revision'], 'messages': [], 'status': 'completed'}
+            'revision': comparison['revision'], 'messages': [], 'status': 'completed',
+            'ai_config': ai_settings.selected('chat')}
         if thread['revision'] != comparison['revision']:
             raise ValueError('Continue this conversation at its original revision or start a new one.')
         if thread['status'] not in FINAL and alive(thread):
@@ -183,7 +193,7 @@ def turn_context(comparison, thread):
     content = {'question': thread['messages'][-1]['text'], 'selections': thread['contexts'],
                'comparison': {k: comparison[k] for k in ('url', 'repository', 'base', 'head')},
                'github_cli': dashboard.gh_executable()}
-    if not thread.get('codex_context_seeded'):
+    if not thread.get('context_seeded', thread.get('codex_context_seeded')):
         content.update(diff=[{'path': f['path'], 'patch': f.get('patch') or '[Read from checkout]'}
                              for f in comparison['files']],
                        previous_messages=thread['messages'][:-1])
@@ -220,47 +230,47 @@ def worker(url, thread_id):
             if current['status'] == 'running':
                 current['draft'] = text
                 save(url, current)
+    provider = None
+    def record_session(session_id):
+        with store.locked(url):
+            current = read(url, thread_id)
+            current['provider_session_id'] = session_id
+            save(url, current)
     try:
-        from openai_codex import Codex, CodexConfig, ApprovalMode, Sandbox
-        from codex_runtime import chat_overrides
         from workspace_checkout import prepare
-        from workspace_chat_provider import ask
         progress = lambda message: record_progress(url, thread_id, message)
-        progress('Connecting to Codex…')
         thread = read(url, thread_id)
+        config = thread['ai_config']
+        progress('Connecting to ' + config['provider'].title() + '…')
         comparison = github.cached(url, thread['revision'])
-        config = dashboard.load_config().get('agent_profiles', {}).get('codex', {})
         content = turn_context(comparison, thread)
         progress('Preparing source at the PR revision…')
         checkout = prepare(comparison)
-        with Codex(CodexConfig(cwd=str(checkout), config_overrides=chat_overrides(),
-                              client_name='pr_code_chat', client_title='PR code questions')) as codex:
-            options = dict(model=config.get('model') or None, cwd=str(checkout),
-                           sandbox=Sandbox.read_only, approval_mode=ApprovalMode.auto_review,
-                           developer_instructions=INSTRUCTIONS)
-            if thread.get('codex_thread_id'):
-                progress('Resuming Codex conversation…')
-                session = codex.thread_resume(thread['codex_thread_id'], **options)
-            else:
-                session = codex.thread_start(ephemeral=False, **options)
-                with store.locked(url):
-                    current = read(url, thread_id)
-                    current['codex_thread_id'] = session.id
-                    save(url, current)
-            response = ask(session, content, config.get('effort'), progress, record, record_draft)
+        provider = ai_runtime.create(config['provider'])
+        response = provider.run(ai_runtime.Request(mode='chat', cwd=str(checkout), prompt=content,
+            model=config['model'], effort=config['effort'], instructions=INSTRUCTIONS,
+            session_id=thread.get('provider_session_id', ''),
+            context={**{key: comparison[key] for key in ('base', 'head', 'repository')},
+                     'github_cli': dashboard.gh_executable()}),
+            ai_runtime.Callbacks(emit=lambda kind, message: progress(message),
+                                 session=record_session, tool=record, draft=record_draft))
+        if not response.get('completed') or not response.get('answer'):
+            raise ai_runtime.ProviderError('The selected AI could not finish. Check its login and retry.')
         with store.locked(url):
             current = read(url, thread_id)
             if not current.get('cancel'):
                 current['messages'].append({'role': 'assistant', 'text': response['answer'], 'contexts': thread['contexts'], 'reads': current['reads'], 'sources': response['sources']})
-                current.update(status='completed', error='', draft='', codex_context_seeded=True)
+                current.update(status='completed', error='', draft='', context_seeded=True)
                 save(url, current)
     except Exception as error:
         with store.locked(url):
             current = read(url, thread_id)
             current.update(status='cancelled' if current.get('cancel') else 'failed',
-                           error=str(error)[:300] if type(error) is ValueError else f'AI unavailable ({type(error).__name__}). Check local Codex login and SDK installation, then retry.')
+                           error=str(error)[:300] if isinstance(error, (ValueError, ai_runtime.ProviderError)) else f'AI unavailable ({type(error).__name__}). Check the selected provider’s local login and runtime installation, then retry.')
             save(url, current)
     finally:
+        if provider:
+            provider.close()
         with store.locked(url):
             current = read(url, thread_id)
             if current.get('cancel') and current['status'] not in FINAL:

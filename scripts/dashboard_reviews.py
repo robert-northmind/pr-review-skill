@@ -9,7 +9,8 @@ import sys
 import threading
 import time
 
-import codex_review
+import ai_runtime
+from review_context import review_prompt
 import pr_review_tracker as tracker
 from review_jobs import (
     Activity, FINAL, complete_report, events, finish_unfinished_tasks,
@@ -26,7 +27,8 @@ def start(run_id, prompt, config):
         'status': 'starting',
         'created_at': tracker.utc_now(),
         'updated_at': tracker.utc_now(),
-        'message': 'Starting Codex',
+        'message': 'Starting AI review',
+        'provider': config.get('provider', config.get('agent', 'codex')),
         'model': config['model'],
         'effort': config['effort'],
         'prompt': prompt,
@@ -44,7 +46,7 @@ def start(run_id, prompt, config):
             start_new_session=True,
         )
     except OSError:
-        Activity(run_id, job).state('failed', 'Could not start the Codex worker.')
+        Activity(run_id, job).state('failed', 'Could not start the AI worker.')
         raise
     threading.Thread(target=process.wait, daemon=True).start()
 
@@ -52,10 +54,10 @@ def start(run_id, prompt, config):
 def cancel(run_id):
     job = job_state(run_id)
     if not job:
-        raise tracker.TrackerError('This is not an in-app Codex review.')
+        raise tracker.TrackerError('This is not an in-app AI review.')
     if job['status'] in FINAL:
         return {'status': job['status']}
-    tracker.atomic_write(path(run_id, 'codex-cancel.json'), {
+    tracker.atomic_write(path(run_id, 'review-cancel.json'), {
         'requested_at': tracker.utc_now(),
     })
     return {'status': 'stopping'}
@@ -75,26 +77,17 @@ class ReviewWorker:
         self.cancel_requested = threading.Event()
         self.needs_input = threading.Event()
 
-    def handle_approval(self, method, params):
-        # Auto-review handles eligible escalations. Never approve its fallback.
-        self.needs_input.set()
-        self.activity.emit('attention',
-            'Codex needs input or permission. Inline answers are not available; '
-            'this request was declined.')
-        if method in ('item/commandExecution/requestApproval',
-                      'item/fileChange/requestApproval'):
-            return {'decision': 'decline'}
-        if method == 'item/tool/requestUserInput':
-            return {'answers': {}}
-        return {}
+    def event(self, kind, text):
+        if kind == 'attention':
+            self.needs_input.set()
+        self.activity.emit(kind, text)
 
     def interrupt(self):
-        if self.client and self.thread_id and self.turn_id:
+        if self.client:
             try:
-                self.client.turn_interrupt(self.thread_id, self.turn_id)
+                self.client.interrupt()
             except Exception:
-                # A stalled SDK is handled by the process-group timeout.
-                pass
+                pass  # Dedicated process-group timeout handles a stalled adapter.
 
     def mark_cancelled(self):
         tracker.command_cancel(Namespace(
@@ -104,9 +97,9 @@ class ReviewWorker:
     def monitor(self):
         heartbeat = time.monotonic()
         while not self.stopped.wait(1):
-            if path(self.run_id, 'codex-cancel.json').exists():
+            if path(self.run_id, 'review-cancel.json').exists():
                 self.cancel_requested.set()
-                self.activity.state('stopping', 'Stopping Codex…')
+                self.activity.state('stopping', 'Stopping AI…')
                 threading.Thread(target=self.interrupt, daemon=True).start()
                 if not self.stopped.wait(CANCEL_GRACE_SECONDS):
                     self.mark_cancelled()
@@ -121,7 +114,7 @@ class ReviewWorker:
     def finish_turn(self, payload):
         if payload.get('turn', {}).get('status') != 'completed':
             self.activity.state('failed',
-                'Codex stopped before completing the review. Saved activity is available.')
+                'AI stopped before completing the review. Saved activity is available.')
             return
         if complete_report(self.run_id):
             tasks = tracker.load_run(tracker.run_dir(self.run_id), 6)['tasks']
@@ -135,45 +128,38 @@ class ReviewWorker:
         self.activity.state(
             'blocked' if self.needs_input.is_set() else 'failed',
             'Review needs input.' if self.needs_input.is_set() else
-            'Codex finished without registering a complete report. Check the saved activity.',
+            'AI finished without registering a complete report. Check the saved activity.',
         )
 
     def review(self):
-        self.client = self.client_factory(self.handle_approval)
-        self.client.start()
-        self.client.initialize()
+        self.client = self.client_factory()
         job = self.activity.job
-        self.thread_id = self.client.thread_start(codex_review.thread_parameters(job)).thread.id
-        tracker.command_set_session(Namespace(run_id=self.run_id, reference=self.thread_id))
-        self.activity.state('running', 'Review in progress', thread_id=self.thread_id)
-        self.activity.emit('status', 'Codex connected. Preparing the review.')
-        options = {'effort': job['effort']} if job.get('effort') else None
-        self.turn_id = self.client.turn_start(
-            self.thread_id, codex_review.review_prompt(self.run_id, job['prompt']), options,
-        ).turn.id
-        while True:
-            notification = self.client.next_turn_notification(self.turn_id)
-            payload = notification.payload.model_dump(mode='json', by_alias=True)
-            codex_review.record_notification(self.activity, notification.method, payload)
-            if notification.method == 'turn/completed':
-                if not self.cancel_requested.is_set():
-                    self.finish_turn(payload)
-                return
+        def session(session_id):
+            tracker.command_set_session(Namespace(run_id=self.run_id, reference=session_id))
+            self.activity.state('running', 'Review in progress', thread_id=session_id)
+        self.activity.state('running', 'Connecting to the selected provider…')
+        result = self.client.run(ai_runtime.Request(
+            mode='review', cwd=str(tracker.tracker_root()),
+            prompt=review_prompt(self.run_id, job['prompt']),
+            model=job.get('model', ''), effort=job.get('effort', ''),
+        ), ai_runtime.Callbacks(emit=self.event, session=session))
+        if not self.cancel_requested.is_set():
+            self.finish_turn({'turn': {'status': 'completed' if result.get('completed') else 'failed'}})
 
     def run(self):
         watcher = threading.Thread(target=self.monitor, daemon=True)
         watcher.start()
         try:
-            if path(self.run_id, 'codex-cancel.json').exists():
+            if path(self.run_id, 'review-cancel.json').exists():
                 self.cancel_requested.set()
             else:
                 self.review()
         except Exception as error:
             # Provider exceptions may contain source or credentials; save only type.
             name = type(error).__name__
-            self.activity.emit('error', f'Codex worker error ({name}).')
+            self.activity.emit('error', f'AI worker error ({name}).')
             self.activity.state('failed',
-                f'Codex could not finish ({name}). Check local Codex authentication and the installed SDK.')
+                str(error) if isinstance(error, ai_runtime.ProviderError) else f'AI could not finish ({name}). Check provider authentication and the installed SDK.')
         finally:
             try:
                 if self.client:
@@ -192,7 +178,7 @@ def run_worker(run_id, client_factory=None):
     with worker_lock(run_id):
         job = read_job(run_id)
         if job and job['status'] not in FINAL:
-            ReviewWorker(run_id, job, client_factory or codex_review.create_client).run()
+            ReviewWorker(run_id, job, client_factory or (lambda: ai_runtime.create(job.get('provider', 'codex')))).run()
 
 
 if __name__ == '__main__':

@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="/assets/dashboard.css">
 <script src="/assets/triage.js" defer></script>
 <script src="/assets/dashboard.js" defer></script>
+<script src="/assets/ai-settings.js" defer></script>
+<link rel="stylesheet" href="/assets/ai-settings.css">
 <script src="/assets/reporting.js" defer></script>
 <script src="/assets/queue.js" defer></script>
 <script src="/assets/live-review.js" defer></script>
@@ -110,29 +112,15 @@
 <dialog id="settings" class="workspace-dialog" aria-labelledby="settings-heading">
   <div class="dialog-heading"><h2 id="settings-heading">Settings</h2><button class="button subtle" data-close-dialog>Close</button></div>
   <nav class="settings-tabs" aria-label="Settings sections">
-    <button class="button" data-settings-panel="agent-settings" aria-pressed="true">Review agent</button>
-    <button class="button" data-settings-panel="estimate-settings" aria-pressed="false">Effort estimates</button>
+    <button class="button" data-settings-panel="ai-settings" aria-pressed="true">AI settings</button>
     <button class="button" data-settings-panel="repository-settings" aria-pressed="false">Repositories</button>
     <button class="button" data-settings-panel="appearance-settings" aria-pressed="false">Appearance</button>
   </nav>
-  <section id="agent-settings" data-settings-section>      <form id="agent-form">
-        <h2>Review agent</h2><p class="muted">Used when you start a review. Model and effort are remembered for each agent.</p>
-        <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code · Terminal</option><option value="codex">Codex · In app</option></select></label>
-        <label>Model<select id="model" name="model"></select></label>
-        <label>Reasoning level<select id="effort" name="effort"></select></label></div>
-        <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
-      </form></section>
-  <section id="estimate-settings" data-settings-section hidden>      <form id="triage-form" class="triage-settings">
-        <h2 id="triage-settings-heading" tabindex="-1">Effort estimates</h2><p class="muted">Estimate ready PRs after GitHub sync. Uses the selected AI provider; your review queue stays in your chosen order.</p>
-        <div class="fields"><label>Automatic estimates<select id="triage-enabled"><option value="false">Off</option><option value="true">After GitHub sync</option></select></label>
-        <label>Provider<select id="triage-provider"><option value="codex">Codex Python SDK</option><option value="openai">OpenAI API</option></select></label>
-        <label>Model<input id="triage-model" required autocomplete="off" placeholder="Model ID"></label>
-        <label>Daily call limit<input id="triage-limit" type="number" min="1" max="100" required></label></div>
-        <p class="muted">Codex uses your existing login. OpenAI API uses OPENAI_API_KEY in the server environment and separate API billing. PR descriptions and diffs are sent to the selected provider.</p>
-        <div class="form-footer"><button class="button" type="submit">Save triage settings</button><span id="triage-save-state" class="muted" role="status"></span></div>
-
-
-      </form></section>
+  <section id="ai-settings" data-settings-section>
+    <p class="muted">Choose independently for each feature. You can mix providers; failures never switch providers automatically.</p>
+    <form id="ai-form"><fieldset id="ai-fields"><div id="ai-cards"></div></fieldset>
+    <div class="save-bar"><div><strong id="ai-save-state" role="status"></strong><p>Settings apply to new work. Saved reports and conversations stay available.</p></div><div class="actions"><button type="button" id="ai-discard" class="button subtle">Discard changes</button><button type="submit" id="ai-save" class="button primary">Save all settings</button></div></div></form>
+  </section>
   <section id="repository-settings" data-settings-section hidden>      <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
         <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
       </section></section>
@@ -148,7 +136,7 @@
           <p id="triage-progress-counts" class="muted"></p>
           <p id="triage-progress-message" class="muted" hidden></p>
         </section>
-  <div class="action-bar"><button class="button" id="triage-run" type="button">Estimate all waiting</button><button class="text-button" data-settings-panel="estimate-settings">Estimate settings</button></div>
+  <div class="action-bar"><button class="button" id="triage-run" type="button">Estimate all waiting</button><button class="text-button" data-settings-panel="ai-settings">Estimate settings</button></div>
   <p id="triage-status" class="muted"></p>
 </dialog>
 <dialog id="sync-dialog" class="workspace-dialog" aria-labelledby="sync-heading">

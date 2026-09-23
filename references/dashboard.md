@@ -235,19 +235,21 @@ The prompt prefers a verified local clone under `PR_REVIEW_LOCAL_DEV_ROOT`
 (default `~/Development`), using an isolated worktree. Follow the
 existing checkout and verification sandbox instructions.
 
-Claude launches `claude` in Terminal with optional `--model` and `--effort`.
-Codex uses the in-app SDK worker described below, with the same saved model and
-reasoning effort. Model and reasoning level use preset dropdowns; **Agent default**
-uses the selected runtime's defaults. Model and effort are stored independently
-per agent; save changes before starting a run. Switching models keeps a supported
-reasoning level or resets it to Agent default with a notification.
+Settings → **AI settings** configures Triage, AI review and Chat independently.
+Each feature remembers provider-specific model/reasoning profiles. Codex and
+Claude Code are available for every feature; the existing OpenAI API option is
+available for triage. Providers can be mixed. There is no automatic fallback.
+Model default leaves the override unset. Changing models resets unsupported
+reasoning; existing custom values remain visible until changed.
 
-Maintain model IDs and reasoning levels in `scripts/agent_options.py` when models
-are released. The catalog is static; dashboard loads do not query providers or
-CLI help. Codex presets reflect the installed host's available GPT-6/GPT-5.6
-models and their supported reasoning levels. Existing values outside the catalog
-remain visible as saved values and are preserved until changed. CLI configuration
-still accepts custom overrides.
+Maintain presets and feature defaults in `scripts/agent_options.py` when models
+are released. The dashboard never queries providers for its dropdowns. Triage
+uses GPT-5.6 Luna or Claude Haiku by default; Claude Haiku has no reasoning override.
+The UI saves all features atomically through POST `/ai-config`, guarded by a
+revision hash so stale windows cannot overwrite newer settings. Existing settings
+are migrated in memory and persisted only on explicit save. Reports, estimates
+and conversation history remain available. Conversations pin their provider,
+model and reasoning; new conversations use the current Chat selection.
 These overrides do not change global agent configuration.
 
 These settings configure the lead session. The skill's
@@ -261,18 +263,11 @@ Eligible Codex escalations go through automatic approval review; this does
 not guarantee every request succeeds. PR code still requires the isolated
 verification environment specified by the skill.
 
-A second launch for an active PR returns the existing run instead of opening
-another session. For Terminal launches, the page shows Starting, Reviewing, Completed, Needs input,
-Run failed, or No recent activity. These are tracker states, not proof that a
-process is alive. A shell wrapper records normal CLI exit, including a missing
-CLI or early termination. A forcibly closed terminal may not run that callback;
-after the activity window expires the dashboard shows No recent activity.
-
-For Terminal launches, an explicit retry releases tracking of previous active runs; it does not kill
-their terminal processes. The UI asks the user to close the previous session
-first. Session references are displayed when recorded and can be copied or
-opened if they are HTTPS URLs. Earlier artifacts remain available during a
-retry. Run history includes partial and completed results with their origin.
+A second launch for an active PR returns the existing run. The shared worker
+tracks liveness, public activity and cancellation for both providers. Earlier
+artifacts remain available during a retry. Historical Terminal runs remain
+readable; releasing their tracking does not terminate an old external process.
+The dashboard does not launch Terminal sessions.
 
 ## Local state and endpoints
 
@@ -360,11 +355,11 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-triage.txt
 ```
 
-Settings → Effort estimates selects Codex Python SDK or OpenAI API,
+Settings → AI settings → Triage selects Codex, Claude Code or OpenAI API,
 a model ID, automatic operation and a daily call limit. The shipped default is
 off; enabling it authorizes sending bounded PR descriptions and patches to the
 selected provider. Codex reuses the existing local login and runs through its
-bundled runtime with no Terminal window. OpenAI API requires OPENAI_API_KEY in
+bundled runtime. Claude uses the installed CLI with tools disabled. OpenAI API requires OPENAI_API_KEY in
 the **server process environment**, uses separate API billing and never reads a
 key from dashboard JSON or the browser. There is no automatic provider fallback.
 The SDK runs ephemeral, read-only classification with inherited MCP servers,
@@ -407,7 +402,7 @@ and the daily limit. Newly pasted My reviews PRs need a successful Check for
 updates to populate their verified revision metadata first.
 
 Choose model IDs available to the selected provider. The Codex default is
-`gpt-5.6-luna`; switching to OpenAI API may require a different API model ID.
+`gpt-5.6-luna`; Claude defaults to Haiku 4.5. Switching to OpenAI API may require a different API model ID.
 The worker stops its run on failure and backs off the same comparison for an
 hour. There is no independent polling schedule: new PRs are discovered by
 Refresh GitHub, not simply by the page's saved-state polling. A running batch
@@ -425,9 +420,10 @@ callers, upstream implementations, or validation results can remain context note
 alongside Quick, Moderate, or Involved; the estimate includes the work to inspect
 those areas. The full review workflow remains available for that deeper work.
 
-`triage.json` stores config, UTC usage counters and per-PR results under the
+`dashboard_config.json` stores the canonical per-feature AI settings.
+`triage.json` stores UTC usage counters and per-PR results under the
 existing dashboard transaction lock. Never edit it manually. It contains no
-raw descriptions or patches. Cache identity includes provider/model, rubric
+raw descriptions or patches. Cache identity includes provider/model/reasoning, rubric
 version, base/head revisions and a digest of title/body. GitHub is rechecked
 before accepting results; local changes during a request also invalidate them.
 Completed estimates keep their original effort, reason, and revision when the PR
@@ -475,10 +471,12 @@ For an isolated UI session, run `python3 tests/fixtures/workspace_browser_fixtur
 from the skill directory. Add `--report-failure` to exercise partial sync failures.
 The fixture uses disposable state and blocks GitHub, provider and terminal work.
 
-## In-app Codex reviews
+## In-app AI reviews
 
-Codex reviews run in a detached Python worker through `openai-codex` (the pinned
-runtime in `requirements-triage.txt`). Claude keeps its existing Terminal launch.
+Reviews run in a detached Python worker through a shared provider interface.
+Codex uses `openai-codex`; Claude uses the pinned JS Agent SDK with the installed
+Claude Code executable. Install its dependencies with
+`npm ci --prefix scripts/claude-runtime` (Node.js 22.16+).
 The review button opens a live activity panel with stage progress and cancellation.
 Finished runs show their outcome and blocked/failed stage counts instead of a
 percentage or progress bar. Stage details retain incomplete checks and their reasons.
@@ -487,7 +485,8 @@ never starts another model call. Session resume/follow-up and inline answers to
 agent questions are not implemented yet. Unhandled input requests are declined
 and surfaced as a blocker if the review cannot complete.
 
-The worker uses workspace-write sandboxing and automatic approval review, keeps
+Codex uses workspace-write sandboxing and automatic approval review. Claude uses
+its native auto permission mode, without bypass flags. Both retain
 the skill's separate sandbox requirement for executing PR code, and passes the
 selected lead model/effort. It explicitly reads the current skill checkout.
 Reviewers report checkpoint counts through `set-task`; stage weights are a UI
@@ -496,15 +495,16 @@ A successful finish requires settled tracker tasks and an existing `review-html`
 in the run. A finished report with blocked or failed checks is labeled Finished
 with the incomplete stage counts. Final outcomes replace the progress bar.
 
-`dashboard_reviews.py` launches and supervises workers; `codex_review.py` owns
-the SDK protocol and prompt; `review_jobs.py` owns persistent state, locking,
+`dashboard_reviews.py` launches and supervises workers; `ai_runtime.py` defines
+requests and callbacks, `provider_*.py` implement each runtime,
+`review_context.py` supplies the shared prompt; `review_jobs.py` owns persistent state, locking,
 activity and progress. Job metadata and events live in each run directory.
 The worker records bounded agent messages and tool activity summaries, not raw command arguments, tool output or reasoning traces.
 The UI escapes messages as plain text. The activity view shows the latest 100
 saved events (with a bounded file-tail read); older events remain on disk.
 Worker heartbeats and actual agent activity are separate. A missing worker is
 reported as failed after a startup grace period. Retry cannot overlap an active
-in-app worker. Stop first requests a Codex interruption; after eight seconds the
+in-app worker. Stop first requests a provider interruption; after eight seconds the
 worker can terminate its own dedicated process group. Partial artifacts and
 checkout state are retained for inspection/normal tracker cleanup.
 
@@ -531,3 +531,24 @@ Playwright is outside Node's normal module path. The fixture never calls a model
 
 See [the code workspace](code-workspace.md) for revision-pinned diffs, private
 progress/notes, persistent inline chat, report embedding and focused tests.
+
+## Claude runtime and T3 Code alignment
+
+The integration follows T3 Code's
+[ClaudeAdapter](https://github.com/pingdotgg/t3code/blob/main/apps/server/src/provider/Layers/ClaudeAdapter.ts)
+and [ClaudeTextGeneration](https://github.com/pingdotgg/t3code/blob/main/apps/server/src/textGeneration/ClaudeTextGeneration.ts):
+JS `@anthropic-ai/claude-agent-sdk` `query()` sessions, streaming user input,
+`pathToClaudeCodeExecutable`, native session resume/interrupt, and the ordinary
+HOME/environment/login. The SDK is pinned in `scripts/claude-runtime/package.json`
+and its lockfile. No subscription token extraction or direct Anthropic HTTP calls
+are involved. Triage runs the installed CLI with `-p --output-format json`,
+`--json-schema`, empty tools, disabled slash commands/hooks, strict MCP config and
+`dontAsk` permissions, matching T3's bounded text-generation approach.
+
+Dashboard-specific restrictions are explicit: triage also disables session
+persistence and settings sources; chat exposes read/web tools plus bounded Git
+and GitHub reads instead of a general shell. Review sessions load ordinary
+user/project/local settings. Interactive permission/input requests that native
+automatic handling cannot resolve are declined and shown as blocked work.
+`PR_REVIEW_CLAUDE` and `PR_REVIEW_NODE` can select executable paths when launchd's
+PATH differs from the interactive shell.

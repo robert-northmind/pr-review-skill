@@ -30,15 +30,11 @@ function triageCard(pr){
  ${done?`<p class="muted">After your review, did the effort feel about right?</p><div class="triage-feedback" role="group" aria-label="Rate review effort estimate">${[['about_right','About right'],['too_low','Took more effort'],['too_high','Took less effort']].map(([rating,text])=>`<button type="button" class="button subtle" data-triage-rating="${rating}" data-estimate-id="${esc(t.id)}" data-url="${esc(pr.url)}" ${t.outdated||t.rerun_status?'disabled':''} aria-pressed="${t.feedback?.rating===rating}">${text}</button>`).join('')}</div>`:''}
  </details></section>`;
 }
-let triageDirty=false,triageConfigSignature='',triageStarting=false;
+let triageDirty=false,triageStarting=false;
 function renderTriageSettings(){
  const t=state?.triage;if(!t)return;
  renderTriageProgress();
- const c=t.config,signature=JSON.stringify(c);
  document.querySelectorAll('[data-triage-reestimate]').forEach(button=>{button.disabled=triageRunDisabled({...t,counts:{waiting:1}});});
- if(!triageDirty&&signature!==triageConfigSignature){
-  $('triage-enabled').value=String(c.enabled);$('triage-provider').value=c.provider;$('triage-model').value=c.model;$('triage-limit').value=c.daily_limit;triageConfigSignature=signature;
- }
  $('triage-status').textContent=`Runs through all eligible unestimated PRs in the inbox and active My reviews. Drafts need a manual estimate; hidden, snoozed, and your own PRs are skipped.`;
  $('triage-run').disabled=triageRunDisabled(t);
  $('triage-run').textContent=triageStarting||['starting','running'].includes(t.status?.state)?'Estimating…':'Estimate all waiting';
@@ -91,13 +87,6 @@ function renderTriageProgress(){
  const button=$('triage-progress-run');button.disabled=triageRunDisabled(t);button.hidden=!blocked||button.disabled;
 }
 document.addEventListener('DOMContentLoaded',()=>{
- $('triage-form').addEventListener('input',()=>{triageDirty=true;$('triage-save-state').textContent='Unsaved changes';renderTriageSettings();});
- $('triage-form').addEventListener('submit',async event=>{
-  event.preventDefault();try{
-   await post('/triage-config',{enabled:$('triage-enabled').value==='true',provider:$('triage-provider').value,model:$('triage-model').value.trim(),daily_limit:Number($('triage-limit').value)});
-   triageDirty=false;triageConfigSignature='';$('triage-save-state').textContent='Saved';await loadState();notify('Triage settings saved. Sync GitHub to estimate new PRs. Existing estimates are kept until you choose Re-estimate.');
-  }catch(error){notify(error.message);}
- });
  $('triage-details-show').addEventListener('click',()=>{showDialog('activity-dialog');$('triage-progress-title').focus();});
  for(const id of ['triage-run','triage-progress-run'])$(id).addEventListener('click',()=>startTriageBatch());
  document.addEventListener('click',async event=>{

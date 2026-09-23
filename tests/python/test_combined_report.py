@@ -40,9 +40,9 @@ class CombinedReports(fixtures.Isolated):
 
     def test_all_launches_request_full_review_without_skipping_stages(self):
         for kind in ('review', 'explainer'):
-            with self.subTest(kind=kind), patch.object(dashboard, 'open_interactive_terminal') as launch:
+            with self.subTest(kind=kind), patch.object(runtime.reviews, 'start') as launch:
                 result = runtime.start_launch(fixtures.URL, kind, retry=True)
-                prompt = launch.call_args.args[0]
+                prompt = launch.call_args.args[1]
                 self.assertIn('review-html', prompt)
                 self.assertNotIn('explain-diff-html', prompt)
                 run = tracker.load_run(tracker.run_dir(result['run_id']), 6)

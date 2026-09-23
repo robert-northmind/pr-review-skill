@@ -131,18 +131,12 @@ import sys,time
 from pathlib import Path
 from types import SimpleNamespace as NS
 import workspace_chat as chat
-class FakeCodex:
- def __init__(self,*a,**kw):pass
- def __enter__(self):return self
- def __exit__(self,*a):pass
- def thread_start(self,**kw):
-  def stream():
-   (chat.store.directory(sys.argv[1])/'provider-ready').touch()
-   time.sleep(60)
-   yield None
-  return NS(id='native-thread',turn=lambda *a,**kw:NS(stream=stream))
-sys.modules['openai_codex']=NS(Codex=FakeCodex,CodexConfig=lambda **kw:None,ApprovalMode=NS(auto_review='auto_review'),Sandbox=NS(read_only='read-only'),ExternalMessage=lambda **kw:None)
-sys.modules['codex_runtime']=NS(chat_overrides=lambda:())
+class FakeProvider:
+ def run(self,request,callbacks):
+  (chat.store.directory(sys.argv[1])/'provider-ready').touch()
+  time.sleep(60)
+ def close(self):pass
+chat.ai_runtime.create=lambda _:FakeProvider()
 sys.modules['workspace_checkout']=NS(prepare=lambda _:chat.store.directory(sys.argv[1]))
 chat.worker(sys.argv[1],sys.argv[2])
 """
@@ -157,6 +151,37 @@ chat.worker(sys.argv[1],sys.argv[2])
             self.assertEqual(chat.read(URL,thread['id'])['status'],'cancelled')
         finally:
             if process.poll() is None:process.kill();process.wait()
+
+    def test_provider_and_model_pinned_across_settings_changes(self):
+        import ai_settings
+        from types import SimpleNamespace as NS
+        first=chat.start(URL,{'revision':REV,'question':'Explain'},launcher=lambda *a:None)
+        settings=ai_settings.load();settings['chat']['provider']='claude';ai_settings.save(settings)
+        seen=[]
+        class Provider:
+            def run(self,request,callbacks):
+                seen.append(request);callbacks.session('native-session')
+                return {'completed':True,'answer':'Answer','sources':[]}
+            def close(self):pass
+        with patch.object(chat.ai_runtime,'create',return_value=Provider()) as create, patch.dict(sys.modules,{'workspace_checkout':NS(prepare=lambda _:store.directory(URL))}):
+            chat.worker(URL,first['id'])
+            create.assert_called_once_with('codex')
+        resumed=chat.start(URL,{'revision':REV,'thread_id':first['id'],'question':'Again'},launcher=lambda *a:None)
+        self.assertEqual(resumed['ai_config'],first['ai_config'])
+        self.assertEqual(resumed['provider_session_id'],'native-session')
+        new=chat.start(URL,{'revision':REV,'question':'New'},launcher=lambda *a:None)
+        self.assertEqual(new['ai_config']['provider'],'claude')
+
+    def test_legacy_sessions_remain_codex(self):
+        import ai_settings
+        thread={'id':'a'*8+'-'+ 'b'*4+'-'+ 'c'*4+'-'+ 'd'*4+'-'+ 'e'*12,
+                'codex_thread_id':'old-session','codex_context_seeded':True}
+        chat.save(URL,thread)
+        settings=ai_settings.load();settings['chat']['provider']='claude';ai_settings.save(settings)
+        loaded=chat.read(URL,thread['id'])
+        self.assertEqual(loaded['ai_config']['provider'],'codex')
+        self.assertEqual(loaded['provider_session_id'],'old-session')
+        self.assertTrue(loaded['context_seeded'])
 
     def test_manifest_detects_commit_race(self):
         pr={'head':{'sha':HEAD},'base':{'sha':BASE},'changed_files':1,'title':'PR','user':{'login':'x'},'state':'open'}

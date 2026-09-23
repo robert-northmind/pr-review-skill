@@ -15,6 +15,7 @@ import time
 import uuid
 from datetime import datetime, timezone, timedelta
 
+import ai_settings
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 
@@ -22,7 +23,7 @@ VERSION = 2
 INACTIVE_RESULT_DAYS, MAX_INACTIVE_RESULTS = 90, 500
 FEEDBACK_DAYS, MAX_FEEDBACK = 180, 1000
 DEFAULT_CONFIG = {'enabled': False, 'provider': 'codex', 'model': 'gpt-5.6-luna',
-                  'daily_limit': 30, 'batch_limit': 10}
+                  'daily_limit': 30, 'batch_limit': 10, 'reasoning': ''}
 EFFORTS = ('quick', 'moderate', 'involved', 'uncertain')
 MAX_FILES, MAX_PATCH_CHARS, MAX_CONTEXT_CHARS = 300, 24000, 100000
 SHA = re.compile(r'^[0-9a-f]{40}$')
@@ -30,7 +31,7 @@ SHA = re.compile(r'^[0-9a-f]{40}$')
 
 def load():
     data = tracker.read_json(tracker.tracker_root()/'triage.json', required=False)
-    return {'config': {**DEFAULT_CONFIG, **data.get('config', {})}, 'prs': data.get('prs', {}),
+    return {'config': ai_settings.triage_config(), 'prs': data.get('prs', {}),
             'budget': data.get('budget', {}), 'status': data.get('status', {}), 'feedback': data.get('feedback', {})}
 
 
@@ -78,20 +79,7 @@ def maintain():
 
 
 def configure(values):
-    with dashboard.state_lock():
-        data = load()
-        config = {**data['config'], **{k: v for k, v in values.items() if k in DEFAULT_CONFIG}}
-        if type(config['enabled']) is not bool or config['provider'] not in ('codex', 'openai'):
-            raise ValueError('Choose Codex SDK or OpenAI API and an enabled state.')
-        model = config['model']
-        if not isinstance(model, str) or not re.fullmatch(r'[A-Za-z0-9._:-]{1,100}', model):
-            raise ValueError('Enter a model ID for the selected provider.')
-        for key, high in (('daily_limit', 100), ('batch_limit', 20)):
-            if type(config[key]) is not int or not 1 <= config[key] <= high:
-                raise ValueError(f'{key} must be between 1 and {high}.')
-        data['config'] = config
-        save(data)
-        return config
+    return ai_settings.configure_triage(values)
 
 
 def revision(entry):
@@ -100,6 +88,8 @@ def revision(entry):
 
 def cache_key(entry, config):
     value = [revision(entry), VERSION, config['provider'], config['model']]
+    if config.get('reasoning'):
+        value.append(config['reasoning'])
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
@@ -311,7 +301,7 @@ def call_model(context, config):
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=cwd, start_new_session=True)
         try:
             output, _ = process.communicate(json.dumps({'provider': config['provider'], 'model': config['model'],
-                                                        'context': context}), timeout=120)
+                                                        'reasoning': config.get('reasoning', ''), 'context': context}), timeout=120)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
@@ -528,8 +518,9 @@ def main():
     parser.add_argument('action', choices=('worker', 'configure', 'status'))
     parser.add_argument('--url')
     parser.add_argument('--enabled', choices=('true', 'false'))
-    parser.add_argument('--provider', choices=('codex', 'openai'))
+    parser.add_argument('--provider', choices=('codex', 'claude', 'openai'))
     parser.add_argument('--model')
+    parser.add_argument('--reasoning')
     parser.add_argument('--daily-limit', type=int)
     parser.add_argument('--batch-limit', type=int, help='Legacy setting; runs now drain all eligible PRs within the daily limit.')
     args = parser.parse_args()

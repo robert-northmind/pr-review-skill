@@ -115,48 +115,28 @@ class ArtifactsAndConfig(Isolated):
 
 class Launches(Isolated):
  def test_duplicate_launch_and_exact_prompt_id(self):
-  with patch.object(d,'open_interactive_terminal') as launch:
+  with patch.object(r.reviews,'start') as launch:
    first=r.start_launch(URL,'review');second=r.start_launch(URL,'explainer')
   self.assertFalse(first['existing']);self.assertTrue(second['existing']);self.assertEqual(first['run_id'],second['run_id']);self.assertEqual(launch.call_count,1)
-  self.assertIn(first['run_id'],launch.call_args.args[0]);self.assertEqual(launch.call_args.kwargs['run_id'],first['run_id'])
+  self.assertIn(first['run_id'],launch.call_args.args[1]);self.assertEqual(launch.call_args.args[0],first['run_id'])
  def test_progress_survives_snapshot_and_completion_updates_artifacts(self):
-  with patch.object(d,'open_interactive_terminal'):run=r.start_launch(URL,'review')['run_id']
+  with patch.object(r.reviews,'start'):run=r.start_launch(URL,'review')['run_id']
   self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'starting')
   self.task(run,'checkout','running');self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'running')
   self.artifact(run);self.complete(run);row=r.snapshot()['prs'][0];self.assertEqual(row['run']['status'],'completed');self.assertIn('review-markdown',row['artifacts'])
- def test_terminal_launch_failure_is_persisted(self):
-  with patch.object(d,'open_interactive_terminal',side_effect=d.DashboardError('Cannot open Terminal')):
+ def test_worker_launch_failure_is_persisted(self):
+  with patch.object(r.reviews,'start',side_effect=d.DashboardError('Cannot start worker')):
    with self.assertRaises(d.DashboardError):r.start_launch(URL,'review')
   self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'failed')
- def test_early_exit_marks_unfinished_tasks_failed(self):
-  with patch.object(d,'open_interactive_terminal'):run=r.start_launch(URL,'review')['run_id']
-  r.record_launch_exit(run,127);row=r.snapshot()['prs'][0];self.assertEqual(row['run']['status'],'failed');self.assertIn('127',row['run']['message'])
- def test_successful_terminal_exit_preserves_completed_run(self):
-  with patch.object(d,'open_interactive_terminal'):run=r.start_launch(URL,'review')['run_id']
-  self.complete(run);r.record_launch_exit(run,0);self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'completed')
  def test_explicit_retry_releases_tracking_without_launching_twice(self):
-  with patch.object(d,'open_interactive_terminal'):
+  with patch.object(r.reviews,'start'):
    old=r.start_launch(URL,'review')['run_id'];new=r.start_launch(URL,'review',retry=True)['run_id']
   self.assertNotEqual(old,new);self.assertEqual(t.load_run(t.run_dir(old),6)['status'],'cancelled')
- def test_shell_wrapper_records_actual_cli_failure(self):
-  d.save_agent_config('claude','','')
-  fake=self.root/'claude';fake.write_text('#!/bin/sh\nexit 127\n');fake.chmod(0o700)
-  with patch.object(d.subprocess,'run',return_value=subprocess.CompletedProcess([],0)) as opener:
-   run=r.start_launch(URL,'review')['run_id']
-   script=Path(opener.call_args.args[0][-1])
-  try:
-   result=subprocess.run(['/bin/bash',str(script)],env={**os.environ,'PATH':str(self.root)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=10)
-   self.assertEqual(result.returncode,127,result.stderr)
-   self.assertEqual(r.snapshot()['prs'][0]['run']['status'],'failed')
-   self.assertEqual(t.read_json(r.launch_path(run))['exit_code'],127)
-  finally:
-   script.unlink(missing_ok=True)
-
  def test_retired_explainer_launch_runs_complete_review(self):
-  with patch.object(d,'open_interactive_terminal') as launch:run=r.start_launch(URL,'explainer')['run_id']
+  with patch.object(r.reviews,'start') as launch:run=r.start_launch(URL,'explainer')['run_id']
   self.task(run,'checkout','completed');self.task(run,'explanation','completed')
   self.assertNotEqual(r.snapshot()['prs'][0]['run']['status'],'completed')
-  self.assertIn('review-html',launch.call_args.args[0])
+  self.assertIn('review-html',launch.call_args.args[1])
   self.assertEqual(r.snapshot()['prs'][0]['run']['kind'],'review')
 
 class HTTP(Isolated):
@@ -172,7 +152,7 @@ class HTTP(Isolated):
  def auth(self):return {'Origin':self.base,'X-CSRF-Token':self.server.csrf_token,'Content-Type':'application/json'}
  def test_copy_prompts_preserve_state_and_do_not_launch(self):
   before={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
-  with patch.object(d,'open_interactive_terminal') as launch, patch.object(t,'command_start') as start:
+  with patch.object(r.reviews,'start') as launch, patch.object(t,'command_start') as start:
    for kind,builder in [('review',d.full_review_prompt),('explainer',d.explainer_prompt)]:
     code,_,body=self.request('/copy-prompt','POST',{'url':URL,'kind':kind},self.auth())
     self.assertEqual(code,200);self.assertEqual(json.loads(body)['prompt'],builder(URL))
@@ -232,7 +212,7 @@ class HTTP(Isolated):
   self.assertEqual(code,200);self.assertIn(b'/artifact?path=',body);self.assertNotIn(b'file://',body)
 
  def test_launch_http_roundtrip_deduplicates(self):
-  with patch.object(d,'open_interactive_terminal') as launch:
+  with patch.object(r.reviews,'start') as launch:
    first=json.loads(self.request('/regenerate-review','POST',{'url':URL},self.auth())[2]);second=json.loads(self.request('/regenerate-review','POST',{'url':URL},self.auth())[2])
    self.assertEqual(first['run_id'],second['run_id']);self.assertEqual(launch.call_count,1)
   run=first['run_id'];self.artifact(run);self.complete(run)

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import workspace_chat_provider as provider
 import test_code_workspace as fixtures
 import workspace_chat as chat
-import triage_provider
+import codex_runtime
 
 URL, REV = fixtures.URL, fixtures.REV
 
@@ -36,8 +36,8 @@ class ProviderProgress(unittest.TestCase):
         self.assertNotIn('raw search content', str(progress) + str(requests))
 
     def test_live_web_is_opt_in_and_other_host_tools_stay_disabled(self):
-        default = triage_provider.codex_overrides()
-        enabled = triage_provider.codex_overrides(web_search=True)
+        default = codex_runtime.restricted_overrides()
+        enabled = codex_runtime.restricted_overrides(web_search=True)
         self.assertIn('web_search="disabled"', default)
         self.assertIn('web_search="live"', enabled)
         self.assertEqual(default[1:], enabled[1:])

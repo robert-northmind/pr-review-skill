@@ -88,7 +88,7 @@ class Conversation(unittest.TestCase):
             chat.worker(URL,first['id'])
             saved=chat.read(URL,first['id'])
             self.assertEqual(saved['status'],'completed',saved.get('error'))
-            self.assertEqual(saved['codex_thread_id'],'native-123')
+            self.assertEqual(saved['provider_session_id'],'native-123')
             chat.start(URL,{'revision':REV,'question':'Why?','thread_id':first['id'],'contexts':[]},launcher=lambda *_:None)
             chat.worker(URL,first['id'])
         self.assertEqual([c[0] for c in calls],['start','resume'])

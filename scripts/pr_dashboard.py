@@ -14,10 +14,8 @@ import html
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
-import tempfile
 import fcntl
 import threading
 from contextlib import contextmanager
@@ -119,6 +117,9 @@ def load_config() -> dict[str, Any]:
     selected = merged["agent"] if merged["agent"] in AGENTS else "claude"
     if selected not in stored.get("agent_profiles", {}):
         profiles[selected] = {k: str(stored.get(k, "")) for k in ("model", "effort")}
+    if 'ai' in stored:
+        review = stored['ai']['review']
+        selected, profiles = review['provider'], review['profiles']
     merged.update(agent=selected, agent_profiles=profiles, **profiles[selected])
     return merged
 
@@ -127,19 +128,18 @@ def load_config() -> dict[str, Any]:
 load_agent_config = load_config
 
 
-@serialized
 def save_agent_config(agent: str, model: str, effort: str) -> None:
+    import ai_settings
     if agent not in AGENTS:
         raise DashboardError(f"Unknown agent: {agent!r}")
-    config = load_config()
-    model, effort = model.strip(), effort.strip()
-    if len(model) > 160 or len(effort) > 40 or any(ord(c) < 32 for c in model + effort):
-        raise DashboardError("Model or effort contains invalid characters.")
-    if (agent == "codex" and model.startswith("claude-")) or (agent == "claude" and model.startswith("gpt-")):
-        raise DashboardError("That model belongs to the other agent. Select a matching model or leave it blank.")
-    config["agent_profiles"][agent] = {"model": model, "effort": effort}
-    config.update({"agent": agent, "model": model, "effort": effort})
-    tracker.atomic_write(config_path(), config)
+    settings = ai_settings.load()
+    revision = ai_settings.revision(settings)
+    settings['review']['provider'] = agent
+    settings['review']['profiles'][agent] = {'model': model.strip(), 'effort': effort.strip()}
+    try:
+        ai_settings.save(settings, revision)
+    except ValueError as error:
+        raise DashboardError(str(error)) from error
 
 
 def normalize_repo(value: str) -> str:
@@ -174,31 +174,6 @@ def remove_watched_repo(repo: str) -> str:
 
 def explainer_output_root() -> Path:
     return (Path.home() / ".local" / "share" / "explain-diff").resolve()
-
-
-def build_agent_argv(prompt: str) -> list[str]:
-    config = load_agent_config()
-    model = config["model"]
-    effort = config["effort"]
-    if config["agent"] == "codex":
-        # Keep ordinary review artifacts inside the workspace boundary. Eligible
-        # escalations go to Codex's reviewer instead of interrupting the user.
-        argv = [
-            "codex", "--approve-for-me",
-            "--cd", str(tracker.tracker_root().resolve()),
-        ]
-        if model:
-            argv += ["-m", model]
-        if effort:
-            argv += ["-c", f"model_reasoning_effort={effort}"]
-    else:
-        argv = ["claude"]
-        if model:
-            argv += ["--model", model]
-        if effort:
-            argv += ["--effort", effort]
-    argv.append(prompt)
-    return argv
 
 
 def discover_claude_options() -> tuple[list[str], list[str]]:
@@ -663,29 +638,6 @@ def full_review_prompt(pr_url: str) -> str:
     )
 
 
-def open_interactive_terminal(prompt: str, run_id: str | None = None) -> None:
-    if sys.platform != "darwin":
-        raise DashboardError("Opening an interactive terminal is only implemented for macOS.")
-    argv = build_agent_argv(prompt)
-    command_line = " ".join(shlex.quote(part) for part in argv)
-    script_fd, script_name = tempfile.mkstemp(suffix=".command", prefix="pr-review-")
-    os.close(script_fd)
-    script_path = Path(script_name)
-    if run_id:
-        callback = " ".join(shlex.quote(x) for x in [sys.executable,
-            str(Path(__file__).resolve()), "launch-exit", "--run-id", run_id, "--exit-code"])
-        script = f'#!/bin/bash\n{command_line}\nresult=$?\n{callback} "$result"\nexit "$result"\n'
-    else:
-        script = f"#!/bin/bash\nexec {command_line}\n"
-    script_path.write_text(script, encoding="utf-8")
-    script_path.chmod(0o700)
-    result = subprocess.run(["/usr/bin/open", "-a", "Terminal", str(script_path)],
-        capture_output=True, text=True, timeout=15, check=False)
-    if result.returncode:
-        script_path.unlink(missing_ok=True)
-        raise DashboardError("Terminal could not be opened. Check that Terminal is available.")
-
-
 DISPLAY_TZ = ZoneInfo("Europe/Berlin")
 
 
@@ -856,14 +808,6 @@ def build_parser() -> argparse.ArgumentParser:
     remove_repo_parser.set_defaults(func=command_remove_repo)
 
     subparsers.add_parser("open").set_defaults(func=command_open)
-    exited = subparsers.add_parser("launch-exit")
-    exited.add_argument("--run-id", required=True)
-    exited.add_argument("--exit-code", type=int, required=True)
-    def record_exit(args):
-        from dashboard_runtime import record_launch_exit
-        record_launch_exit(args.run_id, args.exit_code)
-    exited.set_defaults(func=record_exit)
-
     return parser
 
 
