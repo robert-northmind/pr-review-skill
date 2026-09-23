@@ -9,7 +9,10 @@ review renderer, using headless Chrome at 1440 CSS pixels wide, with viewport he
   before/after explanation for a deliberately flawed toy integer parser.
 - `review-findings-light.jpg`: the same report with one finding collapsed and
   another expanded, showing its example, impact, fix direction, and draft comment.
-- `my-reviews-light.jpg`: saved reviews with fictional update reasons and notes.
+- `my-reviews-light.jpg`: My reviews grouped by turn, with fictional update
+  reasons, move reasons and notes. Recaptured September 24, 2026 from
+  `tests/fixtures/my_reviews_browser_fixture.py`, a temporary synthetic tracker
+  with GitHub, triage and AI calls disabled.
 - `reporting-dark.jpg`: synthetic weekly review and merge activity.
 
 The dashboard API responses were intercepted in an isolated browser context.

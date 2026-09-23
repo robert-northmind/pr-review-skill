@@ -61,11 +61,58 @@ class Queue(unittest.TestCase):
   self.action('stop')
   self.assertEqual(self.view()['bucket'],'up_next')
   self.assertNotIn('review_observation',self.record())
-  for key in ('ack_head','ack_at','ack_event_ids','note','position'):
+  for key in ('ack_head','ack_at','ack_event_ids','note'):
    self.assertEqual(self.record().get(key),before.get(key))
   self.assertTrue(self.view()['reasons'])
+  self.assertEqual(self.view()['moved']['kind'],'paused')
   self.action('start')
   self.assertEqual(self.record()['review_observation']['head_sha'],B)
+ def test_pause_returns_to_top_of_up_next(self):
+  second='https://github.com/example/repo/pull/2';q.mutate(second,'enqueue')
+  self.action('start');self.action('stop')
+  self.assertLess(self.record()['position'],q.load()['prs'][second]['position'])
+ def test_every_move_records_its_reason_and_can_be_undone(self):
+  self.assertEqual(self.view()['moved']['kind'],'added')
+  for action,kind,bucket in [('start','started','reviewing'),('wait','handed_back','waiting'),('remove','removed','removed'),('restore','restored','up_next')]:
+   before=copy.deepcopy(self.record());result=self.action(action)
+   self.assertEqual(self.view()['moved']['kind'],kind);self.assertEqual(self.view()['bucket'],bucket)
+   self.action('undo',revision=result['revision'],token=result['undo_token'])
+   for key in q.UNDO_KEYS:self.assertEqual(self.record().get(key),before.get(key),(action,key))
+   self.action(action)
+ def test_undo_restores_acknowledged_updates(self):
+  self.action('start');self.action('wait');self.fetch(B,T3,[self.event()])
+  self.assertEqual(self.view()['bucket'],'attention')
+  result=self.action('acknowledge');self.assertEqual(self.view()['bucket'],'waiting');self.assertEqual(self.view()['moved']['kind'],'kept_waiting')
+  self.action('undo',revision=result['revision'],token=result['undo_token'])
+  self.assertEqual(self.view()['bucket'],'attention')
+ def test_stale_undo_is_rejected_after_a_newer_choice(self):
+  result=self.action('start');self.action('wait')
+  with self.assertRaises(dashboard.DashboardError):self.action('undo',revision=result['revision'],token=result['undo_token'])
+  self.assertEqual(self.view()['bucket'],'waiting')
+ def test_resuming_from_waiting_is_recorded_as_resumed(self):
+  self.action('start');self.action('wait');self.action('start')
+  self.assertEqual(self.view()['moved']['kind'],'resumed')
+ def test_reminder_brings_a_waiting_pr_back_when_due(self):
+  with self.assertRaises(dashboard.DashboardError):self.action('remind',days=3)
+  self.action('start');self.action('wait')
+  for days in (2,True,'3',None):
+   with self.assertRaises(dashboard.DashboardError):self.action('remind',days=days)
+  with patch.object(tracker,'utc_now',return_value=T1):self.action('remind',days=1)
+  self.assertEqual(self.record()['remind_at'],'2026-09-02T11:00:00+00:00')
+  with patch.object(tracker,'utc_now',return_value='2026-09-02T10:59:00Z'):self.assertEqual(self.view()['bucket'],'waiting')
+  with patch.object(tracker,'utc_now',return_value='2026-09-02T11:00:00Z'):
+   self.assertEqual(self.view()['bucket'],'attention');self.assertEqual(self.view()['reasons'][-1]['kind'],'reminder')
+   self.assertEqual(self.view()['reasons'][-1]['url'],'https://github.com/example/repo/pull/1')
+   self.action('acknowledge')
+  self.assertNotIn('remind_at',self.record());self.assertEqual(self.view()['bucket'],'waiting')
+ def test_reminder_can_be_cleared_and_is_dropped_when_review_resumes(self):
+  self.action('start');self.action('wait');self.action('remind',days=7);self.action('remind',days=0)
+  self.assertNotIn('remind_at',self.record())
+  self.action('remind',days=3);self.action('start');self.assertNotIn('remind_at',self.record())
+ def test_github_review_move_is_explained(self):
+  with patch.object(tracker,'utc_now',return_value=T1):self.action('start')
+  self.fetch(B,T3,latest={'commit_id':B,'submitted_at':T2,'state':'APPROVED'})
+  self.assertEqual(self.view()['moved'],{'kind':'github_review','at':T2})
  def test_stop_requires_reviewing_stage(self):
   with self.assertRaises(dashboard.DashboardError):self.action('stop')
  def test_resume_moves_to_reviewing_and_preserves_pending_updates(self):
@@ -151,6 +198,7 @@ class Queue(unittest.TestCase):
   with patch.object(reporting,'graphql',return_value=result) as search:q.discover_history('me',T3)
   record=q.load()['prs'][candidate['url']]
   self.assertEqual(record['stage'],'waiting');self.assertFalse(q.presentation(record)['in_history'])
+  self.assertEqual(q.presentation(record)['moved'],{'kind':'discovered','at':T3})
   self.assertEqual(self.record()['stage'],'up_next')
   self.assertEqual(search.call_count,4)
  def test_incomplete_search_preserves_history(self):

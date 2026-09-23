@@ -28,7 +28,7 @@ for(const [prefix,legacy] of [['repositories','repository'],['statuses','status'
  filters[prefix+'Excluded']=selectedValues(filters[prefix+'Excluded']);delete filters[legacy];
 }
 if(!labels[filters.view])filters.view='requested';
-let reportingData=null, reportingActive=false, state=null, listSignature='', settingsDirty=false, loading=false, toastTimer, undoAction=null;
+let reportingData=null, reportingActive=false, state=null, listSignature='', settingsDirty=false, loading=false, toastTimer, undoAction=null, showAction=null;
 const busy = new Set();
 // Restore only after async PR data has rebuilt the overview's full height.
 let overviewScrollPending=true;
@@ -49,7 +49,7 @@ function restoreOverviewScroll(){
 function saveFilters(){try{localStorage.setItem('pr-inbox-filters',JSON.stringify(filters));}catch{}}
 function when(stamp){if(!stamp)return 'Not yet checked';const date=new Date(stamp);return Number.isNaN(date.valueOf())?'Unknown date':date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function since(stamp){if(!stamp)return 'Unknown';const minutes=Math.max(0,Math.floor((Date.now()-new Date(stamp))/60000));if(!Number.isFinite(minutes))return 'Unknown';if(minutes<1)return 'just now';if(minutes<60)return minutes+'m ago';if(minutes<1440)return Math.floor(minutes/60)+'h ago';return Math.floor(minutes/1440)+'d ago';}
-function notify(text,undo){clearTimeout(toastTimer);undoAction=undo||null;$('toast').replaceChildren(document.createTextNode(text));if(undo){const button=document.createElement('button');button.textContent='Undo';button.id='undo';$('toast').append(button);}$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,undo?10000:6000);}
+function notify(text,undo,show){clearTimeout(toastTimer);undoAction=undo||null;showAction=show||null;$('toast').replaceChildren(document.createTextNode(text));for(const [id,label,enabled] of [['toast-show','Show',show],['undo','Undo',undo]])if(enabled){const button=document.createElement('button');button.textContent=label;button.id=id;$('toast').append(button);}$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,undo||show?10000:6000);}
 async function post(action,data={}){const response=await fetch(action,{method:'POST',keepalive:action==='/artifact-opened',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw new Error(result.error||'The action failed.');return result;}
 function artifactLink(a,label,pr){
  if(!a)return '';
@@ -283,6 +283,7 @@ function clearFilters(){for(const id of Object.keys(pickerConfig))$(id+'-search'
 document.addEventListener('click',async event=>{
  const view=event.target.closest('[data-view]');if(view){if(typeof showQueue==='function')showQueue(false);showReporting(false);filters.view=view.dataset.view;saveFilters();renderList();return;}
  if(event.target.closest('[data-clear]')||event.target.closest('#clear-filters')){clearFilters();return;}
+ if(event.target.closest('#toast-show')){const action=showAction;showAction=null;$('toast').hidden=true;action?.();return;}
  if(event.target.closest('#undo')){const action=undoAction;undoAction=null;$('toast').hidden=true;try{await action?.();}catch(error){notify(error.message);}return;}
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}
  const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}

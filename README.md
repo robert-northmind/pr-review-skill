@@ -26,8 +26,8 @@ copyable comment, and its evidence. Expand all when you want the full review.
 
 ![Two fictional findings, with one expanded to show an example, impact, fix direction and copyable comment](docs/screenshots/review-findings-light.jpg)
 
-**My reviews.** Keep a personal queue and pick up where you stopped. New commits
-and replies move saved PRs into Needs another look.
+**My reviews.** Keep a personal queue grouped by whose turn it is, and pick up
+where you stopped. New commits and replies bring waiting PRs back to you.
 
 ![My reviews with fictional PRs, update indicators and a private reminder](docs/screenshots/my-reviews-light.jpg)
 
@@ -182,35 +182,47 @@ Review comments are drafts; read and edit them before posting them yourself.
 
 ### Keep track of your reviews
 
-Click **Add to Up next** on a PR or paste its link into **My reviews**. Move it
-through **Up next**, **Reviewing**, and **Waiting**, and leave a private note
-about what to check next. New commits or relevant replies appear in
-**Needs another look**. **Mark updates checked** acknowledges the displayed
-updates; opening a PR alone does not clear them.
+Click **Add to Up next** on a PR or paste its link into **My reviews**. The page
+groups tracked PRs by whose turn it is:
 
-**Resume reviewing** moves a PR from **Needs another look** to **Reviewing**,
-keeping its pending-update indicators. New updates stay visible there while
-you review. Choosing **Waiting for author** returns it to **Needs another look**
-if updates arrived after the saved review observation.
+- **Your turn**: **In progress** (reviews you started), **Back to you** (waiting
+  PRs with new commits, relevant replies, a review re-request or a due reminder)
+  and **Up next** (in your order).
+- **Their turn**: **Waiting for author**.
+- **Finished**: **Merged or closed** and **Stopped tracking**.
 
-**Stop reviewing** returns a PR to **Up next**, keeping its note and pending
-updates. It does not cancel an AI review run.
+Every section collapses, shows its count and remembers its state across reloads.
+Waiting for author and Finished start collapsed. Each PR shows why it is in its
+section, such as "You handed it back to the author 3d ago" or "Added from GitHub
+because you commented or reviewed".
+
+Buttons are named after where the PR goes:
+
+| Button | Where the PR goes |
+|---|---|
+| **Start review** / **Review now** / **Continue review** | In progress |
+| **Hand back to author** | Waiting for author, or Back to you if updates arrived during your review |
+| **Pause** | Top of Up next, keeping pending updates |
+| **Keep waiting** | Stays in Waiting for author; only newer updates bring it back |
+| **Mark updates seen** | Stays in progress; clears the updates shown as new |
+| **Remind me** (1 day, 3 days, 1 week) | Back to you when due, unless something else brings it back first |
+| **Stop tracking** (in •••) | Stopped tracking; **Track again** returns it to Up next |
+
+Each move shows a confirmation with **Show**, which opens the section and
+highlights the PR, and **Undo**. Moves made by GitHub sync, a due reminder or
+another tab are announced the same way. **Find a tracked PR** searches every
+tracked PR, including finished ones, and shows which section each is in.
+Opening a PR does not clear its updates.
 
 Opening a review and returning via **PR reviews** or browser Back restores the
 overview's scroll position after the cards load. Positions stay in the current
 browser tab, separately for My reviews and each Inbox filter selection.
 
-**Up next** and **Needs another look** are collapsible, start expanded, and show
-their PR counts even when collapsed. **Waiting for author** starts collapsed, with its PR count
-visible. The dashboard remembers your choice across refreshes and reloads.
-It keeps the PR tracked after your feedback. New commits or
-relevant replies move it to **Needs another look**. **Remove from My reviews**
-stops active tracking and offers Undo; use Add PR to follow it again later.
 Completing an AI run does not submit a GitHub review or finish your work.
 
 GitHub sync automatically places confirmed closed/merged PRs in **Merged or
 closed**, sorted by latest activity. Open PRs you commented on or reviewed are
-followed in Waiting for author unless already tracked or explicitly removed.
+followed in Waiting for author unless already tracked or explicitly stopped.
 Closed/merged entries, reports, private notes, code conversations and PR caches
 expire 20 days after GitHub's close/merge date, on the next successful check.
 Running work and cleanup failures defer deletion and show an error.

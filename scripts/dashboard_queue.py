@@ -16,6 +16,11 @@ import pr_review_tracker as tracker
 
 STAGES = {'up_next', 'reviewing', 'waiting', 'done', 'removed', 'history'}
 ACTIVE = {'up_next', 'reviewing', 'waiting'}
+# Stage moves record why the PR moved and can be undone from the confirmation toast.
+MOVES = {'start', 'stop', 'wait', 'acknowledge', 'remove', 'restore'}
+UNDO_KEYS = ('stage', 'done_at', 'review_observation', 'ack_head', 'ack_at', 'ack_event_ids',
+             'position', 'moved', 'remind_at')
+REMIND_DAYS = {1, 3, 7}
 _guard = threading.Lock()
 _status = {'status': 'idle'}
 _triage_after_refresh = False
@@ -71,6 +76,10 @@ def acknowledge(record, observation):
     record.update(ack_head=head, ack_at=at, ack_event_ids=ids)
 
 
+def reminder_due(record):
+    return bool(record.get('remind_at')) and epoch(record['remind_at']) <= epoch(tracker.utc_now())
+
+
 def mutate(url, action, payload=None):
     payload = payload or {}
     canonical, fallback = identity(url)
@@ -95,6 +104,8 @@ def mutate(url, action, payload=None):
                       'ack_head': metadata.get('head_sha', ''), 'revision': previous.get('revision', 0) + 1}
             record.pop('undo', None)
             record.pop('review_observation', None)
+            record.pop('remind_at', None)
+            record['moved'] = {'kind': 'recovered' if payload.get('recover') is True else 'added', 'at': now}
             record['ack_head'] = record['metadata'].get('head_sha', '')
             if payload.get('recover') is True:
                 record['recover_baseline'] = True
@@ -112,9 +123,14 @@ def mutate(url, action, payload=None):
             if not undo or not secrets.compare_digest(str(payload.get('token', '')), undo['token']):
                 raise dashboard.DashboardError('Undo is no longer available. Use Add PR to track it again.')
             for key, value in undo['before'].items():
-                record[key] = value
+                if value is None:
+                    record.pop(key, None)
+                else:
+                    record[key] = value
             record.pop('undo', None)
-        elif action in ('start', 'stop', 'wait', 'acknowledge', 'remove', 'note', 'restore', 'move_up'):
+        elif action in ('start', 'stop', 'wait', 'acknowledge', 'remove', 'note', 'restore', 'move_up', 'remind'):
+            before = {key: copy.deepcopy(record.get(key)) for key in UNDO_KEYS}
+            now = tracker.utc_now()
             if action == 'note':
                 note = payload.get('note', '')
                 if not isinstance(note, str) or len(note) > 4000:
@@ -124,29 +140,53 @@ def mutate(url, action, payload=None):
                 observation = payload.get('observed') or observed(record)
                 if not isinstance(observation, dict) or not observation.get('head_sha') or not epoch(observation.get('at')):
                     raise dashboard.DashboardError('Check for updates first so this review starts at a known commit.')
+                record['moved'] = {'kind': 'started' if record['stage'] == 'up_next' else 'resumed', 'at': now}
                 record['stage'] = 'reviewing'
                 record['review_observation'] = copy.deepcopy(observation)
+                record.pop('remind_at', None)
             elif action == 'stop':
                 if record['stage'] != 'reviewing':
                     raise dashboard.DashboardError('This PR is not currently being reviewed.')
+                # Pausing puts the PR back at the top of Up next.
+                record['position'] = min((r.get('position', 0) for r in data['prs'].values()
+                                          if r['stage'] == 'up_next'), default=1) - 1
                 record['stage'] = 'up_next'
+                record['moved'] = {'kind': 'paused', 'at': now}
                 record.pop('review_observation', None)
             elif action == 'wait':
                 acknowledge(record, record.get('review_observation') or payload.get('observed'))
                 record['stage'] = 'waiting'
+                record['moved'] = {'kind': 'handed_back', 'at': now}
                 record.pop('review_observation', None)
+                record.pop('remind_at', None)
             elif action == 'acknowledge':
                 acknowledge(record, payload.get('observed'))
                 if record['stage'] == 'reviewing':
                     record['review_observation'] = copy.deepcopy(payload['observed'])
+                elif record['stage'] == 'waiting':
+                    record['moved'] = {'kind': 'kept_waiting', 'at': now}
+                    if reminder_due(record):
+                        record.pop('remind_at', None)
             elif action == 'remove':
-                record['undo'] = {'token': secrets.token_urlsafe(16), 'before': {
-                    key: record.get(key) for key in ('stage', 'done_at')}}
                 record['stage'] = 'removed'
-                record['done_at'] = tracker.utc_now()
+                record['done_at'] = now
+                record['moved'] = {'kind': 'removed', 'at': now}
+                record.pop('remind_at', None)
             elif action == 'restore':
                 record['stage'] = 'up_next'
-                record.pop('undo', None)
+                record['moved'] = {'kind': 'restored', 'at': now}
+                record.pop('remind_at', None)
+            elif action == 'remind':
+                days = payload.get('days')
+                if record['stage'] != 'waiting':
+                    raise dashboard.DashboardError('Reminders are only available while waiting for the author.')
+                if days == 0:
+                    record.pop('remind_at', None)
+                elif isinstance(days, int) and not isinstance(days, bool) and days in REMIND_DAYS:
+                    record['remind_at'] = (datetime.fromisoformat(now.replace('Z', '+00:00'))
+                                           + timedelta(days=days)).isoformat(timespec='seconds')
+                else:
+                    raise dashboard.DashboardError('Choose a reminder of 1, 3 or 7 days.')
             elif action == 'move_up':
                 peers = sorted(((u, r) for u, r in data['prs'].items() if r['stage'] == 'up_next'),
                                key=lambda pair: pair[1].get('position', 0))
@@ -157,6 +197,8 @@ def mutate(url, action, payload=None):
                     other['revision'] += 1
         else:
             raise dashboard.DashboardError('Unknown personal review action.')
+        if action in MOVES:
+            record['undo'] = {'token': secrets.token_urlsafe(16), 'before': before}
         record['revision'] += 1
         record['action_at'] = tracker.utc_now()
         if action not in ('note', 'move_up'):
@@ -181,12 +223,15 @@ def presentation(record):
         matching = [e for e in events if e['kind'] == kind]
         if matching:
             reasons.append({'kind': kind, 'label': label, 'url': matching[-1]['url']})
+    if stage == 'waiting' and reminder_due(record):
+        reasons.append({'kind': 'reminder', 'label': 'Your reminder is due',
+                        'url': f"https://github.com/{metadata.get('owner')}/{metadata.get('repository')}/pull/{metadata.get('number')}"})
     if closed or stage in ('removed', 'history'):
         reasons = []
     bucket = 'history' if closed else 'removed' if stage == 'removed' else (
         'attention' if reasons and stage == 'waiting' else stage)
     return {key: record.get(key) for key in ('stage', 'revision', 'note', 'created_at', 'position',
-            'checked_at', 'attempted_at', 'error', 'review_observation')} | {
+            'checked_at', 'attempted_at', 'error', 'review_observation', 'moved', 'remind_at', 'action_at')} | {
                 'bucket': bucket, 'reasons': reasons, 'observed': observed(record), 'closed': closed,
                 'stage': stage, 'in_history': closed}
 
@@ -316,7 +361,8 @@ def apply_fetch(url, payload, started, error=None):
             if (record['stage'] == 'reviewing' and latest.get('commit_id')
                     and epoch(latest.get('submitted_at')) > epoch(record.get('action_at'))):
                 record.update(stage='waiting', ack_head=latest['commit_id'], ack_at=latest['submitted_at'],
-                              ack_event_ids=[], action_at=latest['submitted_at'], revision=record['revision'] + 1)
+                              ack_event_ids=[], action_at=latest['submitted_at'], revision=record['revision'] + 1,
+                              moved={'kind': 'github_review', 'at': latest['submitted_at']})
                 record.pop('review_observation', None)
                 record.pop('undo', None)
         save(data)
@@ -381,7 +427,8 @@ def discover_history(login, started):
             if not record:
                 record = {'stage': 'waiting', 'created_at': started, 'action_at': started,
                           'revision': 1, 'position': 0, 'note': '', 'ack_at': started,
-                          'ack_head': metadata['head_sha'], 'ack_event_ids': []}
+                          'ack_head': metadata['head_sha'], 'ack_event_ids': [],
+                          'moved': {'kind': 'discovered', 'at': started}}
                 data['prs'][url] = record
             if epoch(record.get('checked_at')) > epoch(started):
                 continue

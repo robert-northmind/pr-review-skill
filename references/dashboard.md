@@ -137,35 +137,54 @@ inbox card or paste a GitHub PR URL, including a PR outside watched repositories
 Starting an AI review also saves an untracked PR in Up next; AI completion never
 completes the human review.
 
-- **Up next** has Start reviewing and Move up controls.
-- **Reviewing** records the displayed commit and activity observation. Waiting
-  for author acknowledges that observation, so commits or replies arriving
-  during the review remain pending.
-- **Resume reviewing** moves the PR into Reviewing without acknowledging its
-  pending updates. It stays there with update indicators until you choose
-  another stage; Waiting for author exposes any newer updates in Needs another look.
-- **Stop reviewing** returns the PR to Up next without acknowledging updates
+The page groups sections by whose turn it is: **Your turn** (In progress, Back
+to you, Up next), **Their turn** (Waiting for author) and **Finished** (Merged or
+closed, Stopped tracking). Stages map to sections as `reviewing` → In progress,
+`waiting` with reasons → Back to you (bucket `attention`), `up_next`, `waiting`,
+closed → Merged or closed, and `removed` → Stopped tracking.
+
+- Every section collapses via its heading, with its count always visible, and
+  remembers its state per browser. Back to you highlights its count.
+- **Up next** rows are numbered in queue order; only the first has a primary
+  Start review button. Move up swaps with the previous PR.
+- **Start review** (Review now, Continue review) records the displayed commit
+  and activity observation. **Hand back to author** acknowledges that
+  observation, so commits or replies arriving during the review remain pending
+  and the PR goes straight to Back to you; its confirmation says so.
+- Continuing from Back to you does not acknowledge pending updates. They show as
+  "New since you started" until **Mark updates seen** or Hand back to author.
+- **Pause** returns the PR to the top of Up next without acknowledging updates
   or cancelling an AI run. Starting again records a fresh review observation.
-- **Up next**, **Needs another look**, and **Waiting for author** collapse via
-  their headings, with counts always visible. Each remembers its expanded state.
-- **Waiting for author** retains the PR until it needs another look.
-- **Needs another look** shows head changes, human replies in review threads
-  you participated in, author comments after your feedback, mentions, and
-  direct review re-requests. Links open the relevant conversation or comparison.
-  Merely opening a PR does not acknowledge its updates. Mark updates checked
-  acknowledges only the observation displayed in that browser.
-- **Waiting for author** acknowledges the displayed review observation and keeps
-  following commits and replies. It is available from Up next and Reviewing.
-- **Remove from My reviews** stops active tracking and offers Undo. Add PR can
-  enroll it again. Removed open PRs do not appear in Merged or closed.
+- **Back to you** shows head changes, human replies in review threads you
+  participated in, author comments after your feedback, mentions, direct review
+  re-requests and due reminders. Links open the relevant conversation or
+  comparison. Opening a PR does not acknowledge its updates. **Keep waiting**
+  acknowledges only the observation displayed in that browser and clears a due
+  reminder.
+- **Remind me** (1, 3 or 7 days) is available while waiting. A due reminder moves
+  the PR to Back to you on the next page render; starting, handing back, pausing
+  or stopping tracking clears it. The dashboard does not notify while closed.
+- **Stop tracking** (in •••) moves an open PR to Stopped tracking, where
+  **Track again** returns it to Up next. Closed PRs appear in Merged or closed.
 - GitHub sync automatically moves confirmed closed/merged PRs to **Merged or
   closed**. Reopened tracked PRs return to their active stage.
+- Every record stores `moved: {kind, at}` for the latest move (`added`,
+  `recovered`, `discovered`, `started`, `resumed`, `paused`, `handed_back`,
+  `github_review`, `kept_waiting`, `removed`, `restored`). The UI shows it as
+  "why it is here". Stage moves return an undo token restoring stage,
+  acknowledgment, position, reminder and move reason; a newer choice
+  invalidates it.
+- Every move shows a toast with **Show** (open section, scroll, highlight) and
+  **Undo** where available. Section changes not made in the current tab, from
+  GitHub sync, reminders or other tabs, are announced with Show.
+- **Find a tracked PR** filters every tracked PR by title, repository, number,
+  author or note, labelled with its section.
 - Add a private note to retain context or where you stopped. It stays local.
 
 GitHub sync automatically discovers PRs you commented on or submitted a review for,
 including approvals and requested changes, using paginated `commenter` and
 `reviewed-by` GitHub searches. Requests, mentions and AI runs alone do not count.
-Open participated PRs enter Waiting for author unless already tracked or removed.
+Open participated PRs enter Waiting for author unless already tracked or stopped.
 Only closed/merged PRs appear in Merged or closed, newest GitHub update first.
 Discovery never starts an AI review. Legacy done/history stages become waiting
 without acknowledging any unseen changes. The retired done action routes to wait. Search failures preserve existing data; the GitHub
@@ -192,7 +211,7 @@ Follow-up refresh uses read-only, paginated GitHub CLI REST requests, with at
 most four PRs fetched concurrently. It ignores your own replies, bot comments,
 and unrelated thread/CI activity. A newly submitted GitHub review while Reviewing
 moves the PR to Waiting at that review's commit, retaining later updates. Ordinary
-comments do not automatically finish the review; use Waiting for author.
+comments do not automatically finish the review; use Hand back to author.
 
 Every saved PR shows its last successful check and any error. Automatic refresh
 checks open tracked PRs, including waiting items for replies and re-requests, while the page is

@@ -45,6 +45,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.deepEqual(rerunBody,{url:'https://github.com/example/repo/pull/5',estimate_id:'5'});
   await page.click('#my-reviews-tab');
   const personal=page.locator('#queue-list [data-queue-pr="https://github.com/example/repo/pull/6"]');
+  await personal.locator('.queue-tools > summary').click();
   await personal.locator('.triage-details summary').click();
   await personal.getByRole('button',{name:'Estimate effort',exact:true}).click();
   await page.waitForFunction(()=>!triageStarting);
