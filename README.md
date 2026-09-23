@@ -130,9 +130,11 @@ Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
 Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
 `python3 scripts/pr_server.py --port 8766` and open that port instead.
 
-In **Settings**, add watched repositories as `owner/repository`, then select Sync GitHub
-GitHub. Choose the agent used for reviews; blank model and effort fields use
-its CLI defaults. Model and effort are saved separately for each agent.
+In **Settings**, add watched repositories as `owner/repository`, then select Sync
+GitHub. Choose the agent used for reviews; model and reasoning dropdowns include
+an Agent default option.
+Model and effort are saved separately for each agent. Presets are maintained in
+`scripts/agent_options.py`; reasoning choices follow the selected Codex model.
 These settings select the lead session. The lead chooses reviewer subagent
 models and reasoning levels from the host's supported options, within your
 explicit constraints. If overrides are unavailable, reviewers inherit the

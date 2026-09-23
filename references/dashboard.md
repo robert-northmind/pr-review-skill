@@ -237,8 +237,17 @@ existing checkout and verification sandbox instructions.
 
 Claude launches `claude` in Terminal with optional `--model` and `--effort`.
 Codex uses the in-app SDK worker described below, with the same saved model and
-reasoning effort. Blank settings use the selected runtime's defaults. Model and
-effort are stored independently per agent; save changes before starting a run.
+reasoning effort. Model and reasoning level use preset dropdowns; **Agent default**
+uses the selected runtime's defaults. Model and effort are stored independently
+per agent; save changes before starting a run. Switching models keeps a supported
+reasoning level or resets it to Agent default with a notification.
+
+Maintain model IDs and reasoning levels in `scripts/agent_options.py` when models
+are released. The catalog is static; dashboard loads do not query providers or
+CLI help. Codex presets reflect the installed host's available GPT-6/GPT-5.6
+models and their supported reasoning levels. Existing values outside the catalog
+remain visible as saved values and are preserved until changed. CLI configuration
+still accepts custom overrides.
 These overrides do not change global agent configuration.
 
 These settings configure the lead session. The skill's

@@ -118,8 +118,8 @@
   <section id="agent-settings" data-settings-section>      <form id="agent-form">
         <h2>Review agent</h2><p class="muted">Used when you start a review. Model and effort are remembered for each agent.</p>
         <div class="fields"><label>Agent<select id="agent" name="agent"><option value="claude">Claude Code · Terminal</option><option value="codex">Codex · In app</option></select></label>
-        <label>Model<input id="model" name="model" list="model-options" placeholder="Agent default" autocomplete="off"><datalist id="model-options"></datalist></label>
-        <label>Effort<input id="effort" name="effort" list="effort-options" placeholder="Agent default" autocomplete="off"><datalist id="effort-options"></datalist></label></div>
+        <label>Model<select id="model" name="model"></select></label>
+        <label>Reasoning level<select id="effort" name="effort"></select></label></div>
         <div class="form-footer"><button type="submit" class="button primary">Save settings</button><button type="button" id="discard" class="button subtle" hidden>Discard changes</button><span id="save-state" class="muted" role="status"></span></div>
       </form></section>
   <section id="estimate-settings" data-settings-section hidden>      <form id="triage-form" class="triage-settings">

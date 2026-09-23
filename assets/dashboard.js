@@ -263,8 +263,22 @@ function renderList(force=false){if(!state)return;const prs=visiblePrs();const s
  for(const button of document.querySelectorAll('[data-action]'))if(busy.has(button.dataset.url))button.disabled=true;
 }
 function showConfig(config){configSignature=JSON.stringify(config);profiles=structuredClone(config.agent_profiles);editingAgent=config.agent;$('agent').value=editingAgent;fillAgent();settingsDirty=false;markDirty();}
-function fillAgent(){const profile=profiles[editingAgent]||{model:'',effort:''};$('model').value=profile.model;$('effort').value=profile.effort;$('model-options').innerHTML=state.models[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');$('effort-options').innerHTML=state.efforts[editingAgent].map(value=>`<option value="${esc(value)}"></option>`).join('');}
-function markDirty(){if(!state)return;const config=state.config;settingsDirty=editingAgent!==config.agent||$('model').value!==config.model||$('effort').value!==config.effort;$('save-state').textContent=settingsDirty?'Unsaved changes — save before starting a review.':'Saved. Blank fields use the CLI defaults.';$('discard').hidden=!settingsDirty;}
+function fillPresetSelect(id,values,value,preserveSaved=true){
+ const options=[...new Set(['',...values])];
+ if(preserveSaved&&!options.includes(value))options.push(value);
+ $(id).innerHTML=options.map(option=>`<option value="${esc(option)}">${esc(option?(values.includes(option)?option:option+' (saved · outside presets)'):'Agent default')}</option>`).join('');
+ $(id).value=options.includes(value)?value:'';
+}
+function fillEfforts(value,preserveSaved=true){
+ const options=state.model_efforts?.[editingAgent]?.[$('model').value]||state.efforts[editingAgent];
+ fillPresetSelect('effort',options,value,preserveSaved);
+}
+function fillAgent(){
+ const profile=profiles[editingAgent]||{model:'',effort:''};
+ fillPresetSelect('model',state.models[editingAgent],profile.model);
+ fillEfforts(profile.effort);
+}
+function markDirty(){if(!state)return;const config=state.config;settingsDirty=editingAgent!==config.agent||$('model').value!==config.model||$('effort').value!==config.effort;$('save-state').textContent=settingsDirty?'Unsaved changes — save before starting a review.':'Saved. Agent default uses the selected runtime’s defaults.';$('discard').hidden=!settingsDirty;}
 function queueCaptureButton(pr){const tracked=pr.workflow&&pr.workflow.bucket!=='removed';return `<button class="button ${tracked?'':'primary'}" data-queue-action="${tracked?'show':'enqueue'}" data-url="${esc(pr.url)}">${tracked?'My reviews':'Add to Up next'}</button>`;}
 function renderState(){
  const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · in app':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
@@ -310,7 +324,11 @@ for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort'],[
 // Keep a legible avatar fallback if a profile image is missing or unavailable.
 document.addEventListener('error',event=>{if(event.target.matches?.('.author-avatar'))event.target.hidden=true;},true);
 $('agent').addEventListener('change',()=>{profiles[editingAgent]={model:$('model').value,effort:$('effort').value};editingAgent=$('agent').value;fillAgent();markDirty();});
-$('model').addEventListener('input',markDirty);$('effort').addEventListener('input',markDirty);
+$('model').addEventListener('change',()=>{
+ const previous=$('effort').value;fillEfforts(previous,false);markDirty();
+ if(previous!==$('effort').value)notify('Reasoning level reset to Agent default for this model.');
+});
+$('effort').addEventListener('change',markDirty);
 $('discard').addEventListener('click',()=>showConfig(state.config));
 $('agent-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/set-config',{agent:editingAgent,model:$('model').value,effort:$('effort').value});settingsDirty=false;configSignature='';await loadState();notify('Review settings saved.');}catch(error){notify(error.message);}});
 $('repo-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/add-repo',{repo:$('add-repo').value});$('add-repo').value='';notify('Repository added. Sync GitHub to load its PRs.');await loadState();}catch(error){notify(error.message);}});

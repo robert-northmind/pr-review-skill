@@ -160,8 +160,9 @@ def snapshot():
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,
         'refresh':tracker.read_json(tracker.tracker_root()/'dashboard-refresh.json',required=False),
-        'models':{'claude':dashboard.discover_claude_options()[0], 'codex':dashboard.CODEX_FALLBACK_MODELS},
-        'efforts':{'claude':dashboard.discover_claude_options()[1], 'codex':dashboard.CODEX_FALLBACK_EFFORTS}}
+        'models':{'claude':dashboard.discover_claude_options()[0], 'codex':dashboard.CODEX_MODELS},
+        'efforts':{'claude':dashboard.discover_claude_options()[1], 'codex':dashboard.CODEX_EFFORTS},
+        'model_efforts': {'codex': dashboard.CODEX_MODEL_EFFORTS}}
 
 
 def start_launch(url, kind, retry=False):

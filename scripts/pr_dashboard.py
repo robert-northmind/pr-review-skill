@@ -34,6 +34,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pr_review_tracker as tracker  # noqa: E402
+from agent_options import CODEX_MODELS, CODEX_EFFORTS, CODEX_MODEL_EFFORTS, CLAUDE_MODELS, CLAUDE_EFFORTS
 from review_markdown import render as render_review_markdown  # noqa: E402
 
 
@@ -200,68 +201,9 @@ def build_agent_argv(prompt: str) -> list[str]:
     return argv
 
 
-# Codex CLI's --help documents -m/-c as free-form overrides with no
-# queryable list, so these are a manually-curated snapshot, not fetched at
-# runtime. Verified 2026-09-08 against openai/codex release rust-v0.153.4
-# (this machine's installed version): PR #42874 confirms `gpt-6-astra` as
-# the current bundled default model, and the repo's own bundled reference
-# doc (codex-rs/skills/.../references/latest-model.md, itself explicitly
-# marked "non-authoritative, may have drifted") lists `gpt-6` (family
-# alias), `gpt-5.6-terra`, and `gpt-5.6-luna` as the other current tiers,
-# plus `gpt-5.4` and `gpt-4.1` as legacy models still explicitly supported.
-# Re-verify against that reference (or the official
-# https://developers.openai.com/api/docs/guides/latest-model page it
-# points at) if this drifts — datalist inputs still accept arbitrary typed
-# values regardless.
-CODEX_FALLBACK_MODELS = ["", "gpt-6-astra", "gpt-6", "gpt-5.6-terra", "gpt-5.6-luna"]
-CODEX_FALLBACK_EFFORTS = ["", "minimal", "low", "medium", "high"]
-
-_claude_options_cache: tuple[list[str], list[str]] | None = None
-
-# Known current full model IDs (from this system's own runtime context, not
-# fetched) to supplement whatever short aliases `claude --help` happens to
-# use as illustrative examples — those examples go stale independently of
-# the actual current model lineup (e.g. 'claude-fable-5' vs the real
-# current 'claude-fable-5-1').
-CLAUDE_KNOWN_MODELS = [
-    "",
-    "claude-sonnet-5",
-    "claude-opus-5",
-    "claude-fable-5-1",
-    "claude-haiku-4-5-20251001",
-]
-
-
 def discover_claude_options() -> tuple[list[str], list[str]]:
-    """Parses the installed `claude --help` for its documented --model alias
-    examples and --effort choices, merged with CLAUDE_KNOWN_MODELS, so the
-    list tracks both the installed CLI's short aliases and the actual
-    current full model IDs. Falls back to CLAUDE_KNOWN_MODELS alone (still
-    accepting free text) if `claude` isn't on PATH or its help text changes
-    shape."""
-    global _claude_options_cache
-    if _claude_options_cache is not None:
-        return _claude_options_cache
-    models: list[str] = []
-    efforts: list[str] = [""]
-    try:
-        result = subprocess.run(
-            ["claude", "--help"], capture_output=True, text=True, timeout=10, check=False
-        )
-        text = result.stdout
-        alias_match = re.search(r"alias for the latest model\s*\(e\.g\.\s*(.*?)\)", text, re.S)
-        if alias_match:
-            models = re.findall(r"'([a-zA-Z0-9.-]+)'", alias_match.group(1))
-        effort_match = re.search(
-            r"Effort level for the current session\s*\(([^)]+)\)", text, re.S
-        )
-        if effort_match:
-            efforts += [e.strip() for e in effort_match.group(1).replace("\n", " ").split(",")]
-    except (subprocess.TimeoutExpired, OSError):
-        pass
-    merged_models = list(dict.fromkeys(CLAUDE_KNOWN_MODELS + models))
-    _claude_options_cache = (merged_models, efforts)
-    return _claude_options_cache
+    """Return maintained presets without invoking a CLI during dashboard loads."""
+    return CLAUDE_MODELS, CLAUDE_EFFORTS
 
 
 def gh_executable() -> str:
