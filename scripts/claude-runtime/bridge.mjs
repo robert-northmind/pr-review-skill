@@ -6,7 +6,8 @@ import {z} from 'zod';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createInterface} from 'node:readline';
-import {buildOptions, publicEvents} from './protocol.mjs';
+import {buildOptions} from './protocol.mjs';
+import {consumeSession} from './session.mjs';
 const exec = promisify(execFile);
 const emit = event => process.stdout.write(JSON.stringify(event)+'\n');
 let active, started = false, interrupted = false;
@@ -54,15 +55,10 @@ async function run(request) {
     yield {type:'user',message:{role:'user',content:request.prompt},parent_tool_use_id:null,session_id:request.session_id||''};
     await done;
   }
-  const drafts=new Map(); let resultSeen=false;
   try {
     active=query({prompt:input(),options});
     if(interrupted) await active.interrupt();
-    for await (const message of active) {
-      for(const event of publicEvents(message,drafts)) emit(event);
-      if(message.type==='result') {resultSeen=true;release();break;}
-    }
-    if(!resultSeen) emit({type:'error'});
+    await consumeSession(active,emit,()=>interrupted);
   } finally {release();active?.close();lines.close();}
 }
 lines.on('line',line=>{

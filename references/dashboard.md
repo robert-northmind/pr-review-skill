@@ -480,6 +480,10 @@ Claude Code executable. Install its dependencies with
 The review button opens a live activity panel with stage progress and cancellation.
 Finished runs show their outcome and blocked/failed stage counts instead of a
 percentage or progress bar. Stage details retain incomplete checks and their reasons.
+Claude sessions stay connected when the lead finishes a turn while background
+reviewers are running. Their completion notifications let the lead continue
+through synthesis and report registration; progress watchers alone do not keep
+a finished session open.
 Reloading the page or restarting the dashboard reconnects to the saved run; it
 never starts another model call. Session resume/follow-up and inline answers to
 agent questions are not implemented yet. Unhandled input requests are declined
