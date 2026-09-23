@@ -24,6 +24,8 @@ class WorkspaceHTTP(test_dashboard.HTTP):
             self.assertEqual(self.request('/workspace')[0],200)
             self.assertEqual(self.request('/assets/code-workspace/model.mjs')[0],200)
             self.assertEqual(self.request('/assets/code-workspace/progress.mjs')[0],200)
+            for asset in ('chat-markdown.mjs','chat-resize.mjs','vendor/markdown-it.mjs'):
+                self.assertEqual(self.request('/assets/code-workspace/'+asset)[0],200)
             self.assertEqual(self.request('/assets/code-workspace/../../SKILL.md')[0],404)
 
     def test_embedded_report_retains_opaque_sandbox(self):

@@ -23,6 +23,8 @@ import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
 import { reviewHTML, unavailableHTML } from "./review.mjs";
 import { chatProgress, activityHTML } from "./progress.mjs";
+import { chatMarkdown } from "./chat-markdown.mjs";
+import { installChatResize } from "./chat-resize.mjs";
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -30,6 +32,7 @@ import { chatProgress, activityHTML } from "./progress.mjs";
     ...document.querySelectorAll("button,select,input,textarea"),
   ];
   initialControls.forEach((control) => (control.disabled = true));
+  installChatResize($("conversation"), $("chat-resize"), $("workspace-body"));
   const params = new URLSearchParams(location.search);
   const api = new WorkspaceAPI(
     params.get("url"),
@@ -287,6 +290,14 @@ import { chatProgress, activityHTML } from "./progress.mjs";
         fileObserver.observe(card);
     }
   }
+  function renderAfterFileToggle(index) {
+    const card = $(`file-${index}`);
+    const pinned = card && card.getBoundingClientRect().top < document.querySelector(".diff-toolbar").getBoundingClientRect().bottom;
+    const nextId = card?.nextElementSibling?.id;
+    renderFiles();
+    // Collapsing a file from its sticky header must not skip the next file.
+    if (pinned) ($(`file-${index}`) || $(nextId))?.scrollIntoView({block: "start", behavior: "instant"});
+  }
   function paintSelection() {
     for (const row of document.querySelectorAll(".code-row"))
       row.classList.toggle(
@@ -356,6 +367,7 @@ import { chatProgress, activityHTML } from "./progress.mjs";
       ? document.querySelector(`[data-file="${file}"][data-row="${ids[0]}"]`)
       : $(`file-${file}`);
     target?.scrollIntoView({ block: "start", behavior: "instant" });
+    if (ids && target) document.querySelector(".diff-column").scrollTop -= $(`file-${file}`).querySelector(".file-header").offsetHeight + 8;
   }
   function showRail(kind = "chat") {
     $("conversation").hidden = false;
@@ -445,12 +457,12 @@ import { chatProgress, activityHTML } from "./progress.mjs";
       ? thread.messages
           .map(
             (m, index) =>
-              `<article class="message ${m.role}"><header>${m.role === "user" ? "You" : "AI"}</header>${messageContextHTML(m, index, thread)}<p>${esc(m.text)}</p>${sourceLinksHTML(m.sources)}${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} requests</summary>${m.reads.map((r) => `<p>${esc(contextReadLabel(r))}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
+              `<article class="message ${m.role === "user" ? "user" : "assistant"}"><header>${m.role === "user" ? "You" : "AI"}</header>${messageContextHTML(m, index, thread)}${m.role === "user" ? `<p>${esc(m.text)}</p>` : `<div class="chat-markdown">${chatMarkdown(m.text)}</div>`}${sourceLinksHTML(m.sources)}${m.reads?.length ? `<details class="message-contexts"><summary>Additional context · ${m.reads.length} requests</summary>${m.reads.map((r) => `<p>${esc(contextReadLabel(r))}</p>`).join("")}</details>` : ""}${m.role === "assistant" ? `<button class="text-button" data-save-message="${index}">Save to private notes</button>` : ""}</article>`,
           )
           .join("")
       : `<div class="chat-empty"><strong>${contexts.length ? "Start with a question." : "A second pair of eyes."}</strong><p>${contexts.length ? "Ask about these lines. Add more selections from any file to keep exploring in this conversation." : "Select lines in the diff for a focused conversation, or ask about the whole change."}</p></div>`;
     if (thread?.draft && isRunning(thread))
-      messagesHTML += `<article class="message assistant streaming"><header>AI · Responding</header><p>${esc(thread.draft)}</p></article>`;
+      messagesHTML += `<article class="message assistant streaming"><header>AI · Responding</header><div class="chat-markdown">${chatMarkdown(thread.draft)}</div></article>`;
     if ($("messages").innerHTML !== messagesHTML)
       $("messages").innerHTML = messagesHTML;
     $("question").placeholder = thread
@@ -582,7 +594,7 @@ import { chatProgress, activityHTML } from "./progress.mjs";
         ? saved.collapsed.filter((p) => p !== path)
         : [...saved.collapsed, path];
       persist();
-      renderFiles();
+      renderAfterFileToggle(Number(d.collapse));
       document
         .querySelector(`[data-collapse="${d.collapse}"]`)
         ?.focus({ preventScroll: true });
@@ -732,7 +744,7 @@ import { chatProgress, activityHTML } from "./progress.mjs";
         saved.collapsed.push(file.path);
       }
       persist();
-      renderFiles();
+      renderAfterFileToggle(Number(d.viewed));
       document
         .querySelector(`[data-viewed="${d.viewed}"]`)
         ?.focus({ preventScroll: true });
@@ -836,6 +848,10 @@ import { chatProgress, activityHTML } from "./progress.mjs";
     }
     updateLayout();
   });
+  const diffToolbar = document.querySelector(".diff-toolbar");
+  new ResizeObserver(() => {
+    document.querySelector(".diff-column").style.setProperty("--diff-toolbar-height", `${diffToolbar.offsetHeight}px`);
+  }).observe(diffToolbar);
   new ResizeObserver(updateLayout).observe(
     document.querySelector(".diff-column"),
   );
@@ -868,6 +884,14 @@ import { chatProgress, activityHTML } from "./progress.mjs";
   $("clear-selection").addEventListener("click", () => {
     selection = null;
     paintSelection();
+  });
+  $("messages").addEventListener("click", async event => {
+    const button = event.target.closest("[data-copy-code]");
+    if (!button) return;
+    try {
+      await navigator.clipboard.writeText(button.closest(".chat-code").querySelector("code").textContent);
+      notify("Code copied.");
+    } catch { notify("Could not copy code. Select it and copy manually."); }
   });
   $("new-thread").addEventListener("click", () => beginThread());
   $("thread-picker").addEventListener("change", (event) => {

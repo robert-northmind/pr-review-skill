@@ -21,6 +21,26 @@ import pr_review_tracker as tracker
 import pr_server
 
 URL='https://github.com/example/telemetry-sdk/pull/248'
+CHAT_ANSWER = """Synthetic transport answer. <script>must stay text</script>
+
+### Why the keys stay separate
+
+- **Current code:** `namespace-record` includes the supplied namespace.
+- **Default:** each application uses its own storage domain.
+
+| Setup | Storage | Key |
+| --- | --- | --- |
+| Default | `UserDefaults.standard` | `otel-session-record` |
+| Shared group | App group suite | `mobile-session-record` |
+
+```swift
+let key = "mobile-session-record"
+let deliberatelyLongLine = "a source line that is intentionally long enough to scroll horizontally instead of stretching the chat panel or overflowing the page"
+```
+
+[Read the documentation](https://www.w3.org/TR/trace-context/).
+"""
+
 
 
 def main():
@@ -56,7 +76,7 @@ def main():
                     thread=chat.read(url,thread_id)
                     if thread.get('cancel'):thread.update(status='cancelled',error='Stopped.')
                     else:
-                        thread['messages'].append({'role':'assistant','text':'Synthetic transport answer. <script>must stay text</script> [1]', 'contexts':thread['contexts'],'reads':[{'kind':'read_file','path':'src/transports/types.ts','side':'head'}, {'kind':'web_search','query':'W3C trace context'}], 'sources':[{'title':'Example source link (fixture)','url':'https://www.w3.org/TR/trace-context/'}]})
+                        thread['messages'].append({'role':'assistant','text':CHAT_ANSWER, 'contexts':thread['contexts'],'reads':[{'kind':'read_file','path':'src/transports/types.ts','side':'head'}, {'kind':'web_search','query':'W3C trace context'}], 'sources':[{'title':'Example source link (fixture)','url':'https://www.w3.org/TR/trace-context/'}]})
                         thread['status']='completed'
                         thread['draft']=''
                     chat.save(url,thread)

@@ -116,7 +116,7 @@ const {reviewHTML, unavailableHTML} = await import('../../assets/code-workspace/
 const {esc} = await import('../../assets/code-workspace/views.mjs');
 const run = {run_id: 'saved-run', status: 'running', transport: 'terminal'};
 assert.ok(!reviewHTML({run}, pinned, esc).includes('Review activity'));
-assert.ok(reviewHTML({run: {...run, transport: 'codex-sdk'}}, pinned, esc).includes('/?review=saved-run'));
+assert.ok(reviewHTML({run: {...run, transport: 'in-app'}}, pinned, esc).includes('/?review=saved-run'));
 const fallback = unavailableHTML(new Error('<offline>'), {artifact: {path: '/tmp/review & notes.html'}}, esc);
 assert.ok(fallback.includes('&lt;offline&gt;'));
 assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));

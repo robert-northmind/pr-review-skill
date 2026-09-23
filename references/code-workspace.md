@@ -16,7 +16,9 @@ direct link to any saved report, with its current commit freshness unverified.
 Code changes use GitHub's PR head and merge base, pinned by full commit SHA.
 Changed files load as they enter the viewport, with a retry control for failures.
 Unified/side-by-side layouts, wrapping, context expansion, full base/head files,
-selection, collapse, filtering and viewed status are available. Side by
+selection, collapse, filtering and viewed status are available. The current file
+header sticks below the diff toolbar, keeping Viewed and Full file within reach.
+Each header stays inside its own file; the next file replaces it as you scroll. Side by
 side stays selectable at every width. When less than 760px is available, the diff
 scrolls horizontally instead of overriding the chosen layout. Hiding Files gives
 it more room. Layout preference is stored in the browser.
@@ -75,7 +77,17 @@ worker process group. Failures and timeouts preserve the question and prior answ
 Submitting another question never automatically retries a model request.
 While waiting, chat shows elapsed time, public AI updates, native tool activity
 and streamed answer text. Expand **AI activity** for the current question's history.
-Progress refreshes every second. Answers retain clickable external source links. Private reasoning and raw provider output are not displayed.
+Progress refreshes every second. Assistant answers, including streamed drafts, render
+Markdown headings, lists, tables, inline code and fenced code blocks. Code blocks
+have a copy button; wide tables and code scroll inside the chat. Raw HTML stays
+text, remote images are not loaded, and links allow only HTTP(S) URLs without
+embedded credentials. The pinned Markdown renderer is served locally.
+Private reasoning and raw provider output are not displayed.
+
+On desktop, drag the chat's left edge to resize it. The focused divider also accepts
+Left/Right arrows (Shift for larger steps), Home/End for the bounds, and Enter or
+a double-click to reset. Width is remembered in this browser and constrained to
+leave room for the code pane. Narrow screens use the existing overlay layout.
 
 ## Structure
 
