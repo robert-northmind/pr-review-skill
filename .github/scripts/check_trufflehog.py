@@ -8,6 +8,7 @@ import sys
 FIXTURE_PATHS = {
     'scripts/test_code_workspace.mjs',
     'scripts/test_renderer.py',
+    'tests/javascript/test_chat_markdown.mjs',
     'tests/javascript/test_code_workspace.mjs',
     'tests/python/test_renderer.py',
 }
