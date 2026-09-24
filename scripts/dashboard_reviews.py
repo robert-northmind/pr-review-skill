@@ -1,6 +1,7 @@
 """Launch and supervise durable in-app reviews independently of HTTP requests."""
 from __future__ import annotations
 from argparse import Namespace
+import json
 import os
 from pathlib import Path
 import signal
@@ -10,7 +11,7 @@ import threading
 import time
 
 import ai_runtime
-from review_context import review_prompt
+from review_context import WRAP_UP_PROMPT, message_prompt, review_prompt
 import pr_review_tracker as tracker
 from review_jobs import (
     Activity, FINAL, complete_report, events, finish_unfinished_tasks,
@@ -19,6 +20,8 @@ from review_jobs import (
 
 CANCEL_GRACE_SECONDS = 8
 HEARTBEAT_SECONDS = 10
+MESSAGE_LIMIT = 2000
+WRAPPED_UP = 'Wrapped up early; review notes cover the evidence gathered so far.'
 
 
 def start(run_id, prompt, config):
@@ -63,6 +66,27 @@ def cancel(run_id):
     return {'status': 'stopping'}
 
 
+def send_message(run_id, text, wrap_up=False):
+    """Queue a question, steer or wrap-up request for the worker to deliver."""
+    job = job_state(run_id)
+    if not job:
+        raise tracker.TrackerError('This is not an in-app AI review.')
+    if job['status'] in FINAL or job['status'] == 'stopping':
+        raise tracker.TrackerError('This review is no longer running.')
+    text = text.strip() if isinstance(text, str) else ''
+    if len(text) > MESSAGE_LIMIT:
+        raise tracker.TrackerError(f'Keep messages under {MESSAGE_LIMIT} characters.')
+    if not text and not wrap_up:
+        raise tracker.TrackerError('Write a message first.')
+    if wrap_up and job.get('wrap_up_requested_at'):
+        return {'status': 'wrapping-up'}
+    record = {'at': tracker.utc_now(), 'text': text, 'wrap_up': bool(wrap_up)}
+    target = path(run_id, 'review-inbox.jsonl')
+    with os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), 'a') as handle:
+        handle.write(json.dumps(record) + '\n')
+    return {'status': 'queued'}
+
+
 class ReviewWorker:
     """Own one SDK client, activity writer, and cancellation watcher."""
 
@@ -76,6 +100,7 @@ class ReviewWorker:
         self.stopped = threading.Event()
         self.cancel_requested = threading.Event()
         self.needs_input = threading.Event()
+        self.inbox_offset = 0
 
     def event(self, kind, text):
         if kind == 'attention':
@@ -88,6 +113,42 @@ class ReviewWorker:
                 self.client.interrupt()
             except Exception:
                 pass  # Dedicated process-group timeout handles a stalled adapter.
+
+    def deliver_messages(self):
+        """Forward queued dashboard messages once the provider session can take them."""
+        inbox = path(self.run_id, 'review-inbox.jsonl')
+        if not self.client or not inbox.exists():
+            return
+        with inbox.open('rb') as handle:
+            handle.seek(self.inbox_offset)
+            pending = handle.read()
+        while b'\n' in pending:
+            line, pending = pending.split(b'\n', 1)
+            try:
+                message = json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                self.inbox_offset += len(line) + 1
+                continue
+            steer = getattr(self.client, 'steer', None)
+            if not steer:
+                self.inbox_offset += len(line) + 1
+                self.activity.emit('attention', 'This provider cannot take messages during a review.')
+                continue
+            wrap_up = message.get('wrap_up') is True
+            text = str(message.get('text', ''))[:MESSAGE_LIMIT]
+            prompt = WRAP_UP_PROMPT + (f'\n\nTheir note:\n<<<\n{text}\n>>>' if text else '') if wrap_up else message_prompt(text)
+            try:
+                if not steer(prompt, wrap_up=wrap_up):
+                    return  # Session not ready yet; retry on the next tick.
+            except Exception as error:
+                self.inbox_offset += len(line) + 1
+                self.activity.emit('attention', f'Could not deliver the message ({type(error).__name__}).')
+                continue
+            self.inbox_offset += len(line) + 1
+            if wrap_up:
+                self.activity.state(message='Wrapping up with the evidence gathered so far…',
+                                    wrap_up_requested_at=tracker.utc_now())
+            self.activity.emit('you', ('Wrap up now. ' + text).strip() if wrap_up else text)
 
     def mark_cancelled(self):
         tracker.command_cancel(Namespace(
@@ -107,6 +168,10 @@ class ReviewWorker:
                     if os.getpid() == os.getpgrp():
                         os.killpg(os.getpgrp(), signal.SIGKILL)
                 return
+            try:
+                self.deliver_messages()
+            except OSError:
+                pass  # The inbox is retried on the next tick.
             if time.monotonic() - heartbeat >= HEARTBEAT_SECONDS:
                 self.activity.heartbeat()
                 heartbeat = time.monotonic()
@@ -119,6 +184,9 @@ class ReviewWorker:
         if complete_report(self.run_id):
             tasks = tracker.load_run(tracker.run_dir(self.run_id), 6)['tasks']
             gaps = any(task['status'] in ('blocked', 'failed', 'cancelled') for task in tasks)
+            if self.activity.job.get('wrap_up_requested_at'):
+                self.activity.state('completed-with-gaps', WRAPPED_UP)
+                return
             self.activity.state(
                 'completed-with-gaps' if gaps else 'completed',
                 'Review notes are ready; some checks could not be completed.'

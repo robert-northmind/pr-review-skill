@@ -6,11 +6,14 @@ import {z} from 'zod';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createInterface} from 'node:readline';
+import {randomUUID} from 'node:crypto';
 import {buildOptions} from './protocol.mjs';
 import {consumeSession} from './session.mjs';
 const exec = promisify(execFile);
 const emit = event => process.stdout.write(JSON.stringify(event)+'\n');
 let active, started = false, interrupted = false;
+// Messages sent before the session starts wait here until input() drains them.
+const inputs = {queue:[], pending:new Set(), wake:null, send:null};
 const lines = createInterface({input: process.stdin});
 
 function readTools(request) {
@@ -48,24 +51,35 @@ async function run(request) {
     options.mcpServers={'review-reads':readTools(request)};
     options.systemPrompt+='\nUse git_read for pinned base/head files and diffs; use github_read for authenticated GitHub issue/PR reads. Shell execution is unavailable.';
   }
-  let release;
-  const done=new Promise(resolve=>{release=resolve;});
+  let closed=false;
+  const user=text=>({type:'user',message:{role:'user',content:text},parent_tool_use_id:null,session_id:request.session_id||'',uuid:randomUUID()});
   // T3 uses streaming user input with query(), allowing controls while running.
+  // Dashboard messages join the queue; the CLI folds them into the running turn.
   async function* input() {
-    yield {type:'user',message:{role:'user',content:request.prompt},parent_tool_use_id:null,session_id:request.session_id||''};
-    await done;
+    yield user(request.prompt);
+    while(!closed) {
+      while(inputs.queue.length) yield inputs.queue.shift();
+      await new Promise(resolve=>{inputs.wake=resolve;});
+    }
   }
+  inputs.send=text=>{
+    const message=user(text);
+    inputs.pending.add(message.uuid);
+    inputs.queue.push(message);
+    inputs.wake?.();
+  };
   try {
     active=query({prompt:input(),options});
     if(interrupted) await active.interrupt();
-    await consumeSession(active,emit,()=>interrupted);
-  } finally {release();active?.close();lines.close();}
+    await consumeSession(active,emit,()=>interrupted,inputs);
+  } finally {closed=true;inputs.wake?.();active?.close();lines.close();}
 }
 lines.on('line',line=>{
   try {
     const message=JSON.parse(line);
     if(!started){started=true;run(message).catch(()=>{emit({type:'error'});lines.close();process.exitCode=1;});}
     else if(message.type==='interrupt'){interrupted=true;active?.interrupt().catch(()=>{});}
+    else if(message.type==='message'&&typeof message.text==='string'&&message.text) inputs.send?.(message.text);
   }catch{emit({type:'error'});lines.close();process.exitCode=1;}
 });
 process.on('SIGTERM',()=>{active?.close();process.exit(0);});

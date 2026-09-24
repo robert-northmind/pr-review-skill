@@ -72,6 +72,31 @@ assert.deepEqual(answers(await run([start('worker'),result('Interrupted')],()=>t
 assert.deepEqual(await run([start('worker'),result('Waiting')]).then(e=>e.at(-1)), {type:'error'});
 assert.deepEqual(answers(await run([result('Ordinary chat response')])), ['Ordinary chat response']);
 
+// A dashboard message queued before a turn ends runs as the next turn; its
+// reply must not be cut off by the earlier result.
+{
+  const inputs = {pending:new Set(['question'])};
+  const stamped = (answer, uuids) => ({...result(answer), user_message_uuid:uuids.at(-1), user_message_uuids:uuids});
+  assert.deepEqual(answers(await (async () => {
+    const events = [];
+    await consumeSession((async function* () {
+      yield stamped('Working', ['prompt']);
+      assert.deepEqual([...inputs.pending], ['question']);
+      yield {type:'assistant',user_message_uuid:'question',message:{content:[{type:'text',text:'Validating probes'}]}};
+      yield stamped('Report ready', ['question']);
+    })(), e => events.push(e), () => false, inputs);
+    return events;
+  })()), ['Report ready']);
+  assert.equal(inputs.pending.size, 0);
+  // Subagent frames do not consume the lead's messages; old CLIs cannot be tracked.
+  const old = {pending:new Set(['question'])};
+  assert.deepEqual(answers(await (async () => {
+    const events = [];
+    await consumeSession((async function* () {yield result('Done');})(), e => events.push(e), () => false, old);
+    return events;
+  })()), ['Done']);
+}
+
 // Exercise the actual bridge entrypoint, including the lifetime of its input
 // generator. Stub SDK imports in the child process: no login or model calls.
 const fakeSdk = `
@@ -81,13 +106,14 @@ const fakeSdk = `
   export function query({prompt}) {
     const stream = (async function* () {
       assert.equal((await prompt.next()).value.message.content, 'fixture');
-      let inputEnded = false;
-      prompt.next().then(() => {inputEnded = true;});
       yield {type:'system',subtype:'init',session_id:'fixture'};
       yield {type:'system',subtype:'background_tasks_changed',tasks:[{task_id:'reviewer'}]};
       yield {type:'result',subtype:'success',is_error:false,result:'Waiting'};
-      await new Promise(setImmediate);
-      assert.equal(inputEnded, false, 'The control channel closed during background work');
+      // Receiving a message after the waiting result proves the input stayed open.
+      const steer = (await prompt.next()).value;
+      assert.equal(steer.message.content, 'What is going on?');
+      assert.match(steer.uuid, /^[0-9a-f-]{36}$/);
+      yield {type:'assistant',user_message_uuid:steer.uuid,message:{content:[{type:'text',text:'Runtime probes are running'}]}};
       yield {type:'system',subtype:'background_tasks_changed',tasks:[]};
       yield {type:'system',subtype:'task_notification',task_id:'reviewer',status:'completed'};
       yield {type:'assistant',message:{content:[{type:'text',text:'Synthesizing'}]}};
@@ -108,12 +134,14 @@ const loader = `
 `;
 const bridge = spawnSync(process.execPath, ['--import',moduleUrl(loader),
   fileURLToPath(new URL('../../scripts/claude-runtime/bridge.mjs',import.meta.url))], {
-  input:JSON.stringify({mode:'review',prompt:'fixture',cwd:process.cwd(),instructions:''})+'\n',
+  input:JSON.stringify({mode:'review',prompt:'fixture',cwd:process.cwd(),instructions:''})+'\n'
+    +JSON.stringify({type:'message',text:'What is going on?'})+'\n',
   encoding:'utf8',timeout:10000,
 });
 assert.equal(bridge.status,0,bridge.stderr);
 const bridgeEvents = bridge.stdout.trim().split('\n').map(line=>JSON.parse(line));
 assert.deepEqual(answers(bridgeEvents),['Report ready']);
 assert.ok(bridgeEvents.some(e=>e.type==='update' && e.text==='Synthesizing'));
+assert.ok(bridgeEvents.some(e=>e.type==='update' && e.text==='Runtime probes are running'));
 assert.ok(!bridgeEvents.some(e=>e.type==='error'));
 console.log('Claude session: background review continuations, snapshots, errors and cancellation passed.');

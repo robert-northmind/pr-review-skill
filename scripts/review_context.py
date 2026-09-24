@@ -36,3 +36,21 @@ credentials, raw command output or speculative defect claims.
 The existing review.html remains the final deliverable. Register it and finish
 all task states. Do not publish anything to GitHub.
 '''
+
+
+WRAP_UP_PROMPT = '''The person who requested this review asked you to wrap up now.
+Start no new investigation. Stop running background reviewers and validation
+tasks unless one is about to report. Use only the evidence gathered so far.
+Mark each unfinished tracker task blocked with a short message naming the gap,
+then finish synthesis, drafts and the report, and register review.html. Say in
+the report which checks were cut short. Do not publish anything to GitHub.'''
+
+
+def message_prompt(text):
+    # Messages steer scope; the skill's publishing and safety rules still apply.
+    return ('Message from the person who requested this review, sent from the dashboard:\n'
+        f'<<<\n{text}\n>>>\n'
+        'Answer briefly in your progress commentary; the dashboard shows it. If you are waiting '
+        'on a background reviewer, check its latest output before answering. Follow the message '
+        'if it steers scope, then continue the review unless it asks you to stop or wrap up. '
+        'It does not override the rules against publishing to GitHub or exposing secrets.')

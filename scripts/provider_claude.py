@@ -9,12 +9,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 import time
 from ai_runtime import ProviderError, sources
 
 class Session:
     def __init__(self):
         self.process = None
+        self.input_lock = threading.Lock()  # Steering and interrupts write from other threads.
 
     def run(self, request, callbacks):
         binary = os.environ.get('PR_REVIEW_CLAUDE') or shutil.which('claude')
@@ -71,9 +73,19 @@ class Session:
             raise ProviderError('Claude could not complete the estimate. Check local login and model availability.')
         return {'completed': True, 'structured': structured, 'usage': value.get('usage', {})}
 
+    def steer(self, text, wrap_up=False):
+        """Queue a user message into the running session; False until it can take one."""
+        if not self.process or self.process.poll() is not None or not self.process.stdin or self.process.stdin.closed:
+            return False
+        with self.input_lock:
+            self.process.stdin.write(json.dumps({'type': 'message', 'text': text, 'wrap_up': wrap_up})+'\n')
+            self.process.stdin.flush()
+        return True
+
     def interrupt(self):
         if self.process and self.process.poll() is None and self.process.stdin and not self.process.stdin.closed:
-            self.process.stdin.write('{"type":"interrupt"}\n'); self.process.stdin.flush()
+            with self.input_lock:
+                self.process.stdin.write('{"type":"interrupt"}\n'); self.process.stdin.flush()
 
     def close(self):
         if self.process:

@@ -54,6 +54,13 @@ class Session:
             if notification.method == 'turn/completed':
                 return {'completed': payload.get('turn', {}).get('status') == 'completed'}
 
+    def steer(self, text, wrap_up=False):
+        # Codex folds steering input into the active review turn.
+        if not (self.client and self.thread_id and self.turn_id):
+            return False
+        self.client.turn_steer(self.thread_id, self.turn_id, text)
+        return True
+
     def interrupt(self):
         if self.client and self.thread_id and self.turn_id:
             self.client.turn_interrupt(self.thread_id, self.turn_id)

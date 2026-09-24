@@ -2,6 +2,7 @@
 import _bootstrap  # Make this checkout's scripts and test helpers importable.
 
 from argparse import Namespace
+import json
 import os
 import tempfile
 import threading
@@ -38,8 +39,16 @@ def main():
         stop=threading.Event()
         def advance():
             with c.worker_lock(run):
-                n=6
+                n=6;delivered=0
                 while not stop.wait(2):
+                    inbox=c.path(run,'review-inbox.jsonl')
+                    for message in (inbox.read_text().splitlines() if inbox.exists() else [])[delivered:]:
+                        # Stand-in for provider delivery; the real worker path is unit-tested.
+                        delivered+=1;message=json.loads(message)
+                        if message['wrap_up']:
+                            activity.state(message='Wrapping up with the evidence gathered so far…',wrap_up_requested_at=t.utc_now())
+                        activity.emit('you',('Wrap up now. '+message['text']).strip() if message['wrap_up'] else message['text'])
+                        activity.emit('update','Sample reply: correctness is tracing cancellation; contracts and security are still running.')
                     if c.path(run,'codex-cancel.json').exists():
                         activity.state('cancelled','Sample review stopped. Saved activity retained.')
                         t.command_cancel(Namespace(run_id=run,message='Sample cancelled'))

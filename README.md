@@ -312,7 +312,12 @@ in this repository. Keep those out of commits and screenshots.
 Selecting Codex or Claude Code runs AI reviews in a background worker and opens live activity
 in the dashboard. Stage progress follows reviewer checkpoints; it is an estimate,
 not time remaining. Reviews keep running across page reloads and server restarts.
-Stop review cancels the worker and preserves its saved activity. Full-review sessions do not accept follow-ups; the code workspace
+While a review runs, the activity panel accepts questions and steering, such as
+"what is going on?" or "skip the example app"; the lead answers in the agent
+updates. Wrap up now asks the lead to stop new checks, mark unfinished stages
+blocked, and build the report from the evidence gathered so far; the result is
+labeled Finished with gaps. Stop review cancels the worker and preserves its saved
+activity. Finished review sessions do not accept follow-ups; the code workspace
 has a separate persistent chat for code questions.
 
 Install `requirements-triage.txt` into the server's Python environment for Codex

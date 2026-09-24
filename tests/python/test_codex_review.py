@@ -128,6 +128,61 @@ c.run_worker(sys.argv[1],lambda:CodexSession(lambda approval:Stalled()))
         finally:
             if proc.poll() is None:proc.kill();proc.wait()
 
+    def test_messages_validate_and_queue(self):
+        run=self.seed()
+        for text,wrap in [('',False),('   ',False),('x'*2001,False)]:
+            with self.assertRaises(t.TrackerError):c.send_message(run,text,wrap)
+        self.assertEqual(c.send_message(run,' What is going on? ')['status'],'queued')
+        self.assertEqual(c.send_message(run,'',True)['status'],'queued')
+        lines=[json.loads(l) for l in c.path(run,'review-inbox.jsonl').read_text().splitlines()]
+        self.assertEqual([(l['text'],l['wrap_up']) for l in lines],[('What is going on?',False),('',True)])
+        t.atomic_write(c.path(run),{**c.read_job(run),'status':'completed'})
+        with self.assertRaises(t.TrackerError):c.send_message(run,'late')
+
+    def test_worker_delivers_messages_and_wrap_up_finishes_with_gaps(self):
+        run=self.seed();owner=self
+        class Steerable:
+            def __init__(self):self.sent=[];self.ready=False;self.wrapped=threading.Event()
+            def steer(self,text,wrap_up=False):
+                if not self.ready:return False
+                self.sent.append((text,wrap_up))
+                if wrap_up:self.wrapped.set()
+                return True
+            def run(self,request,callbacks):
+                c.send_message(run,'What is going on?')
+                time.sleep(1.5);self.ready=True  # Undeliverable messages wait for the session.
+                c.send_message(run,'skip the example app',True)
+                assert self.wrapped.wait(5)
+                owner.complete(run)
+                p=t.run_dir(run)/'review.html';p.write_text('<h1>Review</h1>')
+                t.command_add_artifact(NS(run_id=run,name='review-html',kind='html',path=str(p),managed=True))
+                return {'completed':True}
+            def close(self):pass
+        client=Steerable()
+        c.run_worker(run,lambda:client)
+        self.assertEqual([w for _,w in client.sent],[False,True])
+        self.assertIn('What is going on?',client.sent[0][0])
+        self.assertIn('wrap up now',client.sent[1][0]);self.assertIn('skip the example app',client.sent[1][0])
+        data=c.snapshot(run)
+        self.assertEqual((data['status'],data['message']),('completed-with-gaps',c.WRAPPED_UP))
+        self.assertTrue(data['wrap_up_requested']);self.assertFalse(data['accepts_messages'])
+        self.assertEqual([e['text'] for e in data['events'] if e['kind']=='you'],['What is going on?','Wrap up now. skip the example app'])
+        self.assertNotIn('Message from the person',json.dumps(data))
+
+    def test_codex_steers_only_the_active_turn(self):
+        calls=[];session=CodexSession();self.assertFalse(session.steer('hi'))
+        session.client=NS(turn_steer=lambda *args:calls.append(args));session.thread_id,session.turn_id='thread','turn'
+        self.assertTrue(session.steer('hi'));self.assertEqual(calls,[('thread','turn','hi')])
+
+    def test_provider_without_steering_reports_it(self):
+        run=self.seed()
+        class Plain:
+            def run(self,request,callbacks):
+                c.send_message(run,'hello');time.sleep(1.5);return {'completed':False}
+            def close(self):pass
+        c.run_worker(run,lambda:Plain())
+        self.assertIn('cannot take messages',json.dumps(c.snapshot(run)['events']))
+
     def test_cancel_before_start_does_not_call_provider(self):
         run=self.seed();c.cancel(run)
         c.run_worker(run,lambda approval:self.fail('must not start'))
@@ -148,6 +203,14 @@ class ReviewHTTP(HTTP):
                 self.assertIn('"status": "completed"',body)
         self.assertEqual(self.request('/api/review-events?run_id='+run,headers={'Origin':'https://evil.example'})[0],403)
         self.assertEqual(self.request('/api/review?run_id=../../outside')[0],400)
+
+    def test_message_requires_csrf_and_running_review(self):
+        run=self.seed()
+        self.assertEqual(self.request('/review-message','POST',{'run_id':run,'text':'hi'})[0],403)
+        self.assertEqual(self.request('/review-message','POST',{'run_id':run,'text':'hi'},self.auth())[0],400)
+        t.atomic_write(c.path(run),{**c.read_job(run),'status':'running'})
+        with c.worker_lock(run):
+            self.assertEqual(self.request('/review-message','POST',{'run_id':run,'text':'hi'},self.auth())[0],202)
 
     def test_cancel_requires_csrf_and_rejects_legacy(self):
         run=self.seed()

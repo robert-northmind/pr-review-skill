@@ -28,10 +28,32 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
    assert.ok(await page.evaluate(()=>document.querySelector('#review-dialog').scrollWidth<=document.querySelector('#review-dialog').clientWidth),`dialog overflow ${theme}/${width}`);
    await page.screenshot({path:path.join(output,`${theme}-${width}.png`)});
   }
+  // Questions and steering go to the running reviewer; replies land in the feed.
+  assert.equal(await page.locator('#review-compose').isVisible(),true);
+  await page.locator('#review-compose-text').fill('What is going on?');
+  await page.locator('#review-compose-text').press('Enter');
+  await page.waitForSelector('.review-event.you');
+  assert.equal(await page.locator('#review-compose-text').inputValue(),'');
+  assert.match(await page.locator('.review-event.you').first().textContent(),/What is going on\?/);
+  await page.waitForFunction(()=>document.getElementById('review-updates').textContent.includes('Sample reply'),null,{timeout:8000});
+  assert.equal(await page.locator('.review-event.you').count(),1);
+  await page.locator('#review-compose-text').fill('Skip the example app');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#review-wrap-up').click();
+  assert.equal(await page.locator('#review-wrap-up').isDisabled(),false,'Dismissing the confirmation must not wrap up');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#review-wrap-up').click();
+  assert.equal(await page.locator('#review-wrap-up').textContent(),'Wrapping up…');
+  await page.waitForFunction(()=>[...document.querySelectorAll('.review-event.you')].some(e=>e.textContent.includes('Wrap up now. Skip the example app')),null,{timeout:8000});
+  await page.reload();await page.waitForSelector('#review-dialog[open] .review-event.you');
+  assert.equal(await page.locator('#review-wrap-up').isDisabled(),true);
+  assert.equal(await page.locator('#review-wrap-up').textContent(),'Wrapping up…');
   await page.locator('#review-stop').click();
   await page.waitForFunction(()=>document.getElementById('review-status').textContent.startsWith('Cancelled'));
   await page.reload();await page.waitForFunction(()=>document.getElementById('review-status').textContent.startsWith('Cancelled'));
   assert.equal(await page.locator('#review-stop').isVisible(),false);
+  assert.equal(await page.locator('#review-compose').isVisible(),false);
+  assert.equal(await page.locator('#review-wrap-up').isVisible(),false);
   // A finished deep link must await the shared state request before rendering its report link.
   const saved=await page.evaluate(()=>state),savedRun=saved.prs[0].history[0];
   savedRun.artifacts['review-html']={name:'review-html',run_id:savedRun.run_id,path:'/fixture/report.html',version:'fixture',freshness:'current',status:'completed'};
@@ -86,6 +108,6 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(await deep.locator('#review-status').textContent(),'Finished · 1 stage blocked');
   await deep.close();
   assert.deepEqual(errors,[]);
-  console.log('Browser checks passed: live progress, reload, offline reconnect, escaped content, cancellation, terminal outcomes, saved report link, light/dark desktop/mobile.');
+  console.log('Browser checks passed: live progress, reload, offline reconnect, escaped content, questions, wrap-up, cancellation, terminal outcomes, saved report link, light/dark desktop/mobile.');
  }finally{if(browser)await browser.close();fixture.kill('SIGTERM');}
 })().catch(e=>{console.error(e);process.exitCode=1;});

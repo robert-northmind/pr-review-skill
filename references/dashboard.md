@@ -512,9 +512,21 @@ reviewers are running. Their completion notifications let the lead continue
 through synthesis and report registration; progress watchers alone do not keep
 a finished session open.
 Reloading the page or restarting the dashboard reconnects to the saved run; it
-never starts another model call. Session resume/follow-up and inline answers to
-agent questions are not implemented yet. Unhandled input requests are declined
-and surfaced as a blocker if the review cannot complete.
+never starts another model call. Session resume after a review ends and inline
+answers to agent questions are not implemented yet. Unhandled input requests are
+declined and surfaced as a blocker if the review cannot complete.
+
+A running review accepts messages from the activity panel. POST `/review-message`
+appends to the run's `review-inbox.jsonl`; the worker forwards each message once
+the provider session can take it, then records it as a `you` event. Claude
+receives it as streaming user input with a client uuid; the bridge keeps the
+session open until a turn reports consuming that uuid, so a queued question is
+not cut off by an earlier result. Codex receives it through `turn/steer` on the
+active turn. Wrap up now sends a fixed instruction to stop new work, stop
+background reviewers, mark unfinished tasks blocked and finish the report; the
+worker then labels a complete report `completed-with-gaps`. Providers without
+steering record an attention event instead. The stored prompt wrapper is never
+shown in activity.
 
 Codex uses workspace-write sandboxing and automatic approval review. Claude uses
 its native auto permission mode, without bypass flags. Both retain
@@ -554,7 +566,7 @@ launchd service to try an isolated worktree.
 
 Run `python3 tests/run.py python test_codex_review test_dashboard test_dashboard_launch`
 from the repository root. `node tests/browser/test_codex_browser.cjs` uses a disposable synthetic
-review to exercise live progress, reload/reconnect, cancellation, escaped text,
+review to exercise live progress, reload/reconnect, questions, wrap-up, cancellation, escaped text,
 and light/dark desktop/mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` when
 Playwright is outside Node's normal module path. The fixture never calls a model.
 

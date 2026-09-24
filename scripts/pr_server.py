@@ -30,7 +30,7 @@ import workspace_report
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/ai-config','/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
-             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
+             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/review-message','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
 
 
 class Server(ThreadingHTTPServer):
@@ -228,6 +228,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200,workspace_chat.cancel(str(data.get('url','')),data.get('thread_id'))); return
             if path == '/review-cancel':
                 self._send(200, reviews.cancel(str(data.get('run_id', '')))); return
+            if path == '/review-message':
+                self._send(202, reviews.send_message(str(data.get('run_id', '')), data.get('text', ''),
+                    data.get('wrap_up') is True)); return
             if path == '/artifact-opened':
                 self._send(200, runtime.mark_artifact_opened(str(data.get('run_id', '')),
                     str(data.get('name', '')), data.get('version'))); return

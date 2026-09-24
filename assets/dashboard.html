@@ -105,8 +105,9 @@
 <ol id="review-stages" class="review-stages"></ol>
 <div class="review-feed-heading"><h3>Agent updates</h3><span id="review-stream-status" class="muted" role="status">Connecting…</span></div>
 <ol id="review-updates" class="review-updates" aria-label="Saved agent updates"></ol>
+<form id="review-compose" class="review-compose" hidden><label class="sr-only" for="review-compose-text">Message the reviewer</label><textarea id="review-compose-text" rows="2" maxlength="2000" placeholder="Ask or steer the reviewer, e.g. what is going on? or skip the example app"></textarea><div class="review-compose-actions"><button type="button" class="button subtle" data-review-ask="What is going on right now, and what is left before the report?">What's going on?</button><span id="review-compose-status" class="muted" role="status"></span><button type="submit" class="button">Send</button></div></form>
 <details class="review-tool-details"><summary>Recent tool activity <span id="review-tools-count" class="count">0</span></summary><ul id="review-tools"></ul><p class="muted">Latest activity only. Raw commands and tool output are not stored in this feed.</p></details>
-<div class="review-footer"><span class="muted">Closing this panel keeps the review running.</span><div id="review-result"></div><button id="review-stop" class="button" hidden>Stop review</button></div>
+<div class="review-footer"><span class="muted">Closing this panel keeps the review running.</span><div id="review-result"></div><div class="review-footer-actions"><button id="review-wrap-up" class="button primary" hidden title="Stop new work and build the report from the evidence gathered so far">Wrap up now</button><button id="review-stop" class="button" hidden>Stop review</button></div></div>
 </dialog>
 <dialog id="settings" class="workspace-dialog" aria-labelledby="settings-heading">
   <div class="dialog-heading"><h2 id="settings-heading">Settings</h2><button class="button subtle" data-close-dialog>Close</button></div>

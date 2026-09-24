@@ -22,8 +22,10 @@ function reviewSummary(run) {
   const finished = reviewFinal.has(run.status);
   const percent = run.progress?.percent || 0;
   const label = finished ? reviewOutcome(run) : statusLabels[run.status] || run.status;
+  const running = finished ? [] : (run.progress?.stages || []).filter(stage => stage.status === 'running');
   const progress = finished ? '' : `
-    <progress max="100" value="${percent}" aria-label="Estimated review progress"></progress>`;
+    <progress max="100" value="${percent}" aria-label="Estimated review progress"></progress>
+    ${running.length ? `<span class="muted review-now">Working on: ${esc(running.map(stage => stage.label).join(' · '))}</span>` : ''}`;
   return `<div class="review-summary">
     <div class="review-summary-main">
       <span class="review-eyebrow">AI REVIEW</span>
@@ -57,6 +59,7 @@ class ReviewPanel {
     this.finished = false;
     this.generation = 0;
     this.updateSignature = '';
+    this.wrapUpSent = false;
   }
 
   disconnect() {
@@ -111,6 +114,11 @@ class ReviewPanel {
     $('review-stop').hidden = this.finished;
     $('review-stop').disabled = data.status === 'stopping';
     $('review-stop').textContent = data.status === 'stopping' ? 'Stopping…' : 'Stop review';
+    const talking = !this.finished && data.accepts_messages && data.status !== 'stopping';
+    $('review-compose').hidden = !talking;
+    $('review-wrap-up').hidden = !talking;
+    $('review-wrap-up').disabled = data.wrap_up_requested || this.wrapUpSent;
+    $('review-wrap-up').textContent = data.wrap_up_requested || this.wrapUpSent ? 'Wrapping up…' : 'Wrap up now';
     $('review-stages').innerHTML = progress.stages.map(reviewStage).join('');
     this.renderUpdates(data.events);
     $('review-stream-status').textContent = this.finished
@@ -180,6 +188,10 @@ class ReviewPanel {
     $('review-message').textContent = '';
     $('review-counts').textContent = '';
     $('review-stop').hidden = true;
+    $('review-compose').hidden = true;
+    $('review-wrap-up').hidden = true;
+    $('review-compose-status').textContent = '';
+    this.wrapUpSent = false;
     if (!$('review-dialog').open) $('review-dialog').showModal();
     try {
       const response = await fetch('/api/review?run_id=' + encodeURIComponent(runId));
@@ -191,6 +203,37 @@ class ReviewPanel {
       if (this.generation === generation) {
         $('review-stream-status').textContent = error.message || 'Could not load this review.';
       }
+    }
+  }
+
+  async send(text, wrapUp = false) {
+    const generation = this.generation;
+    const status = $('review-compose-status');
+    status.textContent = 'Sending…';
+    try {
+      await post('/review-message', {run_id: this.runId, text, wrap_up: wrapUp});
+      if (this.generation !== generation) return true;
+      status.textContent = wrapUp ? 'Asked the reviewer to wrap up.'
+        : 'Sent. The reviewer answers in the updates above.';
+      return true;
+    } catch (error) {
+      if (this.generation === generation) status.textContent = error.message;
+      return false;
+    }
+  }
+
+  async wrapUp() {
+    if (!confirm('Wrap up now? The reviewer stops new checks and builds the report from what it has so far.')) return;
+    this.wrapUpSent = true;
+    $('review-wrap-up').disabled = true;
+    $('review-wrap-up').textContent = 'Wrapping up…';
+    // Any unsent text becomes the note that goes with the wrap-up.
+    const note = $('review-compose-text').value.trim();
+    if (await this.send(note, true)) $('review-compose-text').value = '';
+    else {
+      this.wrapUpSent = false;
+      $('review-wrap-up').disabled = false;
+      $('review-wrap-up').textContent = 'Wrap up now';
     }
   }
 
@@ -223,6 +266,24 @@ $('review-dialog').addEventListener('close', () => {
   if (!$('review-dialog').open && reviewPanel.runId) reviewPanel.close();
 });
 $('review-stop').addEventListener('click', () => reviewPanel.cancel());
+$('review-wrap-up').addEventListener('click', () => reviewPanel.wrapUp());
+$('review-compose').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = $('review-compose-text');
+  const text = input.value.trim();
+  if (!text) return input.focus();
+  if (await reviewPanel.send(text)) input.value = '';
+});
+$('review-compose-text').addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    $('review-compose').requestSubmit();
+  }
+});
+$('review-compose').addEventListener('click', event => {
+  const ask = event.target.closest('[data-review-ask]');
+  if (ask) reviewPanel.send(ask.dataset.reviewAsk);
+});
 document.addEventListener('DOMContentLoaded', async () => {
   let saved = new URL(location.href).searchParams.get('review');
   try { saved ||= sessionStorage.getItem('pr-active-review'); } catch {}
