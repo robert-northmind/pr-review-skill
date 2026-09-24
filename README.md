@@ -1,588 +1,270 @@
 # PR Review Skill
 
-A local workspace for reviewing GitHub pull requests with an AI coding agent.
-Keep track of what needs your attention, read an explanation of a change,
-and turn verified findings into review comments you can edit and send yourself.
+A local dashboard and AI review skill for GitHub pull requests. Find what needs
+your attention, understand a change, inspect its code and discussion, and turn
+verified findings into review comments you can edit and post yourself.
 
-The dashboard runs on your machine. Python serves the app; the frontend is
-plain HTML, CSS, and JavaScript. There is no frontend build step or database
-service to set up.
+Use the dashboard with your GitHub CLI login. Add Codex or Claude Code for AI
+reviews, effort estimates and code chat. You can also run the review skill
+directly from an AI coding agent, without the dashboard.
 
-[Features](#what-it-does) · [Get started](#get-started) ·
-[GitHub and AI authentication](#connect-github-and-ai-accounts) ·
-[Code workspace](#code-review-workspace) · [Development](#development-and-recovery)
+The app runs on your machine: a Python server with plain HTML, CSS and JavaScript.
+No frontend build or database service is required. GitHub operations are read-only;
+the dashboard does not post comments, approve or merge PRs.
 
-## A look around
-
-**Your review inbox, in light mode.** See authors, filter your queue, and open
-the code workspace or saved AI report with **Open review**. Snooze a PR from
-its actions menu or save it to My reviews.
-
-![PR inbox in light mode with fictional pull requests and authors](docs/screenshots/inbox-light.jpg)
-
-**One report, starting with the outcome and assessment.** Follow a concrete
-before/after example and see the exact code behind the behavior.
-
-![Combined review report opening with a fictional parser change and before-and-after example](docs/screenshots/review-overview-light.jpg)
-
-**Findings you can explore one at a time.** Severity and titles stay visible.
-Open a finding for an example, the cause and consequence, a fix direction, a
-copyable comment, and its evidence. Expand all when you want the full review.
-
-![Two fictional findings, with one expanded to show an example, impact, fix direction and copyable comment](docs/screenshots/review-findings-light.jpg)
-
-**My reviews.** Keep a personal queue grouped by whose turn it is, and pick up
-where you stopped. New commits and replies bring waiting PRs back to you.
-
-![My reviews with fictional PRs, update indicators and private notes](docs/screenshots/my-reviews-light.jpg)
-
-**Reporting, in dark mode.** Compare completed weeks, follow daily activity
-trends, and select a day or week to see the reviewed and merged PRs.
-
-![Reporting in dark mode with fictional review and merge activity](docs/screenshots/reporting-dark.jpg)
-
-**Code and GitHub discussion together.** Read diffs, navigate review threads,
-and attach a comment to AI chat or ask for a draft reply.
-
-![Code workspace showing a fictional batch transport diff, inline thread and Comments rail](docs/screenshots/code-workspace-light.jpg)
-
-**Steer a running review.** Follow stage progress, ask questions, add guidance,
-or request **Wrap up now** with the evidence gathered so far.
-
-![Simulated live AI review with stage progress, a question and reply, and wrap-up controls](docs/screenshots/live-review-light.jpg)
-
-**Choose an AI for each job.** Configure Triage, AI review and Chat independently.
-
-![AI settings with separate provider, model and reasoning controls for each feature](docs/screenshots/ai-settings-light.jpg)
-
-All screenshots use fictional PRs, people, repositories, and activity.
-They were captured from the current dashboard and report renderer on
-September 24, 2026, using disposable fixtures with mocked GitHub and AI data.
-See [screenshot provenance](docs/screenshots/README.md).
+[Features](#what-it-does) · [Screenshots](#screenshots) ·
+[Install and run](#install-and-run) · [First review](#run-your-first-review) ·
+[Authentication](docs/authentication.md) · [Documentation](#documentation)
 
 ## What it does
 
-- **Triage:** separate views for review requests, watched repositories, your
-  own PRs, snoozed PRs, and hidden PRs. Snooze for one day, two days, or a
-  week; hide a PR with an undo option.
-- **Estimate effort:** optional background AI estimates show Quick, Moderate,
-  Involved, or Uncertain with a short explanation. Filter for quick reviews or
-  sort by effort, and rate estimates after your normal reviews. A compact
-  indicator appears while estimating and hides when finished. AI activity keeps
-  detailed progress and daily usage; failures and blocked work remain visible.
-- **Follow up:** save PRs in My reviews, keep private notes, and see new commits
-  and replies that need another look.
-- **Filter:** include or exclude multiple authors, repositories, and review
-  statuses. There is a shortcut to exclude Renovate. Preferences are remembered
-  in your browser.
-- **Review:** run Claude Code or Codex from the dashboard. Keep the
-  combined HTML review notes and run history attached to the PR.
-  Existing results remain available during a rerun; outdated results are marked.
-  Start with guidance, ask questions or steer an active review, wrap up early
-  with explicit gaps, or stop it while retaining saved activity.
-- **Explore code and discussion:** unified or side-by-side diffs, full files,
-  viewed progress, inline GitHub threads, and the PR conversation. Ask AI about
-  selected lines or comments in persistent, revision-pinned chats. Draft replies
-  remain local for you to copy; the dashboard does not post them.
-- **Understand and check:** the opening shows the changed outcome and current
-  assessment, with a shortcut to findings. One HTML contains the explanation and
-  expandable, verified findings with examples and draft comments. The lead
-  assesses size, complexity, risk, and uncertainty before allocating reviewers;
-  the verification appendix records coverage, checks, limitations, and model choices.
-- **Report:** daily and weekly GitHub activity, completed-week comparisons,
-  daily trend averages with time-off exclusions,
-  and a short list of yesterday's work. A PR counts once per day or week.
-  AI runs, draft reviews, and ordinary PR comments do not count as submitted
-  GitHub reviews.
-- **Sync:** one Sync GitHub action updates discovery, saved reviews and reporting.
-  Open the sync status for source timestamps and any failures. Cached results stay available.
-- **Settings:** review agents, effort estimates, watched repositories and appearance
-  are available from every view. Choose light, dark, or your system theme.
+| Feature | What you can do |
+|---|---|
+| **PR inbox** | Browse review requests, watched repositories and your own PRs. Filter by author, repository, review status or draft state; snooze or hide items. |
+| **My reviews** | Keep an ordered queue, save private notes and reminders, and see when new commits or replies bring a PR back to you. |
+| **Effort estimates** | Get optional Quick, Moderate, Involved or Uncertain estimates, with reasons, filters and a daily call limit. |
+| **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Keep previous reports and run history. |
+| **Review reports** | Read the outcome and assessment, before/after examples, exact source excerpts, expandable findings, copyable draft comments and verification limits in one HTML report. |
+| **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
+| **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
+| **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions. |
+| **Settings** | Choose providers, models and reasoning independently for Triage, AI review and Chat. Configure watched repositories and light, dark or system appearance. |
 
-## Requirements and current scope
+AI reviews cover the full diff through correctness, contracts and security lenses,
+verify candidate findings, and record what was actually checked. The result is
+review assistance; you decide which comments to send and whether to approve.
 
-- Python 3.11 or newer, Git, and the [GitHub CLI](https://cli.github.com/).
-- A GitHub login with access to the repositories you want to review.
-- The Python backend uses Unix facilities; Windows support is not provided.
-- Claude Code installed and authenticated, Node.js 22.16+ and the pinned
-  JS runtime (`npm ci --prefix scripts/claude-runtime`) for Claude review/chat, or the pinned
-  `openai-codex` runtime from `requirements-triage.txt` and an existing Codex
-  login for in-app Codex reviews.
+## Screenshots
 
-Background effort estimates use the optional Python dependencies in
-`requirements-triage.txt`. Install them into `.venv`, then configure
-Settings → AI settings → Triage. Codex and Claude Code use your existing local login;
-OpenAI API uses `OPENAI_API_KEY` from the server environment and separate billing.
-Initial estimates run after GitHub refresh or Estimate all waiting, continuing
-through eligible inbox and active My reviews PRs until caught up or the daily
-limit is reached. Estimate effort on a card also supports an explicit draft
-estimate; automatic runs skip drafts. Hidden and snoozed PRs are excluded.
-Completed estimates are retained when a PR changes and marked Outdated; use
-Re-estimate on its card to update one manually. Incomplete
-diffs are marked Uncertain. See [effort configuration and limits](references/dashboard.md#initial-review-effort).
+**Inbox:** review requests, effort estimates and an entry into each PR's workspace.
 
-Before adopting this workflow, review the customization notes below.
-The inbox and reporting can be used without running an AI agent.
+![PR inbox with fictional pull requests, effort estimates and Open review actions](docs/screenshots/inbox-light.jpg)
 
-### Full-review dependencies
+**Code workspace:** the diff, inline review threads and GitHub discussion together.
 
-The combined report renderer and neutral comment-writing guidance are bundled.
-No additional skill is required. You can optionally configure your agent to use
-a personal writing-style skill, such as `my-feedback-voice`, for draft comments.
-Without one, reviews use clear, collegial wording. Keep personal writing examples
-outside this repository.
-Read [SKILL.md](SKILL.md) for the complete review and sandboxed verification
-workflow. An agent needs a suitable disposable sandbox to execute PR code.
-Full report validation also needs Node.js, Playwright, and an available
-Chromium or Chrome browser. See [renderer and browser-check setup](references/authoring.md)
-for the commands and runtime-path overrides.
+![Code workspace with a fictional batch transport diff, inline thread and Comments rail](docs/screenshots/code-workspace-light.jpg)
 
-## Get started
+<details>
+<summary>More screenshots: reports, review queue, live AI reviews, settings and reporting</summary>
 
-Clone into the shared skill directory used by this installation:
+**Review report:** the outcome and current assessment lead into a before/after example.
+
+![Review report opening with its assessment and a fictional parser example](docs/screenshots/review-overview-light.jpg)
+
+**Findings:** expand a finding to read the example, impact, fix direction and draft comment.
+
+![Two fictional findings, one expanded with evidence and a copyable comment](docs/screenshots/review-findings-light.jpg)
+
+**My reviews:** see whose turn it is, what changed and where you stopped.
+
+![Personal review queue with update indicators and private notes](docs/screenshots/my-reviews-light.jpg)
+
+**Live review:** follow progress, ask questions, add guidance or request an early wrap-up.
+
+![Simulated AI review with stage progress, a question and reply, and wrap-up controls](docs/screenshots/live-review-light.jpg)
+
+**AI settings:** choose a separate provider and model for each feature.
+
+![Independent Triage, AI review and Chat provider settings](docs/screenshots/ai-settings-light.jpg)
+
+**Reporting:** review and merge activity, trend lines and a selected day's PRs.
+
+![Reporting in dark mode with fictional daily activity and workday trends](docs/screenshots/reporting-dark.jpg)
+
+</details>
+
+All screenshots use synthetic data, captured September 24, 2026 from the actual
+UI. See [screenshot provenance and refresh instructions](docs/screenshots/README.md).
+
+## Install and run
+
+### Requirements
+
+- macOS or Linux, Python 3.11+, Git and [GitHub CLI](https://cli.github.com/).
+  The backend uses Unix facilities; Windows is not supported.
+- A GitHub account with access to the repositories you want to review.
+- For AI features, an authenticated [Codex CLI](https://developers.openai.com/codex/cli/)
+  or [Claude Code](https://code.claude.com/docs/en/setup) installation and the
+  provider runtime described below. Claude reviews/chat also need Node.js 22.16+.
+
+The inbox, review queue, code browser and reporting work without an AI provider.
+Full AI review validation needs a disposable execution sandbox; report browser
+checks also need Node.js, Playwright and Chrome/Chromium. See
+[review validation setup](references/authoring.md).
+
+### 1. Clone the repository
 
 ```sh
 git clone https://github.com/robert-northmind/pr-review-skill.git \
   ~/.agents/skills/pr-review
 cd ~/.agents/skills/pr-review
-gh auth login
-python3 scripts/pr_server.py
 ```
 
-If you already have this checkout, use it instead of cloning over it.
+Use an existing checkout if you already have one. Another directory also works;
+use that path when referring to the skill from your agent.
 
-Open [the local dashboard](http://127.0.0.1:8765/) and click **Sync GitHub**.
-Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
-`python3 scripts/pr_server.py --port 8766` and open that port instead.
-
-In **Settings**, add watched repositories as `owner/repository`, then select Sync
-GitHub. In **AI settings**, configure Triage, AI review and Chat independently.
-Each has provider, model and reasoning dropdowns; providers can be mixed.
-Choices are remembered per feature and provider. Presets are maintained in
-`scripts/agent_options.py`; unsupported reasoning resets to the model default.
-Save all settings applies the three profiles together. Existing conversations keep
-their original settings; new conversations use the current Chat profile.
-Provider errors are shown without automatic fallback.
-These settings select the lead session. The lead chooses reviewer subagent
-models and reasoning levels from the host's supported options, within your
-explicit constraints. If overrides are unavailable, reviewers inherit the
-session settings and the report records that limitation.
-
-### Connect GitHub and AI accounts
-
-GitHub access and AI access are separate. The server runs local CLI/SDK processes
-under your OS account; there is no dashboard account or token-entry form.
-Authenticate in the terminal as the same user who runs the server.
-
-| Connection | Used for | Authentication |
-|---|---|---|
-| GitHub CLI (`gh`) | Inbox, reporting, PR source, review threads and follow-up checks | Your GitHub CLI login |
-| Codex | Triage, AI reviews and code chat | Your local Codex authentication |
-| Claude Code | Triage, AI reviews and code chat | Your local Claude Code authentication |
-| OpenAI API | Triage only | `OPENAI_API_KEY` in the server environment; separate API billing |
-
-#### GitHub
-
-Install [GitHub CLI](https://cli.github.com/), then sign in and check access:
+### 2. Connect GitHub
 
 ```sh
 gh auth login --hostname github.com --web
 gh auth status --hostname github.com
-gh api user --jq .login
-gh pr view https://github.com/OWNER/REPOSITORY/pull/123 --json url,title
 ```
 
-Replace the example URL with a PR you can access. The dashboard uses `gh` for
-REST/GraphQL reads and the code-chat checkout uses `gh auth git-credential` for
-its HTTPS fetch. No separate GitHub OAuth app or copied token is needed.
-Your GitHub account must have access to the repository, including any required
-organization SSO authorization. An SSH key alone does not authenticate these API
-reads. GitHub CLI manages stored credentials; `GH_TOKEN` or `GITHUB_TOKEN` can
-also supply authentication to the server process. See [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login).
+Use the same OS account for login and the server. The app uses `gh` for GitHub
+API reads and for authenticated HTTPS source fetches in code chat. No dashboard
+GitHub account or token-entry form is needed. Private repositories require your
+normal repository access and any organization SSO authorization.
 
-Dashboard actions read GitHub; they do not post, approve, merge or resolve threads.
-This does not reduce the permissions of the underlying GitHub credential.
-My reviews binds its queue to the first synced GitHub account. Switching accounts
-produces an error; use a separate `PR_REVIEW_TRACKER_HOME` for another account.
+### 3. Start the dashboard
 
-#### Codex
+```sh
+python3 scripts/pr_server.py
+```
 
-Install the [Codex CLI](https://developers.openai.com/codex/cli/), then authenticate:
+Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/) and click **Sync GitHub**.
+Review requests and your own PRs appear after sync. In **Settings → Repositories**,
+add repositories as `owner/repository` and sync again to populate **Watching**.
+
+Keep the terminal running; Ctrl-C stops the server. If the port is occupied:
+
+```sh
+python3 scripts/pr_server.py --port 8766
+```
+
+Then open [http://127.0.0.1:8766/](http://127.0.0.1:8766/).
+For automatic startup, see [macOS service setup](references/dashboard.md#automatic-startup-on-macos).
+
+### 4. Enable an AI provider (optional)
+
+GitHub and AI logins are separate. Configure either provider or both, using the
+same OS account and environment as the server. Run these commands from the
+repository root. Stop the server before restarting it with an installed runtime.
+
+**Codex**
 
 ```sh
 codex login
 codex login status
-```
-
-The browser login uses your ChatGPT account. Codex also supports API-key
-credentials, with API billing; `codex login status` identifies the active method.
-See [Codex authentication](https://developers.openai.com/codex/auth/).
-
-Install the dashboard's pinned Python runtime from the repository root:
-
-```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-triage.txt
 .venv/bin/python scripts/pr_server.py
 ```
 
-Use this interpreter for the server, or set `PR_REVIEW_PYTHON` to its absolute
-path for workers. The `openai-codex` runtime starts local Codex sessions; full
-reviews use its app-server connection and chat resumes a saved native session.
-The dashboard relies on the local authentication available to that process,
-including the same `CODEX_HOME` when customized. It does not copy Codex credentials
-into tracker settings. An `OPENAI_API_KEY` for the separate Triage API provider
-does not sign you into Codex.
+The pinned Python runtime starts local Codex sessions using your Codex
+authentication. Browser login uses ChatGPT; Codex API-key login uses API billing.
+See [Codex authentication](https://developers.openai.com/codex/auth/).
 
-#### Claude Code
-
-Install [Claude Code](https://code.claude.com/docs/en/setup), then authenticate:
+**Claude Code**
 
 ```sh
 claude auth login
 claude auth status
-```
-
-Claude Code manages its login and billing mode. Console login is an API-billed
-option; see the [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference).
-Install Node.js 22.16+ and the pinned review/chat bridge from the repository root:
-
-```sh
 npm ci --prefix scripts/claude-runtime
+python3 scripts/pr_server.py
 ```
 
-Triage runs the installed `claude` CLI with tools disabled. Reviews and chat use
-the bundled Claude Agent SDK bridge with that executable and its normal
-environment/login. The dashboard does not extract subscription tokens or send
-them directly to Anthropic HTTP endpoints. `PR_REVIEW_CLAUDE` and `PR_REVIEW_NODE`
-can select absolute executable paths if they are not on the server's `PATH`.
+The pinned Claude Agent SDK bridge uses your installed Claude Code executable
+and its local authentication. Triage uses the Claude CLI directly. If you also
+installed the Codex runtime, start the server with `.venv/bin/python` instead.
+See [Claude Code authentication commands](https://code.claude.com/docs/en/cli-reference).
 
-#### Select providers and troubleshoot
+In **Settings → AI settings**, choose the provider, model and reasoning for
+**Triage**, **AI review** and **Chat**, then **Save all settings**. Providers can
+be mixed. Existing chats keep their original configuration; changed settings
+apply to new conversations. Provider failures never silently switch providers.
 
-In **Settings → AI settings**, select a provider, model and reasoning level for
-each feature, then **Save all settings**. Triage supports all three AI providers;
-AI review and Chat support Codex and Claude Code. Existing chats retain their
-original provider and settings; start a new conversation to use a changed profile.
+**OpenAI API** is an additional option for Triage only. It requires
+`requirements-triage.txt` and `OPENAI_API_KEY` in the server environment, with
+separate API billing. A Codex/ChatGPT login does not authenticate this option.
 
-For OpenAI API triage, install `requirements-triage.txt`, supply `OPENAI_API_KEY`
-through your server environment, and choose **OpenAI API** under Triage. There is
-no key field in the UI, and a Codex/ChatGPT login does not authenticate this provider.
+For how each connection works, credential handling and service-environment
+troubleshooting, see [GitHub and AI authentication](docs/authentication.md).
 
-If a connection fails, check the relevant login command above and repository or
-model access. Run the server from that same terminal to isolate service-environment
-problems. A launchd service does not automatically inherit your interactive shell's
-`PATH` or exported keys; see [service setup](references/dashboard.md#automatic-startup-on-macos).
-Restart the server after changing its environment or runtime installation.
-Failures stay visible and never silently switch providers.
+## Run your first review
 
-### Run a review
+1. Sync GitHub and choose a PR, or paste a PR URL into **My reviews → Add PR**.
+2. Select **Open review**. Use **Code changes** to inspect the diff and discussion.
+3. In **AI review**, choose **Generate AI review**. Use **Run with guidance…**
+   to focus that run, for example: “Docs only; skip tests.”
+4. Follow live activity. Ask questions or steer the review while it runs.
+   **Wrap up now** requests a report with unfinished checks recorded as gaps;
+   **Stop review** cancels the worker and preserves saved activity.
+5. Read the completed report in **AI review**: assessment, explanation, findings
+   and verification evidence. Review and edit draft comments before posting on GitHub.
+6. Use **Hand back to author** in My reviews when you are waiting for a response.
+   New commits, relevant replies or a due reminder can bring the PR back to you.
 
-Make this skill discoverable by your agent. Skill search
-paths depend on the agent; placing the folder here alone does not configure
-every CLI. You can also give an agent the explicit instruction:
+Reports remain available during reruns, and outdated results are marked.
+Finishing an AI run does not submit a GitHub review or finish your personal review.
+For later code questions, use the workspace's persistent **Ask AI** chat.
+
+### Use the skill directly in an agent
+
+Give your coding agent this instruction, replacing the PR URL:
 
 ```text
 Read ~/.agents/skills/pr-review/SKILL.md and run a full review of
 https://github.com/OWNER/REPOSITORY/pull/123.
 ```
 
-From the dashboard, choose **Run AI review** in a PR’s actions menu or open
-**Open review → AI review → Generate AI review** to generate the combined report.
-Both providers run in a background worker with live progress inside the dashboard.
-They use the skill prompt and
-the selected agent's authentication. Use **Copy review prompt** to paste the
-same instructions into another agent session.
+You can also use **Copy review prompt** from a PR's actions menu. Automatic skill
+discovery depends on your agent's search paths; cloning here alone does not
+configure every CLI. The renderer and neutral comment-writing guidance are
+bundled. A personal writing-style skill is optional.
 
-**Run with guidance…** (in the PR actions menu and the workspace AI review tab)
-starts the same review with a short steering note, such as "Docs only; skip
-tests" or "Only iOS changed; validate on iOS". The note applies to that run only.
+## Configuration and data
 
-The agent records progress and artifacts in the local tracker. When finished,
-click **Open review** on the card and select **AI review**. There is one report and one review skill:
-
-1. **Understand the change:** purpose, essential context, a concrete before/after
-   example, and exact source excerpts.
-2. **Read the assessment and findings:** each finding starts collapsed with its
-   severity and title visible. Open it for expected versus actual behavior, why
-   it happens, why it matters, the proposed fix, evidence, and a copyable comment.
-   Multiple findings have **Expand all / Collapse all** controls.
-3. **Check the verification appendix:** inspected scope, checks and outcomes,
-   unresolved gaps, and reviewer allocation with requested versus known effective
-   model and effort settings.
-
-The workflow covers the full diff with correctness, security, and contract
-review lenses, then verifies candidates before reporting them. Model selection
-is an adaptive policy, not a guarantee of review quality. See the
-[review approach](references/review-practices.md) and
-[allocation policy](references/reviewer-allocation.md).
-Review comments are drafts; read and edit them before posting them yourself.
-
-### Keep track of your reviews
-
-Click **Add to Up next** on a PR or paste its link into **My reviews**. The page
-groups tracked PRs by whose turn it is:
-
-- **Your turn**: **In progress** (reviews you started), **Back to you** (waiting
-  PRs with new commits, relevant replies, a review re-request or a due reminder)
-  and **Up next** (in your order).
-- **Their turn**: **Waiting for author**.
-- **Finished**: **Merged or closed** and **Stopped tracking**.
-
-Every section collapses, shows its count and remembers its state across reloads.
-Waiting for author and Finished start collapsed. Each PR shows why it is in its
-section, such as "You handed it back to the author 3d ago" or "Added from GitHub
-because you commented or reviewed".
-
-Buttons are named after where the PR goes:
-
-| Button | Where the PR goes |
+| Setting | Purpose |
 |---|---|
-| **Start review** / **Review now** / **Continue review** | In progress |
-| **Hand back to author** | Waiting for author, or Back to you if updates arrived during your review |
-| **Pause** | Top of Up next, keeping pending updates |
-| **Keep waiting** | Stays in Waiting for author; only newer updates bring it back |
-| **Mark updates seen** | Stays in progress; clears the updates shown as new |
-| **Remind me** (1 day, 3 days, 1 week) | Back to you when due, unless something else brings it back first |
-| **Stop tracking** (in •••) | Stopped tracking; **Track again** returns it to Up next |
+| `PR_REVIEW_LOCAL_DEV_ROOT` | Existing checkout discovery root; defaults to `~/Development`. |
+| `PR_REVIEW_TRACKER_HOME` | Local state and report directory; defaults to `~/.local/share/pr-review-tracker/`. Use separate homes for different GitHub accounts. |
+| `PR_REVIEW_PYTHON` | Python interpreter for background workers. |
+| `PR_REVIEW_CLAUDE` / `PR_REVIEW_NODE` | Explicit Claude Code and Node.js executable paths when needed. |
 
-Each move shows a confirmation with **Show**, which opens the section and
-highlights the PR, and **Undo**. Moves made by GitHub sync, a due reminder or
-another tab are announced the same way. **Find a tracked PR** searches every
-tracked PR, including finished ones, and shows which section each is in.
-Opening a PR does not clear its updates.
+Set environment variables before starting the server. A background service may
+have a different `PATH` and environment from your terminal.
 
-Opening a review and returning via **PR reviews** or browser Back restores the
-overview's scroll position after the cards load. Positions stay in the current
-browser tab, separately for My reviews and each Inbox filter selection.
+The server listens on loopback. GitHub sync reads with your `gh` credentials;
+AI features send relevant PR descriptions, code/diffs and questions to the
+selected provider. Enable them only for repositories you can share with it.
+Private notes stay local and are not included in AI requests.
 
-Completing an AI run does not submit a GitHub review or finish your work.
+Reports, cached source and conversations are stored outside this repository.
+For tracked PRs, local data expires 20 days after the confirmed close/merge date
+on a successful check; running work or cleanup errors defer deletion. Provider
+session history is separate and is not deleted by tracker cleanup.
 
-GitHub sync automatically places confirmed closed/merged PRs in **Merged or
-closed**, sorted by latest activity. Open PRs you commented on or reviewed are
-followed in Waiting for author unless already tracked or explicitly stopped.
-Closed/merged entries, reports, private notes, code conversations and PR caches
-expire 20 days after GitHub's close/merge date, on the next successful check.
-Running work and cleanup failures defer deletion and show an error.
-Reporting keeps its separate activity window.
+Follow-up checks run every five minutes while the dashboard is visible; there
+are no queue checks or notifications while it is closed. Running AI work can
+continue independently. Reporting uses a fixed Europe/Berlin timezone and covers
+four complete weeks plus the current week.
 
-Saved PRs and participation history are checked every five minutes while the dashboard is visible.
-There are no checks or notifications while the page is closed.
+## Documentation
 
-### See your activity
-
-Open **Reporting** and click **Sync GitHub**. The report
-covers four complete weeks and the current week, using Europe/Berlin dates.
-Switch between **Daily** and **Weekly**, select a chart bar, or click
-**Yesterday** to see the associated PRs. Reporting has its own repository
-filter; hiding an inbox PR does not remove it from your activity.
-
-Daily bars include separate review and merge trend lines. **Activity trend**
-uses the last 10 complete workdays by default; select 5 for a faster-moving
-average. Weekends and dates marked under **Time off** are excluded, while
-zero-activity workdays count. The line stays flat across excluded days and
-starts once a full window is available. Today and the last synced day remain
-outside the average until a later sync confirms their full activity.
-
-Time off accepts an inclusive date range; use the same start and end for a
-single day, or **Remove** to include those weekdays again. These preferences
-are saved in the current browser. Bars and weekly totals retain all activity,
-including PRs reviewed or merged on excluded days. Trend values are daily
-averages; weekly counts remain distinct PRs for the week.
-
-## Personalize the installation
-
-- Set `PR_REVIEW_LOCAL_DEV_ROOT` to the directory containing your existing clones.
-  It defaults to `~/Development` and is used as a checkout discovery hint.
-- Optionally configure a writing-style skill in your agent for personalized comments.
-- Reporting's Europe/Berlin timezone is currently fixed in the backend and UI;
-  it is not a dashboard setting.
-- For automatic startup on macOS, generate a launchd plist for your installation
-  using [the service setup instructions](references/dashboard.md#automatic-startup-on-macos).
-  Running the server manually is sufficient to get started.
-
-For example, start with a different checkout directory:
-
-```sh
-export PR_REVIEW_LOCAL_DEV_ROOT="$HOME/Projects"
-python3 scripts/pr_server.py
-```
-
-`PR_REVIEW_TRACKER_HOME` selects the state directory. `PR_REVIEW_PYTHON` selects
-the Python interpreter for background workers. Set these before starting the
-server or generating its launchd configuration.
-
-## Local data and privacy
-
-State and review runs live under `~/.local/share/pr-review-tracker/`; generated
-review files live separately from this Git repository. The
-`PR_REVIEW_TRACKER_HOME` environment variable selects an alternate tracker
-home, which is useful for isolated testing. Use the provided commands instead
-of editing registry JSON by hand.
-
-The dashboard runs on your machine, but AI features send data off your machine:
-
-- **GitHub sync:** reads PR information using your GitHub login. Author avatars
-  normally load from GitHub.
-- **AI features:** send PR descriptions, code/diffs, and your questions to the
-  selected AI provider as needed. Effort estimates also send descriptions and
-  patches. Only enable these features for repositories you are allowed to share
-  with that provider.
-- **Saved copies:** review reports, downloaded source, notes, and chat data can
-  remain in the tracker directory. Persistent AI conversations also use
-  provider-managed history outside that directory. Deleting tracker files does not
-  delete provider history or copies retained by a provider; manage those separately
-  through the relevant product's data controls.
-
-The server listens only on your machine's loopback interface. Treat generated
-reports and screenshots as potentially containing private code and review data.
-
-Dashboard GitHub operations are read-only: they do not post comments, approve,
-or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
-for PR code. Runtime history and generated review artifacts are not included
-in this repository. Keep those out of commits and screenshots.
-
-## In-app AI reviews
-
-Selecting Codex or Claude Code runs AI reviews in a background worker and opens live activity
-in the dashboard. Stage progress follows reviewer checkpoints; it is an estimate,
-not time remaining. Reviews keep running across page reloads and server restarts.
-While a review runs, the activity panel accepts questions and steering, such as
-"what is going on?" or "skip the example app"; the lead answers in the agent
-updates. Wrap up now asks the lead to stop new checks, mark unfinished stages
-blocked, and build the report from the evidence gathered so far; the result is
-labeled Finished with gaps. Stop review cancels the worker and preserves its saved
-activity. Finished review sessions do not accept follow-ups; the code workspace
-has a separate persistent chat for code questions.
-
-Install `requirements-triage.txt` into the server's Python environment for Codex
-reviews. See [dashboard operations](references/dashboard.md#in-app-ai-reviews)
-for isolated state, progress reporting, and validation.
-
-## Code review workspace
-
-**Open review** opens a workspace with AI review and Code changes tabs. Explore
-unified or side-by-side diffs, expand context, open full files, and save viewed
-progress. Checking for new commits resets viewed status only for changed file
-comparisons. Private notes and revision-labeled conversations are saved locally.
-
-Select lines to focus a question, then let the selected AI investigate beyond it.
-Each conversation pins its provider, model, reasoning and PR revision. Follow-ups
-resume the same native session; switching providers requires a new conversation.
-Both providers can read source, inspect the pinned base version, search public
-documentation, and read GitHub issues/PRs. Codex uses its read-only sandbox and
-automatic approval review. Claude uses a restricted read/web tool set plus bounded
-Git/GitHub read tools; shell, edits, hooks and imported MCP servers are disabled.
-Private notes remain local. Streamed answers, public activity and source links
-appear in the conversation.
-
-GitHub review threads appear under the lines they discuss, and **Comments** lists
-every thread plus the general PR conversation. Show all, only unresolved, or no
-comments inline, and hide bot comments. **Ask AI** attaches a comment to the chat;
-**Draft reply** checks whether the current code addresses it and drafts a reply
-for you to copy. Nothing is posted to GitHub.
-
-Finished HTML reviews stay in the dashboard; completion does not open an external
-browser. See [workspace architecture, limits and tests](references/code-workspace.md).
+| Guide | Contents |
+|---|---|
+| [Authentication](docs/authentication.md) | GitHub CLI, Codex, Claude Code, API triage and connection troubleshooting. |
+| [Using the dashboard](docs/usage.md) | Review reports, queue transitions, reminders, reporting, code chat and privacy. |
+| [Review workflow](SKILL.md) | Agent instructions, full-diff coverage, finding verification and sandboxed checks. |
+| [Dashboard reference](references/dashboard.md) | Configuration, background services, providers and operational details. |
+| [Code workspace](references/code-workspace.md) | Diff behavior, GitHub comments, persistent chat and current limits. |
+| [Development](docs/development.md) | Tests, browser setup, repository structure and security scans. |
+| [Screenshot maintenance](docs/screenshots/README.md) | Synthetic fixtures and repeatable screenshot capture. |
+| [Recovery](RECOVERY.md) | Git recovery procedures. |
 
 ## Development and recovery
 
-Runtime helpers and public commands live in `scripts/`. Regression tests live
-in `tests/python/`, `tests/javascript/`, and `tests/browser/`; disposable browser
-servers and synthetic data live in `tests/fixtures/`. `assets/` contains the UI
-and report resources, and `references/` contains the skill's detailed guidance.
-
-Run all regression suites from the repository root:
+Run the regression suites from the repository root:
 
 ```sh
 python3 tests/run.py
 ```
 
-The runner stops on failure. Python tests use the invoking interpreter;
-JavaScript and browser tests require Node.js. Browser tests also require
-Playwright and Chrome. Install Playwright in an external development environment
-and set `PR_REVIEW_PLAYWRIGHT_MODULE` to its absolute module path if it is not
-available through normal Node resolution. `PR_REVIEW_BROWSER_CHANNEL` defaults
-to `chrome`. Browser fixtures use the runner's interpreter unless `PYTHON` is
-set; `NODE` can select a different Node.js executable.
-
-Run individual suites or focused Python checks:
-
-```sh
-python3 tests/run.py python
-python3 tests/run.py javascript
-python3 tests/run.py browser
-python3 tests/run.py python test_reporting test_dashboard
-python3 tests/run.py python --pattern 'test_code_workspace*.py'
-```
-
-The runner resolves paths from its own location, so it also works when invoked
-by absolute path from another directory. To use unittest directly, run
-`PYTHONPATH=scripts python3 -m unittest discover -s tests/python -p 'test_*.py'`
-from the repository root. Individual JavaScript/browser files can be run with
-`node tests/javascript/test_reporting.cjs` or
-`node tests/browser/test_inbox_review_browser.cjs`.
-
-Tests use disposable state and local servers. HTTP and browser checks need
-loopback access; macOS sandbox integration checks need permission to launch
-`sandbox-exec`. Fixtures can also be started directly, for example
-`python3 tests/fixtures/workspace_integration_fixture.py --port 8879`.
-
-Reload the page after asset changes. Restart the server after Python changes.
-See [dashboard details](references/dashboard.md),
-[review-note conventions](references/review-notes.md), and
-[Git recovery instructions](RECOVERY.md) for more.
-
-### Commit identity and security checks
-
-Git stores an author's and committer's email in each commit. To use a different
-address for future commits, set repository-local `user.email` to your chosen
-public address or GitHub noreply address. You can also set `GIT_AUTHOR_EMAIL`
-and `GIT_COMMITTER_EMAIL` in the shell that creates commits. Git stores the
-resolved addresses, not the environment-variable names. Neither method changes
-existing commits or annotated tags; those need a separate history rewrite or
-a fresh public repository if their identity metadata must remain private.
-
-Security checks run on pushes, pull requests, and manual workflow dispatches,
-with read-only repository permissions and actions pinned to commit hashes:
-
-- **Secret scan / gitleaks:** Gitleaks 8.30.1 scans all fetched history with
-  redacted output.
-- **Secret scan / trufflehog:** TruffleHog 3.97.5 scans the history reachable
-  from the checked-out commit, including the PR merge commit on pull requests.
-  It fails on detected secrets with credential verification disabled, so
-  candidate credentials are not sent to external providers. The CI filter ignores
-  only the exact intentional URL fixture in the renderer/workspace tests and
-  their historical paths. Other findings and scan errors fail the job; raw
-  credential values are not printed in the job output.
-- **Workflow security / zizmor:** zizmor 1.30.1 audits GitHub Actions workflows,
-  fails on findings, and adds job annotations. It does not require GitHub
-  Advanced Security or write permissions.
-
-Run the scanners locally with the versions above:
-
-```sh
-gitleaks git . --log-opts="--all" --redact --no-banner
-# Also check new and uncommitted files before committing:
-gitleaks dir . --redact --no-banner
-set -o pipefail
-trufflehog git "file://$PWD" --branch HEAD --no-verification --fail-on-scan-errors --no-update --json \
-  | python3 .github/scripts/check_trufflehog.py
-zizmor .github/workflows
-```
-
-For TruffleHog findings, run the scan locally without the pipe to inspect its JSON
-output; do not paste raw results into issues or CI logs. If scanning a linked Git
-worktree fails, scan a disposable regular clone instead.
-
-A scan failure needs investigation. Revoke any real credential, remove it from
-the affected history when necessary, and rerun the check. CI runs after a push;
-use local scans and GitHub push protection to catch secrets before they reach
-the remote. Scanners do not detect every kind of private information, so review
-screenshots, examples, and generated artifacts before committing them.
+JavaScript tests need Node.js; browser tests also need Playwright and Chrome.
+See [development setup and focused checks](docs/development.md) before running
+those suites. Reload the page after asset changes; restart the server after
+Python changes.
 
 ## License
 
 [MIT](LICENSE), copyright © 2026 Robert Magnusson.
-You may use, modify, distribute, and sell copies, including in commercial
-projects, while retaining the copyright and permission notice. The software
-is provided without warranty. See the license for the complete terms.
