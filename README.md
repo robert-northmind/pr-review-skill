@@ -123,7 +123,6 @@ gh auth login
 python3 scripts/pr_server.py
 ```
 
-While the repository is private, cloning requires authenticated repository access.
 If you already have this checkout, use it instead of cloning over it.
 
 Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
@@ -306,7 +305,7 @@ reports and screenshots as potentially containing private code and review data.
 Dashboard GitHub operations are read-only: they do not post comments, approve,
 or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
 for PR code. Runtime history and generated review artifacts are not included
-in this repository's Git backup. Keep those out of commits and screenshots.
+in this repository. Keep those out of commits and screenshots.
 
 ## In-app AI reviews
 

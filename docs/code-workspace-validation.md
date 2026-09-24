@@ -76,8 +76,8 @@ streaming, cancellation, and unchanged triage restrictions.
 A real chat used the production worker with dartastic_opentelemetry PR #271 at
 head `33d5e9a0c5738fd978ff2f0eeb895c3d4377b518` and base
 `625918c2ea41438a8551524f1abc34d6fa0064d6`. Codex read `pubspec.yaml` from the isolated
-checkout, successfully queried the authenticated issues endpoint of the private
-dashboard repository, and opened the W3C Trace Context specification. The private
+checkout, successfully queried the authenticated issues endpoint of the dashboard
+repository (then private) and opened the W3C Trace Context specification. The
 repository returned an empty issue list, so this establishes authenticated endpoint
 access, not reading a private issue body. A follow-up resumed the same native
 thread and recalled the package and GitHub result without new tool calls.

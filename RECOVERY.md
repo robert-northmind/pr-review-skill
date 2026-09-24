@@ -2,7 +2,7 @@
 
 This folder is a local Git repository for the PR-review skill, dashboard,
 reporting, tests, and supporting templates. The initial snapshot is tagged
-`baseline-2026-09-10`. Its private GitHub backup is
+`baseline-2026-09-10`. Its GitHub repository is
 https://github.com/robert-northmind/pr-review-skill (`origin`).
 
 Git records versions when you commit. Before changing the skill, check for
@@ -78,7 +78,7 @@ Review runs and dashboard state live separately under
 code, not that runtime data. The optional separate
 `my-feedback-voice` skill has its own folder and is not tracked here.
 
-Commits pushed to the private GitHub remote can be recovered if this local
+Commits pushed to the GitHub remote can be recovered if this local
 folder is lost. Local commits and tags are backed up only after you push
 them (`git push origin main` and, for new tags, `git push origin --tags`).
 Keep a machine backup for runtime data and any uncommitted work.
