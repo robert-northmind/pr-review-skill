@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def _send(self, code, body, content_type='application/json; charset=utf-8', csp=None):
+    def _send(self, code, body, content_type='application/json; charset=utf-8', csp=None, cache='no-store'):
         if isinstance(body, dict):
             body = json.dumps(body).encode()
         elif isinstance(body,str):
@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header('Content-Type',content_type)
         self.send_header('Content-Length',str(len(body)))
-        self.send_header('Cache-Control','no-store')
+        self.send_header('Cache-Control',cache)
         self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Referrer-Policy','no-referrer')
         self.send_header('Content-Security-Policy',csp or "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://github.com https://avatars.githubusercontent.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
@@ -175,7 +175,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._error(404,'Workspace API not found.')
             elif parsed.path in ('/','/dashboard.html'):
                 page=(ASSETS/'dashboard.html').read_text().replace('__CSRF_TOKEN__',html.escape(self.server.csrf_token,quote=True))
-                self._send(200,page,'text/html; charset=utf-8')
+                # no-store would stop Chrome's back/forward cache, so Back from the workspace reloaded everything.
+                self._send(200,page,'text/html; charset=utf-8',cache='private, no-cache')
             elif parsed.path in ('/assets/ai-settings.js','/assets/ai-settings.css','/assets/dashboard.css','/assets/dashboard.js','/assets/reporting.js','/assets/theme.js','/assets/queue.js','/assets/triage.js','/assets/live-review.js'):
                 path=ASSETS/Path(parsed.path).name
                 self._send(200,path.read_bytes(),'text/css' if path.suffix=='.css' else 'text/javascript')

@@ -128,6 +128,8 @@ async function refreshExpiredSnoozes(){
  try{await post('/refresh');}catch(error){notify('Could not check expired snoozes. '+error.message);}
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState();});
+// Back from the workspace restores this page from the browser cache; refresh its data behind it.
+window.addEventListener('pageshow',event=>{if(event.persisted){loadState();loadReporting();}});
 document.addEventListener('click',event=>{for(const picker of document.querySelectorAll('.snooze-picker[open]'))if(!picker.contains(event.target))picker.open=false;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const picker of document.querySelectorAll('.snooze-picker[open]')){picker.open=false;picker.querySelector('summary').focus();}});
 function aiReviewActions(pr){

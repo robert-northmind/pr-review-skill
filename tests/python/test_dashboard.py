@@ -197,7 +197,8 @@ class HTTP(Isolated):
   self.assertEqual(self.request('/api/state',headers={'Origin':'null'})[0],403)
   self.assertEqual(self.request('/api/state',headers={'Sec-Fetch-Site':'cross-site'})[0],403)
  def test_page_has_token_assets_and_no_cache(self):
-  code,headers,body=self.request('/');self.assertEqual(code,200);self.assertIn(self.server.csrf_token.encode(),body);self.assertIn('no-store',headers['Cache-Control'])
+  code,headers,body=self.request('/');self.assertEqual(code,200);self.assertIn(self.server.csrf_token.encode(),body);self.assertEqual(headers['Cache-Control'],'private, no-cache')
+  self.assertEqual(self.request('/api/state')[1]['Cache-Control'],'no-store')
   self.assertEqual(self.request('/assets/dashboard.js')[0],200)
  def test_html_is_sandboxed_and_symlink_escape_rejected(self):
   p=self.root/'example.html';p.write_text('<script>fetch("/api/state")</script>')
