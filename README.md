@@ -8,15 +8,20 @@ The dashboard runs on your machine. Python serves the app; the frontend is
 plain HTML, CSS, and JavaScript. There is no frontend build step or database
 service to set up.
 
+[Features](#what-it-does) · [Get started](#get-started) ·
+[GitHub and AI authentication](#connect-github-and-ai-accounts) ·
+[Code workspace](#code-review-workspace) · [Development](#development-and-recovery)
+
 ## A look around
 
 **Your review inbox, in light mode.** See authors, filter your queue, and open
-one combined review report from the PR card. Snooze a PR or save it to My reviews.
+the code workspace or saved AI report with **Open review**. Snooze a PR from
+its actions menu or save it to My reviews.
 
 ![PR inbox in light mode with fictional pull requests and authors](docs/screenshots/inbox-light.jpg)
 
-**One report, starting with the explanation.** Follow a concrete before/after
-example and see the exact code behind the behavior.
+**One report, starting with the outcome and assessment.** Follow a concrete
+before/after example and see the exact code behind the behavior.
 
 ![Combined review report opening with a fictional parser change and before-and-after example](docs/screenshots/review-overview-light.jpg)
 
@@ -29,16 +34,30 @@ copyable comment, and its evidence. Expand all when you want the full review.
 **My reviews.** Keep a personal queue grouped by whose turn it is, and pick up
 where you stopped. New commits and replies bring waiting PRs back to you.
 
-![My reviews with fictional PRs, update indicators and a private reminder](docs/screenshots/my-reviews-light.jpg)
+![My reviews with fictional PRs, update indicators and private notes](docs/screenshots/my-reviews-light.jpg)
 
-**Reporting, in dark mode.** Compare completed weeks and select a day or week
-to see which PRs you reviewed and which of your own PRs were merged.
+**Reporting, in dark mode.** Compare completed weeks, follow daily activity
+trends, and select a day or week to see the reviewed and merged PRs.
 
 ![Reporting in dark mode with fictional review and merge activity](docs/screenshots/reporting-dark.jpg)
 
-All screenshots use fictional PRs, people, repositories, and activity, with
-synthetic avatars. They were captured from the dashboard and report
-renderer on September 15, 2026, using an isolated demo with mocked data.
+**Code and GitHub discussion together.** Read diffs, navigate review threads,
+and attach a comment to AI chat or ask for a draft reply.
+
+![Code workspace showing a fictional batch transport diff, inline thread and Comments rail](docs/screenshots/code-workspace-light.jpg)
+
+**Steer a running review.** Follow stage progress, ask questions, add guidance,
+or request **Wrap up now** with the evidence gathered so far.
+
+![Simulated live AI review with stage progress, a question and reply, and wrap-up controls](docs/screenshots/live-review-light.jpg)
+
+**Choose an AI for each job.** Configure Triage, AI review and Chat independently.
+
+![AI settings with separate provider, model and reasoning controls for each feature](docs/screenshots/ai-settings-light.jpg)
+
+All screenshots use fictional PRs, people, repositories, and activity.
+They were captured from the current dashboard and report renderer on
+September 24, 2026, using disposable fixtures with mocked GitHub and AI data.
 See [screenshot provenance](docs/screenshots/README.md).
 
 ## What it does
@@ -59,12 +78,19 @@ See [screenshot provenance](docs/screenshots/README.md).
 - **Review:** run Claude Code or Codex from the dashboard. Keep the
   combined HTML review notes and run history attached to the PR.
   Existing results remain available during a rerun; outdated results are marked.
+  Start with guidance, ask questions or steer an active review, wrap up early
+  with explicit gaps, or stop it while retaining saved activity.
+- **Explore code and discussion:** unified or side-by-side diffs, full files,
+  viewed progress, inline GitHub threads, and the PR conversation. Ask AI about
+  selected lines or comments in persistent, revision-pinned chats. Draft replies
+  remain local for you to copy; the dashboard does not post them.
 - **Understand and check:** the opening shows the changed outcome and current
   assessment, with a shortcut to findings. One HTML contains the explanation and
   expandable, verified findings with examples and draft comments. The lead
   assesses size, complexity, risk, and uncertainty before allocating reviewers;
   the verification appendix records coverage, checks, limitations, and model choices.
 - **Report:** daily and weekly GitHub activity, completed-week comparisons,
+  daily trend averages with time-off exclusions,
   and a short list of yesterday's work. A PR counts once per day or week.
   AI runs, draft reviews, and ordinary PR comments do not count as submitted
   GitHub reviews.
@@ -125,7 +151,7 @@ python3 scripts/pr_server.py
 
 If you already have this checkout, use it instead of cloning over it.
 
-Open [the local dashboard](http://127.0.0.1:8765/) and click **Refresh GitHub**.
+Open [the local dashboard](http://127.0.0.1:8765/) and click **Sync GitHub**.
 Leave the server running in that terminal; Ctrl-C stops it. If the port is occupied, start with
 `python3 scripts/pr_server.py --port 8766` and open that port instead.
 
@@ -142,6 +168,113 @@ models and reasoning levels from the host's supported options, within your
 explicit constraints. If overrides are unavailable, reviewers inherit the
 session settings and the report records that limitation.
 
+### Connect GitHub and AI accounts
+
+GitHub access and AI access are separate. The server runs local CLI/SDK processes
+under your OS account; there is no dashboard account or token-entry form.
+Authenticate in the terminal as the same user who runs the server.
+
+| Connection | Used for | Authentication |
+|---|---|---|
+| GitHub CLI (`gh`) | Inbox, reporting, PR source, review threads and follow-up checks | Your GitHub CLI login |
+| Codex | Triage, AI reviews and code chat | Your local Codex authentication |
+| Claude Code | Triage, AI reviews and code chat | Your local Claude Code authentication |
+| OpenAI API | Triage only | `OPENAI_API_KEY` in the server environment; separate API billing |
+
+#### GitHub
+
+Install [GitHub CLI](https://cli.github.com/), then sign in and check access:
+
+```sh
+gh auth login --hostname github.com --web
+gh auth status --hostname github.com
+gh api user --jq .login
+gh pr view https://github.com/OWNER/REPOSITORY/pull/123 --json url,title
+```
+
+Replace the example URL with a PR you can access. The dashboard uses `gh` for
+REST/GraphQL reads and the code-chat checkout uses `gh auth git-credential` for
+its HTTPS fetch. No separate GitHub OAuth app or copied token is needed.
+Your GitHub account must have access to the repository, including any required
+organization SSO authorization. An SSH key alone does not authenticate these API
+reads. GitHub CLI manages stored credentials; `GH_TOKEN` or `GITHUB_TOKEN` can
+also supply authentication to the server process. See [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login).
+
+Dashboard actions read GitHub; they do not post, approve, merge or resolve threads.
+This does not reduce the permissions of the underlying GitHub credential.
+My reviews binds its queue to the first synced GitHub account. Switching accounts
+produces an error; use a separate `PR_REVIEW_TRACKER_HOME` for another account.
+
+#### Codex
+
+Install the [Codex CLI](https://developers.openai.com/codex/cli/), then authenticate:
+
+```sh
+codex login
+codex login status
+```
+
+The browser login uses your ChatGPT account. Codex also supports API-key
+credentials, with API billing; `codex login status` identifies the active method.
+See [Codex authentication](https://developers.openai.com/codex/auth/).
+
+Install the dashboard's pinned Python runtime from the repository root:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-triage.txt
+.venv/bin/python scripts/pr_server.py
+```
+
+Use this interpreter for the server, or set `PR_REVIEW_PYTHON` to its absolute
+path for workers. The `openai-codex` runtime starts local Codex sessions; full
+reviews use its app-server connection and chat resumes a saved native session.
+The dashboard relies on the local authentication available to that process,
+including the same `CODEX_HOME` when customized. It does not copy Codex credentials
+into tracker settings. An `OPENAI_API_KEY` for the separate Triage API provider
+does not sign you into Codex.
+
+#### Claude Code
+
+Install [Claude Code](https://code.claude.com/docs/en/setup), then authenticate:
+
+```sh
+claude auth login
+claude auth status
+```
+
+Claude Code manages its login and billing mode. Console login is an API-billed
+option; see the [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference).
+Install Node.js 22.16+ and the pinned review/chat bridge from the repository root:
+
+```sh
+npm ci --prefix scripts/claude-runtime
+```
+
+Triage runs the installed `claude` CLI with tools disabled. Reviews and chat use
+the bundled Claude Agent SDK bridge with that executable and its normal
+environment/login. The dashboard does not extract subscription tokens or send
+them directly to Anthropic HTTP endpoints. `PR_REVIEW_CLAUDE` and `PR_REVIEW_NODE`
+can select absolute executable paths if they are not on the server's `PATH`.
+
+#### Select providers and troubleshoot
+
+In **Settings → AI settings**, select a provider, model and reasoning level for
+each feature, then **Save all settings**. Triage supports all three AI providers;
+AI review and Chat support Codex and Claude Code. Existing chats retain their
+original provider and settings; start a new conversation to use a changed profile.
+
+For OpenAI API triage, install `requirements-triage.txt`, supply `OPENAI_API_KEY`
+through your server environment, and choose **OpenAI API** under Triage. There is
+no key field in the UI, and a Codex/ChatGPT login does not authenticate this provider.
+
+If a connection fails, check the relevant login command above and repository or
+model access. Run the server from that same terminal to isolate service-environment
+problems. A launchd service does not automatically inherit your interactive shell's
+`PATH` or exported keys; see [service setup](references/dashboard.md#automatic-startup-on-macos).
+Restart the server after changing its environment or runtime installation.
+Failures stay visible and never silently switch providers.
+
 ### Run a review
 
 Make this skill discoverable by your agent. Skill search
@@ -153,7 +286,8 @@ Read ~/.agents/skills/pr-review/SKILL.md and run a full review of
 https://github.com/OWNER/REPOSITORY/pull/123.
 ```
 
-From the dashboard, click **Run AI review** to generate the combined report.
+From the dashboard, choose **Run AI review** in a PR’s actions menu or open
+**Open review → AI review → Generate AI review** to generate the combined report.
 Both providers run in a background worker with live progress inside the dashboard.
 They use the skill prompt and
 the selected agent's authentication. Use **Copy review prompt** to paste the
@@ -164,7 +298,7 @@ starts the same review with a short steering note, such as "Docs only; skip
 tests" or "Only iOS changed; validate on iOS". The note applies to that run only.
 
 The agent records progress and artifacts in the local tracker. When finished,
-click **Open notes** on the card. There is one report and one review skill:
+click **Open review** on the card and select **AI review**. There is one report and one review skill:
 
 1. **Understand the change:** purpose, essential context, a concrete before/after
    example, and exact source excerpts.

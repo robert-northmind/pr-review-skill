@@ -163,7 +163,10 @@ Private state, conversations, cached comparisons and isolated source checkouts l
 under `$PR_REVIEW_TRACKER_HOME/workspaces/<hash-of-PR-URL>/`. User checkouts remain
 untouched. Native conversation context is also persisted by the selected provider under its normal
 local storage. Removing the dashboard cache alone does not remove those sessions.
-Automatic retention cleanup is not implemented.
+For tracked PRs, a successful sync expires this local data 20 days after the
+confirmed close/merge date; active work or cleanup errors defer deletion. See
+[queue retention](dashboard.md#my-reviews). Provider-managed session history is
+separate and is not deleted by tracker cleanup.
 
 GitHub exposes at most 3,000 changed files through the PR files API. Larger PRs
 fail explicitly. Diff previews support UTF-8 files up to 500 KB / 12,000 lines;
