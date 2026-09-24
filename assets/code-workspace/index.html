@@ -45,6 +45,8 @@
           <span id="viewed-progress"></span
           ><button class="button" id="refresh-comparison" hidden>
             Check for new commits</button
+          ><button class="button" id="comments-toggle">
+            Comments <span id="comment-count"></span></button
           ><button class="button" id="notes-toggle">
             Private notes <span id="note-count">0</span></button
           ><button class="button" id="chat-toggle" aria-expanded="false">
@@ -104,6 +106,15 @@
               >Select code, or click and Shift-click line numbers</span
             ><label class="wrap-control"
               ><input id="wrap-lines" type="checkbox" /> Wrap lines</label
+            ><span class="comment-controls"
+              ><label class="sr-only" for="comment-filter">GitHub comments in the diff</label
+              ><select id="comment-filter" aria-label="GitHub comments in the diff">
+                <option value="all">All comments</option>
+                <option value="unresolved">Unresolved comments</option>
+                <option value="hidden">Hide comments</option></select
+              ><label class="wrap-control"
+                ><input id="comment-bots" type="checkbox" checked /> Bots</label
+              ></span
             >
           </div>
           <div id="files" tabindex="-1"></div>
@@ -157,7 +168,9 @@
               Explain this change</button
             ><button data-prompt="What edge cases should I check?">
               Check edge cases</button
-            ><button data-prompt="What tests would help?">Suggest tests</button>
+            ><button data-prompt="What tests would help?">Suggest tests</button
+            ><button id="prompt-addressed" hidden>
+              Is it addressed?</button>
           </div>
           <p id="chat-status" role="status" class="muted"></p>
           <button class="button" id="stop-chat" hidden>Stop</button>
@@ -179,6 +192,21 @@
           <p class="chat-footnote" id="chat-footnote">
             Uses your selected AI provider’s local login. Selected code and PR context are sent to
             the AI provider. Can explore source, public docs and GitHub issues. Nothing is posted to GitHub.
+          </p>
+        </div>
+        <div id="comments-content" class="comments-content" hidden>
+          <div class="comments-heading">
+            <p id="comments-status" class="muted" role="status"></p>
+            <button class="text-button" id="refresh-comments">Refresh</button>
+          </div>
+          <p id="comments-placement" class="notice warning" hidden></p>
+          <h3>Review threads</h3>
+          <div id="comment-threads" class="comment-threads"></div>
+          <h3>Conversation</h3>
+          <div id="comment-conversation" class="comment-conversation"></div>
+          <p class="chat-footnote">
+            Read from GitHub with your gh login. Draft replies appear in chat for you to
+            copy; nothing is posted to GitHub.
           </p>
         </div>
         <div id="notes-content" class="notes-content" hidden>

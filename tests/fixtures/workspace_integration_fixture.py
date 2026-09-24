@@ -15,6 +15,7 @@ import workspace_fixture_data as fixture
 import workspace_github as github
 import workspace_store as store
 import workspace_chat as chat
+import workspace_comments as comments
 import code_workspace as workspace
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
@@ -87,7 +88,9 @@ def main():
         stack.enter_context(patch.object(workspace,'review',return_value={'artifact':artifact,'run':None}))
         stack.enter_context(patch.object(chat,'start',side_effect=lambda url,request:real_start(url,request,launcher=launch)))
         stack.enter_context(patch.object(dashboard,'discover_claude_options',return_value=([''],[''])))
+        stack.enter_context(patch.object(comments,'fetch',side_effect=lambda url:fixture.review_comments(comparison['head'])))
         # Fail closed: the fixture must never reach GitHub or a provider.
+        stack.enter_context(patch.object(comments,'graphql',side_effect=AssertionError('Fixture network disabled')))
         stack.enter_context(patch.object(github,'api',side_effect=AssertionError('Fixture network disabled')))
         stack.enter_context(patch.object(pr_server.runtime,'mark_artifact_opened',return_value={'opened':True}))
         stack.enter_context(patch.object(pr_server.runtime,'start_launch',return_value={'run_id':'fixture','transport':'in-app'}))

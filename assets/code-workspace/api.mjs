@@ -39,6 +39,9 @@ export class WorkspaceAPI {
   review(head) {
     return this.get("/api/workspace-review", { head });
   }
+  comments(refresh) {
+    return this.get("/api/workspace-comments", refresh ? { refresh: "1" } : {});
+  }
   chat(threadId) {
     return this.get("/api/workspace-chat", { thread_id: threadId });
   }

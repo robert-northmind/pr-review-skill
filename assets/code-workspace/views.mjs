@@ -34,13 +34,30 @@ function highlight(text) {
 function gapHTML(index, gap, pair = "") {
   return `<button class="context-gap" ${pair} data-expand="${index}" data-start="${gap.start}" data-end="${gap.end}">↕ Show ${Math.min(12, gap.count)} more lines <span>(${gap.count} hidden)</span></button>`;
 }
-function splitRows(index, entries, base, head) {
-  const pairs = splitPairs(entries);
+/** Annotations (review threads) follow their row; split lanes get matching spacers. */
+function withAnnotations(pairs, annotate) {
+  if (!annotate) return pairs;
+  const result = [];
+  for (const pair of pairs) {
+    result.push(pair);
+    const notes = ["base", "head"].map((side, lane) =>
+      pair[lane] && !pair[lane].gap ? annotate(pair[lane], side) : "",
+    );
+    if (notes.some(Boolean)) result.push({ notes });
+  }
+  return result;
+}
+function splitRows(index, entries, base, head, annotate) {
+  const pairs = withAnnotations(splitPairs(entries), annotate);
   return `<div class="split-diff">${["base", "head"]
     .map(
       (side, lane) =>
         `<section class="split-pane" aria-label="${side === "base" ? "Base" : "Head"} version"><div class="split-heading">${side === "base" ? "Base" : "Head"} <code>${esc((side === "base" ? base : head).slice(0,12))}</code></div><div class="split-line-list">${pairs
           .map((pair, n) => {
+            if (pair.notes)
+              return pair.notes[lane]
+                ? `<div class="row-annotations" data-pair="${n}">${pair.notes[lane]}</div>`
+                : `<div class="split-blank annotation-blank" data-pair="${n}" aria-hidden="true"></div>`;
             const row = pair[lane];
             if (!row)
               return `<div class="split-blank" data-pair="${n}" aria-hidden="true"></div>`;
@@ -52,33 +69,47 @@ function splitRows(index, entries, base, head) {
     )
     .join("")}</div>`;
 }
+const annotationHTML = (html) =>
+  html ? `<div class="row-annotations">${html}</div>` : "";
 export function renderFileRows(
   file,
   index,
-  { mode, layout, extra, base, head, loading },
+  { mode, layout, extra, base, head, loading, annotate },
 ) {
   if (!file.rows)
     return `<div class="empty-code"><p>${esc(file.error || "Load this file to explore its diff and complete source.")}</p><button class="button" data-load-file="${index}" ${loading ? "disabled" : ""}>${loading ? "Loading…" : file.error ? "Retry file" : "Load diff"}</button></div>`;
   const entries = diffEntries(file, mode, extra);
-  if (layout === "split" && !mode) return splitRows(index, entries, base, head);
+  if (layout === "split" && !mode)
+    return splitRows(index, entries, base, head, annotate);
   return (
     entries
       .map((row) => {
         if (row.gap) return gapHTML(index, row);
         const kind = mode ? "context" : row.kind;
-        return `<div class="code-row ${kind}" data-file="${index}" data-row="${row.id}"><button class="line-number" data-line="base" aria-label="Select base line ${row.old ?? "not present"}" ${row.old === null ? "disabled" : ""}>${row.old ?? ""}</button><button class="line-number" data-line="head" aria-label="Select head line ${row.new ?? "not present"}" ${row.new === null ? "disabled" : ""}>${row.new ?? ""}</button><span class="line-sign">${kind === "add" ? "+" : kind === "delete" ? "−" : " "}</span><code>${highlight(row.text) || " "}</code></div>`;
+        return `<div class="code-row ${kind}" data-file="${index}" data-row="${row.id}"><button class="line-number" data-line="base" aria-label="Select base line ${row.old ?? "not present"}" ${row.old === null ? "disabled" : ""}>${row.old ?? ""}</button><button class="line-number" data-line="head" aria-label="Select head line ${row.new ?? "not present"}" ${row.new === null ? "disabled" : ""}>${row.new ?? ""}</button><span class="line-sign">${kind === "add" ? "+" : kind === "delete" ? "−" : " "}</span><code>${highlight(row.text) || " "}</code></div>${annotationHTML(annotate?.(row))}`;
       })
       .join("") ||
     '<p class="empty-code">This file does not exist at this revision.</p>'
   );
 }
+const contextName = (context) =>
+  context.kind === "comment"
+    ? "Comment" + (context.path ? " · " + basename(context.path) : "")
+    : basename(context.path);
+/** "code selections" when every attachment is code; comments make them generic. */
+export function attachmentCount(contexts) {
+  const code = contexts.every((c) => c.kind !== "comment"),
+    one = contexts.length === 1;
+  return `${contexts.length} ${code ? (one ? "code selection" : "code selections") : one ? "attachment" : "attachments"}`;
+}
 export function contextHTML(context, index) {
-  return `<div class="context-attachment"><div class="context-heading"><button data-context-jump="${index}">${esc(basename(context.path))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context="${index}" aria-label="Remove code context: ${esc(basename(context.path))} ${esc(context.label)}" title="Remove from future questions. Earlier messages keep their code context.">×</button></div><p>${esc(context.path)} · ${esc(context.side === "base" ? context.base : context.head)}</p><details><summary>Selected code · ${context.ids.length} lines</summary><pre>${esc(context.snippet)}</pre></details></div>`;
+  const comment = context.kind === "comment";
+  return `<div class="context-attachment"><div class="context-heading"><button data-context-jump="${index}">${esc(contextName(context))} · ${esc(context.label)}</button><button class="context-remove" data-remove-context="${index}" aria-label="Remove ${comment ? "comment" : "code"} context: ${esc(contextName(context))} ${esc(context.label)}" title="Remove from future questions. Earlier messages keep their context.">×</button></div><p>${esc(context.path || "Pull request conversation")} · ${esc(context.side === "base" ? context.base : context.head)}</p><details><summary>${comment ? "GitHub comment" : `Selected code · ${context.ids.length} lines`}</summary><pre>${esc(context.snippet)}</pre></details></div>`;
 }
 export function messageContextHTML(message, index, thread) {
   const contexts = Array.isArray(message.contexts)
     ? message.contexts
     : contextsOf(thread);
   if (message.role !== "user" || !contexts.length) return "";
-  return `<details class="message-contexts"><summary>${contexts.length} code ${contexts.length === 1 ? "selection" : "selections"} + PR diff</summary>${contexts.map((context, n) => `<button class="text-button" data-message-context="${index}" data-context-index="${n}">${esc(basename(context.path))} · ${esc(context.label)}</button>`).join("")}</details>`;
+  return `<details class="message-contexts"><summary>${attachmentCount(contexts)} + PR diff</summary>${contexts.map((context, n) => `<button class="text-button" data-message-context="${index}" data-context-index="${n}">${esc(contextName(context))} · ${esc(context.label)}</button>`).join("")}</details>`;
 }

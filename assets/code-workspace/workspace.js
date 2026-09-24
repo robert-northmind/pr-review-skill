@@ -4,7 +4,21 @@ import {
   contextHTML,
   messageContextHTML,
   sourceLinksHTML,
+  attachmentCount,
 } from "./views.mjs";
+import {
+  COMMENT_MODES,
+  DRAFT_PROMPT,
+  ADDRESSED_PROMPT,
+  placeable,
+  isShown,
+  placeThreads,
+  findComment,
+  commentContext,
+  excerptOf,
+  threadHTML,
+  conversationHTML,
+} from "./comments.mjs";
 import {
   contextsOf,
   contextKey,
@@ -128,6 +142,18 @@ import { installChatResize } from "./chat-resize.mjs";
   } catch {}
   const full = new Map(),
     revealed = new Map();
+  // Review comments are read-only GitHub data; open state and filters stay in this browser.
+  let comments = null,
+    commentsLoading = false,
+    commentsError = "",
+    focusedThread = null;
+  const openThreads = new Map(),
+    commentFilter = { mode: "all", bots: true };
+  try {
+    const mode = localStorage.getItem("pr-code-comment-filter");
+    if (COMMENT_MODES.includes(mode)) commentFilter.mode = mode;
+    commentFilter.bots = localStorage.getItem("pr-code-comment-bots") !== "hidden";
+  } catch {}
   let alignmentFrame;
   function alignSplitRows() {
     cancelAnimationFrame(alignmentFrame);
@@ -245,27 +271,59 @@ import { installChatResize } from "./chat-resize.mjs";
     $("file-progress").value = count;
     $("file-progress").max = data.files.length;
     $("note-count").textContent = saved.notes.length;
+    $("comment-count").textContent = comments
+      ? (comments.threads || []).filter((t) => !t.resolved).length
+      : "";
+  }
+  function threadBadge(file) {
+    const count = shownThreads().filter((t) => t.path === file.path).length;
+    return count
+      ? `<span class="file-thread-count" title="${count} review ${count === 1 ? "thread" : "threads"}" aria-label="${count} review ${count === 1 ? "thread" : "threads"}">${count}</span>`
+      : "";
   }
   function renderTree() {
     $("file-tree").innerHTML =
       filteredFiles()
         .map(
           ({ file, index }) =>
-            `<button class="file-link" data-jump="${index}" aria-current="${index === activeFile}"><span class="${saved.viewed.includes(file.path) ? "viewed-icon" : ""}">${saved.viewed.includes(file.path) ? "✓" : "◇"}</span><span><span class="file-name">${esc(basename(file.path))}</span><span class="file-dir">${esc(file.path.split("/").slice(0, -1).join("/"))}</span></span><span class="file-type">${{ added: "A", removed: "D", renamed: "R" }[file.status] || "M"}</span></button>`,
+            `<button class="file-link" data-jump="${index}" aria-current="${index === activeFile}"><span class="${saved.viewed.includes(file.path) ? "viewed-icon" : ""}">${saved.viewed.includes(file.path) ? "✓" : "◇"}</span><span><span class="file-name">${esc(basename(file.path))}</span><span class="file-dir">${esc(file.path.split("/").slice(0, -1).join("/"))}</span></span>${threadBadge(file)}<span class="file-type">${{ added: "A", removed: "D", renamed: "R" }[file.status] || "M"}</span></button>`,
         )
         .join("") || '<p class="muted">No matching files.</p>';
   }
   function visibleRows(index) {
     return projectRows(data.files[index], full.get(index));
   }
+  const shownThreads = () =>
+    (comments?.threads || []).filter((t) =>
+      isShown(t, commentFilter, focusedThread),
+    );
+  const threadOpen = (thread) =>
+    thread.id === focusedThread || (openThreads.get(thread.id) ?? !thread.resolved);
+  function placement(index) {
+    return placeThreads(data.files[index], shownThreads(), {
+      placed: placeable(comments, data),
+      mode: full.get(index),
+    });
+  }
   function fileRows(index) {
-    return renderFileRows(data.files[index], index, {
+    const { byRow, other } = placement(index);
+    const extra = new Set([...(revealed.get(index) || []), ...byRow.keys()]);
+    const annotate = (row, side) =>
+      (byRow.get(row.id) || [])
+        .filter((t) => !side || t.side === side)
+        .map((t) => threadHTML(t, threadOpen(t)))
+        .join("");
+    const outside = other.length && data.files[index].rows
+      ? `<details class="file-comments" ${other.some((t) => t.id === focusedThread) ? "open" : ""}><summary>${other.length} ${other.length === 1 ? "comment" : "comments"} not on current lines${placeable(comments, data) ? " · file-level or outdated" : " · from a newer commit"}</summary>${other.map((t) => threadHTML(t, threadOpen(t))).join("")}</details>`
+      : "";
+    return outside + renderFileRows(data.files[index], index, {
       mode: full.get(index),
       layout: diffLayout,
-      extra: revealed.get(index),
+      extra,
       base: data.base,
       head: data.head,
       loading: loadingFiles.has(index),
+      annotate: byRow.size ? annotate : null,
     });
   }
   function renderFiles() {
@@ -375,9 +433,11 @@ import { installChatResize } from "./chat-resize.mjs";
     $("chat-toggle").setAttribute("aria-expanded", "true");
     $("chat-content").hidden = kind !== "chat";
     $("notes-content").hidden = kind !== "notes";
+    $("comments-content").hidden = kind !== "comments";
     $("rail-title").textContent =
-      kind === "chat" ? "Ask about this code" : "Private notes";
+      { chat: "Ask about this code", notes: "Private notes", comments: "GitHub comments" }[kind];
     if (kind === "chat") renderChat();
+    else if (kind === "comments") renderComments();
     else renderNotes();
     updateLayout();
   }
@@ -450,7 +510,7 @@ import { installChatResize } from "./chat-resize.mjs";
         )
         .join("");
     $("chat-context").innerHTML = contexts.length
-      ? `<p class="context-count">${contexts.length} code ${contexts.length === 1 ? "selection" : "selections"} + PR diff</p>` +
+      ? `<p class="context-count">${attachmentCount(contexts)} + PR diff</p>` +
         contexts.map(contextHTML).join("")
       : `<strong>Entire pull request</strong><p>Comparison ${esc((thread?.base || data.base).slice(0, 12))} → ${esc((thread?.head || data.head).slice(0, 12))}</p>`;
     let messagesHTML = thread
@@ -474,6 +534,7 @@ import { installChatResize } from "./chat-resize.mjs";
       thread || contexts.length
         ? "Add selection to chat"
         : "Ask about selection";
+    $("prompt-addressed").hidden = !contexts.some((c) => c.kind === "comment");
     $("send-question").disabled = chatStarting || isRunning(thread);
     $("stop-chat").hidden = !isRunning(thread);
     $("stop-chat").disabled = thread?.status === "stopping";
@@ -516,15 +577,19 @@ import { installChatResize } from "./chat-resize.mjs";
     }
   }
   async function jumpContext(context) {
+    if (context.kind === "comment" && context.head === data.head && context.base === data.base) {
+      await focusThread(context.comment);
+      return;
+    }
     if (context.head !== data.head || context.base !== data.base) {
       const query = new URLSearchParams({
         url: data.url,
         revision: context.base + "-" + context.head,
         tab: "code",
         path: context.path,
-        line: context.ids[0],
         side: context.side,
       });
+      if (context.ids.length) query.set("line", context.ids[0]);
       location.href = "/workspace?" + query;
       return;
     }
@@ -533,6 +598,89 @@ import { installChatResize } from "./chat-resize.mjs";
       await jump(index, context.ids, context.side);
       if (innerWidth <= 750) closeRail();
     }
+  }
+  async function loadComments(refresh = false) {
+    if (commentsLoading) return;
+    commentsLoading = true;
+    commentsError = "";
+    renderComments();
+    try {
+      comments = await api.comments(refresh);
+    } catch (error) {
+      commentsError = error.message;
+    } finally {
+      commentsLoading = false;
+      renderFiles();
+      renderComments();
+    }
+  }
+  function renderComments() {
+    if (!data) return;
+    const status = commentsLoading
+      ? "Loading comments from GitHub…"
+      : commentsError ||
+        (comments
+          ? `Read from GitHub ${new Date(comments.fetched_at * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}${comments.incomplete ? " · very long discussions are cut off; see GitHub for the rest" : ""}`
+          : "");
+    $("comments-status").textContent = status;
+    $("comments-status").classList.toggle("warning", !!commentsError);
+    $("refresh-comments").disabled = commentsLoading;
+    $("comments-placement").hidden = !comments || placeable(comments, data);
+    if (comments && !placeable(comments, data))
+      $("comments-placement").textContent = `Comments refer to commit ${comments.head.slice(0, 12)}, not the ${data.head.slice(0, 12)} shown here. They're listed under each file instead of on lines. Check for new commits to place them.`;
+    if ($("conversation").hidden || $("comments-content").hidden) return;
+    const listed = (comments?.threads || []).filter((t) =>
+      isShown(t, { ...commentFilter, mode: commentFilter.mode === "hidden" ? "all" : commentFilter.mode }),
+    );
+    $("comment-threads").innerHTML = comments
+      ? listed.length
+        ? listed
+            .map((t) => {
+              const first = t.comments[0] || { author: "ghost", body: "" };
+              const line = t.line || t.original_line;
+              return `<button class="thread-link${t.resolved ? " resolved" : ""}" data-thread-jump="${esc(t.id)}"><span><strong>@${esc(first.author)}</strong> · ${esc(basename(t.path))}${line && !t.file_level ? ":" + line : ""}${t.resolved ? " · Resolved" : ""}${t.outdated ? " · Outdated" : ""}</span><span class="muted">${esc(excerptOf(first.body, 140))}</span></button>`;
+            })
+            .join("")
+        : `<p class="muted">${comments.threads.length ? "No threads match the comment filter." : "No review threads on code yet."}</p>`
+      : "";
+    $("comment-conversation").innerHTML = comments
+      ? comments.conversation.length
+        ? comments.conversation
+            .filter((c) => commentFilter.bots || !c.bot)
+            .map(conversationHTML)
+            .join("") || '<p class="muted">Only bot comments. Turn on Bots to see them.</p>'
+        : '<p class="muted">No general PR comments or review summaries.</p>'
+      : "";
+  }
+  function contextForComment(id) {
+    const item = findComment(comments, id);
+    if (!item) return null;
+    const index = item.comments ? data.files.findIndex((f) => f.path === item.path) : -1;
+    const context = commentContext(item, data, data.files[index], index);
+    if (!placeable(comments, data)) context.ids = [];
+    return context;
+  }
+  async function focusThread(id) {
+    const thread = comments?.threads.find((t) => t.id === id);
+    if (!thread) {
+      showRail("comments");
+      document
+        .querySelector(`[data-conversation="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "center" });
+      return;
+    }
+    const index = data.files.findIndex((f) => f.path === thread.path);
+    if (index < 0) {
+      notify("This comment is on a file outside the current comparison. Open it on GitHub.");
+      return;
+    }
+    focusedThread = id;
+    openThreads.set(id, true);
+    await jump(index);
+    if (innerWidth <= 750) closeRail();
+    const target = document.querySelector(`.review-thread[data-thread="${CSS.escape(id)}"]`);
+    target?.scrollIntoView({ block: "center", behavior: "instant" });
+    target?.querySelector("summary")?.focus({ preventScroll: true });
   }
   function renderNotes() {
     $("saved-notes").innerHTML = saved.notes.length
@@ -695,6 +843,20 @@ import { installChatResize } from "./chat-resize.mjs";
       $("note-text").focus();
     }
     if (d.showCode !== undefined) setTab("code");
+    if (d.threadJump !== undefined) focusThread(d.threadJump);
+    if (d.commentAsk !== undefined) {
+      const context = contextForComment(d.commentAsk);
+      if (context) attachContext(context);
+    }
+    if (d.commentDraft !== undefined) {
+      const context = contextForComment(d.commentDraft);
+      if (context && !chatStarting) {
+        // Drafts get a fresh conversation so they never inherit unrelated selections.
+        beginThread(context);
+        ask(DRAFT_PROMPT);
+      }
+    }
+    if (button.id === "refresh-comments") loadComments(true);
     if (button.id === "generate-review") {
       button.disabled = true;
       if (!(await startReview({}))) button.disabled = false;
@@ -879,6 +1041,38 @@ import { installChatResize } from "./chat-resize.mjs";
   new ResizeObserver(updateLayout).observe(
     document.querySelector(".diff-column"),
   );
+  $("comment-filter").addEventListener("change", (event) => {
+    commentFilter.mode = event.target.value;
+    focusedThread = null;
+    try {
+      localStorage.setItem("pr-code-comment-filter", commentFilter.mode);
+    } catch {}
+    renderFiles();
+    renderComments();
+  });
+  $("comment-bots").addEventListener("change", (event) => {
+    commentFilter.bots = event.target.checked;
+    focusedThread = null;
+    try {
+      localStorage.setItem("pr-code-comment-bots", commentFilter.bots ? "shown" : "hidden");
+    } catch {}
+    renderFiles();
+    renderComments();
+  });
+  // Toggle does not bubble; capture it to remember each thread's open state.
+  document.addEventListener(
+    "toggle",
+    (event) => {
+      const thread = event.target.closest?.(".review-thread");
+      if (thread === event.target) {
+        openThreads.set(thread.dataset.thread, thread.open);
+        if (!thread.open && focusedThread === thread.dataset.thread) focusedThread = null;
+      }
+      alignSplitRows();
+    },
+    true,
+  );
+  $("comments-toggle").addEventListener("click", () => showRail("comments"));
   $("file-filter").addEventListener("input", renderFiles);
   $("unviewed-only").addEventListener("change", renderFiles);
   $("wrap-lines").addEventListener("change", (event) => {
@@ -909,7 +1103,8 @@ import { installChatResize } from "./chat-resize.mjs";
     selection = null;
     paintSelection();
   });
-  $("messages").addEventListener("click", async event => {
+  // Code blocks in chat answers and GitHub comments (including suggestions).
+  document.addEventListener("click", async event => {
     const button = event.target.closest("[data-copy-code]");
     if (!button) return;
     try {
@@ -998,12 +1193,16 @@ import { installChatResize } from "./chat-resize.mjs";
       $("diff-totals").innerHTML =
         `<span class="added">+${data.files.reduce((sum, f) => sum + f.additions, 0)}</span><span class="deleted">−${data.files.reduce((sum, f) => sum + f.deletions, 0)}</span>`;
       initialControls.forEach((control) => (control.disabled = false));
+      $("prompt-addressed").dataset.prompt = ADDRESSED_PROMPT;
+      $("comment-filter").value = commentFilter.mode;
+      $("comment-bots").checked = commentFilter.bots;
       $("loading-workspace").hidden = true;
       $("workspace-body").hidden = false;
       renderReview();
       renderFiles();
       if (currentThread()) renderChat();
       setTab(tab);
+      loadComments();
       if (data.files.length) {
         const index = Math.max(
           0,

@@ -206,7 +206,7 @@
 }
 .file-link {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
   width: 100%;
   text-align: left;
   gap: 8px;
@@ -1245,3 +1245,279 @@
 
 .chat-table code { white-space: nowrap; overflow-wrap: normal; }
 .chat-resize::before { content: ''; position: absolute; left: 3px; top: calc(50% - 16px); width: 4px; height: 32px; border-radius: 3px; background: var(--muted); opacity: .4; }
+
+/* GitHub review comments: read-only threads between diff rows and in the rail. */
+.comment-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.comment-controls select {
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.code-workspace {
+  --comment: #7b4fd6;
+  --comment-band: #f6f2ff;
+  --comment-head: #efe8ff;
+}
+:root[data-theme="dark"] .code-workspace {
+  --comment: #b69cff;
+  --comment-band: #211d2c;
+  --comment-head: #2c2540;
+}
+/* A tinted band with an accent edge separates discussion from source. */
+.row-annotations {
+  padding: 8px 12px 10px 60px;
+  background: var(--comment-band);
+  border-block: 1px solid color-mix(in srgb, var(--comment) 30%, var(--line));
+  box-shadow: inset 3px 0 var(--comment);
+}
+/* Cards stay inside the visible code area while long lines scroll horizontally. */
+.code-lines,
+.split-pane {
+  container-type: inline-size;
+}
+.row-annotations > .review-thread {
+  position: sticky;
+  left: 60px;
+  max-width: min(760px, calc(100cqw - 72px));
+}
+.split-line-list .row-annotations {
+  padding-left: 12px;
+}
+.split-line-list .row-annotations > .review-thread {
+  left: 12px;
+  max-width: min(760px, calc(100cqw - 24px));
+}
+.annotation-blank {
+  background: var(--comment-band);
+  border-block: 1px solid color-mix(in srgb, var(--comment) 30%, var(--line));
+}
+.review-thread,
+.file-comments {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--comment) 45%, var(--line));
+  border-radius: 8px;
+  max-width: 760px;
+  white-space: normal;
+  box-shadow: 0 1px 3px #0000001a;
+  overflow: hidden;
+}
+.review-thread > summary,
+.file-comments > summary {
+  background: var(--comment-head);
+  cursor: pointer;
+}
+.review-thread.resolved {
+  border-color: var(--line);
+  box-shadow: none;
+}
+.review-thread.resolved > summary {
+  background: var(--soft);
+}
+.thread-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--comment);
+}
+.review-thread.resolved .thread-icon {
+  color: var(--muted);
+}
+.review-thread + .review-thread {
+  margin-top: 6px;
+}
+.review-thread > summary,
+.file-comments > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+.review-thread.resolved > summary {
+  color: var(--muted);
+}
+.thread-excerpt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.review-thread[open] .thread-excerpt {
+  visibility: hidden;
+}
+.thread-badge,
+.thread-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--soft);
+  color: var(--muted);
+}
+.thread-count {
+  background: none;
+}
+.thread-comment {
+  border-top: 1px solid var(--line);
+  padding: 8px 12px;
+}
+.thread-comment header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.thread-comment header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.thread-comment .chat-markdown {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.thread-comment .chat-markdown p {
+  margin: 0 0 10px;
+}
+.thread-comment .chat-markdown h1,
+.thread-comment .chat-markdown h2,
+.thread-comment .chat-markdown h3,
+.thread-comment .chat-markdown h4 {
+  font-size: 14px;
+  margin: 12px 0 6px;
+}
+.thread-comment .chat-markdown details {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.thread-comment .chat-markdown details > summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.thread-comment .chat-markdown details[open] > summary {
+  margin-bottom: 6px;
+}
+.thread-comment .chat-markdown sup,
+.thread-comment .chat-markdown sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.thread-comment .chat-markdown pre {
+  font-size: 12px;
+}
+.thread-comment .chat-markdown > :first-child {
+  margin-top: 4px;
+}
+.thread-comment .chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+.thread-hunk {
+  border-top: 1px solid var(--line);
+  padding: 4px 12px;
+}
+.thread-hunk pre {
+  font-size: 11px;
+  overflow-x: auto;
+  margin: 4px 0;
+}
+.thread-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  border-top: 1px solid var(--line);
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.thread-actions a {
+  color: var(--muted);
+}
+.code-lines > .file-comments {
+  margin: 6px 12px 8px;
+}
+.file-comments > .review-thread {
+  margin: 0 10px 8px;
+}
+.file-thread-count {
+  font-size: 10px;
+  border-radius: 8px;
+  padding: 0 6px;
+  background: var(--selection-bg);
+  color: var(--selection);
+  align-self: center;
+}
+.comments-content {
+  padding: 14px 18px;
+  overflow: auto;
+  font-size: 12px;
+}
+.comments-content h3 {
+  font-size: 12px;
+  margin: 18px 0 8px;
+}
+.comments-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.comments-heading .warning {
+  color: var(--warn);
+}
+.comments-content .notice {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.thread-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  padding: 7px 2px;
+  font-size: 12px;
+}
+.thread-link:hover {
+  background: var(--soft);
+}
+.thread-link.resolved {
+  color: var(--muted);
+}
+.thread-link .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversation-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.conversation-item > .thread-badge {
+  display: inline-block;
+  margin: 8px 12px 0;
+}
+.conversation-item .thread-comment:first-of-type {
+  border-top: 0;
+}
+.thread-comment .chat-markdown a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}

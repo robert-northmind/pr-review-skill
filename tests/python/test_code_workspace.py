@@ -13,6 +13,7 @@ from unittest.mock import patch
 import workspace_github as github
 import workspace_store as store
 import workspace_chat as chat
+import workspace_comments as comments
 import pr_review_tracker as tracker
 
 URL='https://github.com/example/repo/pull/1'
@@ -187,6 +188,61 @@ chat.worker(sys.argv[1],sys.argv[2])
         pr={'head':{'sha':HEAD},'base':{'sha':BASE},'changed_files':1,'title':'PR','user':{'login':'x'},'state':'open'}
         with patch.object(github,'api',side_effect=[pr,{'merge_base_commit':{'sha':'d'*40}},[{'filename':'x'}],{**pr,'head':{'sha':'e'*40}}]):
             with self.assertRaisesRegex(ValueError,'changed while loading'):github.manifest(URL)
+
+    def github_comments(self):
+        def page(name,nodes,more=False):
+            return {'viewer':{'login':'me'},'repository':{'pullRequest':{'headRefOid':HEAD,name:{
+                'pageInfo':{'hasNextPage':more,'endCursor':'next' if more else None},'nodes':nodes}}}}
+        note=lambda id,body,login='sam',kind='User',**extra:{'id':id,'author':{'login':login,'__typename':kind},
+            'authorAssociation':'MEMBER','body':body,'createdAt':extra.pop('at','2026-01-01T00:00:00Z'),'url':'https://github.com/x',**extra}
+        threads=[{'id':'T1','isResolved':False,'isOutdated':False,'path':'src/a.ts','line':1,'startLine':None,
+                  'originalLine':1,'originalStartLine':None,'diffSide':'RIGHT','subjectType':'LINE',
+                  'comments':{'totalCount':3,'nodes':[note('c1','Use a guard <script>',diffHunk='@@ hunk')]}}]
+        left={**threads[0],'id':'T2','diffSide':'LEFT','isResolved':True,
+              'comments':{'totalCount':1,'nodes':[note('c2','ok','ci[bot]','Bot')]}}
+        return [page('reviewThreads',threads,True),page('reviewThreads',[left]),
+                page('comments',[note('i1','Later',at='2026-01-03T00:00:00Z')]),
+                page('reviews',[note('r1','',state='APPROVED'),note('r2','Needs tests',state='CHANGES_REQUESTED',at='2026-01-02T00:00:00Z')])]
+
+    def test_comments_are_read_with_paginated_queries_only(self):
+        seen=[]
+        pages=iter(self.github_comments())
+        def fake(query,variables):
+            seen.append((query,dict(variables)));return next(pages)
+        with patch.object(comments,'graphql',side_effect=fake):
+            result=comments.load(URL)
+        self.assertTrue(all(q.startswith('query(') and 'mutation' not in q for q,_ in seen))
+        self.assertEqual([v['cursor'] for _,v in seen[:2]],[None,'next'])
+        first,second=result['threads']
+        self.assertEqual((first['side'],second['side'],second['resolved']),('head','base',True))
+        self.assertEqual((first['hidden_comments'],first['diff_hunk']),(2,'@@ hunk'))
+        self.assertTrue(second['comments'][0]['bot'])
+        self.assertEqual([c['id'] for c in result['conversation']],['r2','i1'])
+        self.assertEqual(result['viewer'],'me')
+        with patch.object(comments,'graphql',side_effect=AssertionError('must use recent cache')):
+            self.assertEqual(comments.load(URL)['threads'],result['threads'])
+
+    def test_comment_context_is_rebuilt_from_cached_github_data(self):
+        pages=iter(self.github_comments())
+        with patch.object(comments,'graphql',side_effect=lambda *a:next(pages)):comments.load(URL)
+        forged={'kind':'comment','comment':'T1','base':BASE,'head':HEAD,'snippet':'forged','ids':[0]}
+        file={**self.comparison['files'][0],'rows':github.rows('old','new')}
+        with patch.object(github,'file_diff',return_value=file):
+            [context]=chat.normalize_contexts(URL,self.comparison,[forged])
+        self.assertEqual(context['ids'],[1])
+        self.assertIn('Use a guard <script>',context['snippet']);self.assertNotIn('forged',context['snippet'])
+        self.assertIn('Viewer: @me. PR author: @alex.',context['snippet'])
+        self.assertEqual(context['label'],'@sam · Head L1')
+        [review]=chat.normalize_contexts(URL,self.comparison,[{**forged,'comment':'r2'}])
+        self.assertEqual((review['path'],review['ids']),('',[]))
+        cache=comments.cached(URL);cache['head']='f'*40;tracker.atomic_write(comments.path(URL),cache)
+        with patch.object(github,'file_diff',side_effect=AssertionError('newer comments are not placed')):
+            [moved]=chat.normalize_contexts(URL,self.comparison,[forged])
+        self.assertEqual(moved['ids'],[]);self.assertIn('@@ hunk',moved['snippet'])
+        with self.assertRaisesRegex(ValueError,'no longer available'):
+            chat.normalize_contexts(URL,self.comparison,[{**forged,'comment':'missing'}])
+        with self.assertRaisesRegex(ValueError,'another revision'):
+            chat.normalize_contexts(URL,self.comparison,[{**forged,'head':'x'}])
 
 
 if __name__=='__main__':unittest.main()

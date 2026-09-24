@@ -25,6 +25,7 @@ import dashboard_reviews as reviews
 import code_workspace as workspace
 import workspace_github
 import workspace_chat
+import workspace_comments
 import workspace_report
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
@@ -143,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200,page,'text/html; charset=utf-8')
             elif parsed.path.startswith('/assets/code-workspace/'):
                 name = parsed.path.removeprefix('/assets/code-workspace/')
-                if name not in ('workspace.js','workspace.css','model.mjs','api.mjs','diff.mjs','review.mjs','views.mjs','progress.mjs','chat-markdown.mjs','chat-resize.mjs','vendor/markdown-it.mjs'):
+                if name not in ('workspace.js','workspace.css','model.mjs','api.mjs','diff.mjs','review.mjs','views.mjs','progress.mjs','chat-markdown.mjs','chat-resize.mjs','comments.mjs','vendor/markdown-it.mjs'):
                     self._error(404,'Asset not found.'); return
                 self._send(200,(ASSETS/'code-workspace'/name).read_bytes(), 'text/css' if name.endswith('.css') else 'text/javascript')
             elif parsed.path.startswith('/api/workspace') or parsed.path == '/workspace-report':
@@ -156,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200,workspace.load(url,rev))
                 elif parsed.path == '/api/workspace-file':
                     self._send(200,workspace_github.file_diff(url,rev,query.get('path',[''])[0]))
+                elif parsed.path == '/api/workspace-comments':
+                    self._send(200,workspace_comments.load(url,query.get('refresh',[''])[0] == '1'))
                 elif parsed.path == '/api/workspace-chat':
                     self._send(200,workspace_chat.snapshot(url,query.get('thread_id',[''])[0]))
                 elif parsed.path == '/api/workspace-ai':

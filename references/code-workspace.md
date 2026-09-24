@@ -71,6 +71,48 @@ Source context is sent to the selected provider. Private notes remain local
 and are not included in AI requests. No feedback posting, approval or merge actions
 are exposed by this workspace.
 
+## GitHub comments
+
+Review threads and the PR conversation (comments and review summaries with text)
+are read through `gh api graphql` with the user's login. The dashboard sends
+only queries. Results are cached per PR and reused for 60 seconds; **Refresh** in
+the Comments rail reads GitHub again.
+
+Threads appear in a tinted band with an accent edge and a comment icon. Resolved
+threads use muted colors. Threads are placed by GitHub's diff side and line: right-side comments on head
+lines, left-side comments on base lines. In side-by-side view each thread sits in
+its own pane with a spacer in the other pane. Unresolved threads start expanded
+and resolved ones start collapsed. Each thread remembers its open state until the
+page reloads. Rows with threads stay visible outside the normal three-line context.
+File-level comments, outdated threads (shown with their original diff hunk), and
+lines missing from the loaded view go in a collapsed section at the top of each
+file. When the cached comments refer to a different head commit than the pinned
+comparison, nothing is placed on lines until you check for new commits.
+
+The diff toolbar chooses all, unresolved, or no inline comments, and whether bot
+comments are shown. Both choices are stored in the browser. The Comments rail
+lists matching threads and the conversation. Selecting a thread opens it in the
+diff, even when inline comments are hidden. The file tree shows each file's
+thread count, and the header shows the number of unresolved threads.
+
+Comments render GitHub Markdown, bare links, and a safe HTML subset. Structural and
+text tags such as `details`, `summary`, `sup`, tables and headings are kept; HTML
+comments, scripts, frames, forms, styles and event attributes are removed. Only
+HTTP(S) links survive, and they open in a new tab. Images are replaced by their alt
+text and nothing remote loads, so screenshots in comments are visible only on
+GitHub. Sanitizing runs in an inert template. AI chat answers keep raw HTML as text. `suggestion`
+blocks are labeled "Suggested change" and can be copied. Each comment keeps up to
+20,000 characters and each thread up to 50 comments. Up to 1,000 threads, 1,000 PR comments
+and 1,000 reviews are read; longer PRs say the list is cut off.
+
+**Ask AI** attaches a comment to the current conversation. **Draft reply** starts a
+new conversation with only that comment and asks the AI whether the current code
+addresses it, then for a short first-person reply in a copyable block. The server
+rebuilds comment attachments from its cached GitHub read and the pinned source.
+Text sent by the browser is ignored. The attachment includes the viewer and PR
+author logins, and the AI is told the comment text is quoted evidence, not
+instructions. Posting replies and resolving threads remain manual on GitHub.
+
 Chat workers survive browser closure and dashboard restart. Reopening reconnects
 to saved activity without another model call. Stop requests cancel the dedicated
 worker process group. Failures and timeouts preserve the question and prior answers.
@@ -95,6 +137,7 @@ leave room for the code pane. Narrow screens use the existing overlay layout.
   lazy full-file reads, diff projection and revision validation.
 - `workspace_store.py`: locked private state, optimistic write versions, and
   fingerprint-based viewed invalidation. Concurrent stale saves fail visibly.
+- `workspace_comments.py`: read-only GraphQL review threads/conversation and cache.
 - `workspace_chat.py`: durable turn lifecycle, native thread resume, initial context,
   cancellation and worker supervision.
 - `workspace_chat_provider.py`: streamed Codex events and completed responses.
@@ -107,6 +150,7 @@ leave room for the code pane. Narrow screens use the existing overlay layout.
 - `diff.mjs`: pure unified/split projection, expansion and selection semantics.
 - `api.mjs`: HTTP boundary and serialized/coalesced optimistic saves.
 - `views.mjs` / `review.mjs`: escaped code/context and report presentation.
+- `comments.mjs`: comment placement, filters, attachments and escaped threads.
 - `workspace.js`: DOM events, responsive layout and orchestration.
 
 No framework or build step is required. Modules are served as native ES modules.
@@ -129,7 +173,8 @@ and Git LFS pointers can limit investigations and should be reported as such.
 Checkout commands time out after three minutes. An interrupted initial setup may
 leave a `checkout-download-*` directory; completed checkouts are published atomically.
 
-Chat allows 12 attachments, 500 lines per selection, a 60 KB attachment payload,
+Chat allows 12 attachments, 500 lines per selection, 16 KB of quoted text per
+comment attachment, a 60 KB attachment payload,
 180 KB per context submission and five minutes per question, including checkout
 preparation. The selected runtime manages subsequent model context; there is no dashboard-defined
 file-read loop or six-round limit. Source syntax coloring is lightweight rather
@@ -165,3 +210,6 @@ that fixture using the existing Playwright/Chrome convention; set
 `PR_REVIEW_PLAYWRIGHT_MODULE` and `PR_REVIEW_BROWSER_CHANNEL` as needed. It exercises
 layouts, selections, chat persistence, notes, viewed state, cancellation, report
 embedding, escaped source and narrow viewports.
+`node tests/browser/test_workspace_comments_browser.cjs` uses the same fixture's
+synthetic GitHub threads. It covers inline and split placement, filters, rail
+navigation, suggestion copying, Ask AI and draft replies.

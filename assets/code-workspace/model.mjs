@@ -12,6 +12,7 @@ export const contextKey = (context) =>
     context.head,
     context.side,
     context.ids,
+    context.comment || null,
   ]);
 export const emptyState = () => ({
   viewed: [],

@@ -336,6 +336,12 @@ Git/GitHub read tools; shell, edits, hooks and imported MCP servers are disabled
 Private notes remain local. Streamed answers, public activity and source links
 appear in the conversation.
 
+GitHub review threads appear under the lines they discuss, and **Comments** lists
+every thread plus the general PR conversation. Show all, only unresolved, or no
+comments inline, and hide bot comments. **Ask AI** attaches a comment to the chat;
+**Draft reply** checks whether the current code addresses it and drafts a reply
+for you to copy. Nothing is posted to GitHub.
+
 Finished HTML reviews stay in the dashboard; completion does not open an external
 browser. See [workspace architecture, limits and tests](references/code-workspace.md).
 
