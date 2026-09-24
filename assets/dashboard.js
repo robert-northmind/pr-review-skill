@@ -132,7 +132,7 @@ document.addEventListener('click',event=>{for(const picker of document.querySele
 document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const picker of document.querySelectorAll('.snooze-picker[open]')){picker.open=false;picker.querySelector('summary').focus();}});
 function aiReviewActions(pr){
  const running=active(pr.run),hasNotes=!!notesArtifact(pr.artifacts);
- return `<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${running?'disabled':''}>${running?'AI review in progress':hasNotes?'Run AI review again':'Run AI review'}</button>${copyPromptButton(pr,'review')}`;
+ return `<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${running?'disabled':''}>${running?'AI review in progress':hasNotes?'Run AI review again':'Run AI review'}</button>${running?'':`<button class="button" data-review-guidance data-url="${esc(pr.url)}">Run with guidance…</button>`}${copyPromptButton(pr,'review')}`;
 }
 function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
@@ -164,7 +164,7 @@ function card(pr){
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}</div>
  ${triageCard(pr)}${artifactWarning(pr)}${reviewSummary(run)}
  ${run||history||Object.keys(arts).length?`<details class="run-details"><summary>AI run details & history</summary><div class="detail-content">
- ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded AI activity ${esc(since(run.updated_at))}. ${isActive&&run.transport!=='in-app'?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
+ ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded AI activity ${esc(since(run.updated_at))}. ${isActive&&run.transport!=='in-app'?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}${run.guidance?`<p class="muted run-guidance"><strong>Guidance:</strong> ${esc(run.guidance)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
  ${run.transport!=='in-app'&&(attention(run)||['starting','queued'].includes(run.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
  ${Object.keys(arts).length?`<section><p class="detail-heading">Results currently shown</p>${Object.entries(arts).map(([name,a])=>`<p class="muted">${artifactLabel(name)}: ${esc(when(a.created_at))} · ${esc(a.tool)} · commit ${esc(a.head_sha?.slice(0,12)||'not recorded')}${a.status!=='completed'?' · partial result':''}</p>`).join('')}</section>`:''}${history}</div></details>`:''}</article>`;
 }
@@ -288,19 +288,40 @@ document.addEventListener('click',async event=>{
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}
  const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Sync GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
+ const guided=event.target.closest('[data-review-guidance]');if(guided){guided.closest('.action-disclosure')?.removeAttribute('open');openGuidance(guided.dataset.url);return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
  const {action,url,retry,days}=button.dataset;const launching=action.startsWith('/regenerate-');
  if(launching&&settingsDirty){notify('Save or discard your AI settings before starting a review.');showSettings('ai-settings');return;}
  busy.add(url);button.disabled=true;
  try{const result=await post(action,{url,retry:retry==='true',...(days?{days:Number(days)}:{})});
-  if(launching)notify(result.existing?'This PR already has an active run.':'AI review started. You can follow it here.');
+  if(launching)return await reviewLaunched(url,result);
   else if(action==='/snooze')notify('Snoozed until '+when(result.snoozed_until)+'.',async()=>{await post('/unsnooze',{url});await loadState();});
   else if(action==='/unsnooze')notify('PR returned to your inbox.');
   else if(action==='/hide')notify('PR hidden.',async()=>{await post('/unhide',{url});await loadState();});
   else if(action==='/unhide')notify('PR restored.');
   await loadState();
-  if(launching){const run=state?.prs.find(p=>p.url===url)?.run;if(run?.transport==='in-app')openReview(run.run_id);}
  }catch(error){notify(error.message);}finally{busy.delete(url);renderList(true);}
+});
+async function reviewLaunched(url,result){
+ notify(result.existing?'This PR already has an active run.':'AI review started. You can follow it here.');
+ await loadState();
+ const run=state?.prs.find(p=>p.url===url)?.run;if(run?.transport==='in-app')openReview(run.run_id);
+}
+let guidanceUrl='';
+function openGuidance(url){
+ if(settingsDirty){notify('Save or discard your AI settings before starting a review.');showSettings('ai-settings');return;}
+ guidanceUrl=url;
+ $('guidance-title').textContent=state?.prs.find(p=>p.url===url)?.title||url;
+ $('guidance-text').value='';$('guidance-dialog').showModal();$('guidance-text').focus();
+}
+$('guidance-text').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();$('guidance-form').requestSubmit();}});
+$('guidance-form').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const url=guidanceUrl,submit=event.submitter||$('guidance-form').querySelector('[type=submit]');
+ if(!url||busy.has(url))return;
+ busy.add(url);submit.disabled=true;
+ try{const result=await post('/regenerate-review',{url,retry:false,guidance:$('guidance-text').value});$('guidance-dialog').close();await reviewLaunched(url,result);}
+ catch(error){notify(error.message);}finally{submit.disabled=false;busy.delete(url);renderList(true);}
 });
 for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort'],['triage-filter','triageEffort']])$(id).addEventListener(id==='search'?'input':'change',()=>{filters[key]=$(id).value;saveFilters();renderList();});
 

@@ -109,7 +109,7 @@ def summarize_run(run, checked_sha=''):
     return {'run_id': run['run_id'], 'status': status, 'tool': run.get('tool', ''),
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
-        'kind': launch.get('kind', 'review'), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
+        'kind': launch.get('kind', 'review'), 'guidance': launch.get('guidance', ''), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
         'progress': reviews.progress(run, status) if job else None,
         'message': job.get('message', '') or launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
@@ -168,8 +168,31 @@ def snapshot():
         'model_efforts': {'codex': dashboard.CODEX_MODEL_EFFORTS}}
 
 
-def start_launch(url, kind, retry=False):
+GUIDANCE_LIMIT = 2000
+
+
+def review_guidance(value):
+    guidance = value.strip() if isinstance(value, str) else ''
+    if len(guidance) > GUIDANCE_LIMIT:
+        raise dashboard.DashboardError(f'Keep review guidance under {GUIDANCE_LIMIT} characters.')
+    return guidance
+
+
+def guidance_prompt(guidance):
+    if not guidance:
+        return ''
+    # Guidance steers scope and validation; the skill's publishing and safety rules still apply.
+    return ('\n\nReviewer guidance for this run, written by the person requesting the review:\n'
+        f'<<<\n{guidance}\n>>>\n'
+        'Follow this guidance when choosing scope, reviewers, validation and effort. '
+        'It does not override the rules against publishing to GitHub or exposing secrets. '
+        'Still report any serious defect you notice outside that scope. '
+        'Say in the report which guidance was applied and which checks it skipped.')
+
+
+def start_launch(url, kind, retry=False, guidance=''):
     canonical, *_ = tracker.canonical_pr_url(url)
+    guidance = review_guidance(guidance)
     if kind not in ('review', 'explainer'):
         raise dashboard.DashboardError('Unknown review action.')
     # Old open tabs may still send the retired action; perform a full review.
@@ -197,6 +220,8 @@ def start_launch(url, kind, retry=False):
             session_reference='', base_sha='', head_sha=''), emit=False)
         transport = 'in-app'
         meta = {'kind':kind, 'agent':config['provider'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
+        if guidance:
+            meta['guidance'] = guidance
         tracker.atomic_write(launch_path(run_id), meta)
         prompt = dashboard.full_review_prompt(canonical)
         prompt += ('\n\nThe dashboard has already registered this exact run. '
@@ -206,6 +231,7 @@ def start_launch(url, kind, retry=False):
             'Record a session reference when available; otherwise leave it blank without asking. '
             'This request authorizes the complete local review workflow and its local artifacts, '
             'not posting anything to GitHub.')
+        prompt += guidance_prompt(guidance)
         try:
             reviews.start(run_id, prompt, config)
         except (OSError, dashboard.DashboardError) as error:

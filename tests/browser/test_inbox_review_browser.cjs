@@ -62,8 +62,30 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await card.getByRole('button',{name:'Run AI review again',exact:true}).click();
   await card.getByRole('button',{name:'AI review in progress',exact:true}).waitFor({state:'attached'});
   assert.equal(launches.length,3);
+  assert.equal(launches[2].guidance,undefined,'Plain reruns must not send guidance');
+
+  // Guided reruns send the typed steering text; cancelling sends nothing.
+  pr.run.status='completed';
+  await page.reload();await card.waitFor();
+  await card.locator('.pr-overflow > summary').click();
+  await card.getByRole('button',{name:'Run with guidance…',exact:true}).click();
+  const dialog=page.locator('#guidance-dialog');
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  assert.equal(await dialog.evaluate(element=>element.open),false);
+  assert.equal(launches.length,3);
+  await card.locator('.pr-overflow > summary').click();
+  await card.getByRole('button',{name:'Run with guidance…',exact:true}).click();
+  assert.equal(await card.locator('.pr-overflow').evaluate(element=>element.open),false,'Opening guidance must close the actions menu');
+  assert.equal(await page.locator('#guidance-title').textContent(),pr.title);
+  await dialog.getByRole('textbox').fill('Docs only; skip tests.');
+  await dialog.getByRole('textbox').press('Control+Enter');
+  await card.locator('[data-action="/regenerate-review"]:disabled',{hasText:'AI review in progress'}).waitFor({state:'attached'});
+  assert.equal(await card.locator('[data-review-guidance]').count(),0,'Active runs must not offer guided launches');
+  assert.equal(launches.length,4);
+  assert.equal(launches[3].guidance,'Docs only; skip tests.');
+  assert.equal(await dialog.evaluate(element=>element.open),false);
   assert.deepEqual(errors,[]);
-  console.log('Inbox review browser checks passed: first launch, active-run guard, rerun, failure recovery, desktop/mobile.');
+  console.log('Inbox review browser checks passed: first launch, active-run guard, rerun, failure recovery, guided rerun, desktop/mobile.');
  }finally{
   if(browser)await browser.close();
   const stopped=once(fixture,'exit');fixture.kill('SIGTERM');await stopped;

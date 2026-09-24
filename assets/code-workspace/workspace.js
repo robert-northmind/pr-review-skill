@@ -697,16 +697,14 @@ import { installChatResize } from "./chat-resize.mjs";
     if (d.showCode !== undefined) setTab("code");
     if (button.id === "generate-review") {
       button.disabled = true;
-      try {
-        const result = await api.request("/regenerate-review", {});
-        notify("AI review started. Follow its activity in the dashboard.");
-        clearTimeout(reviewTimer);
-        await updateReview();
-      } catch (error) {
-        notify(error.message);
-        button.disabled = false;
-      }
+      if (!(await startReview({}))) button.disabled = false;
     }
+    if (button.id === "generate-review-guided") {
+      $("guidance-text").value = "";
+      $("guidance-dialog").showModal();
+      $("guidance-text").focus();
+    }
+    if (button.id === "guidance-cancel") $("guidance-dialog").close();
     if (button.id === "refresh-comparison") {
       button.disabled = true;
       try {
@@ -827,6 +825,32 @@ import { installChatResize } from "./chat-resize.mjs";
         a.dataset.side ||
           (full.get(Number(a.dataset.file)) === "base" ? "base" : "head"),
       );
+  });
+  async function startReview(body) {
+    try {
+      await api.request("/regenerate-review", body);
+      notify("AI review started. Follow its activity in the dashboard.");
+      clearTimeout(reviewTimer);
+      await updateReview();
+      return true;
+    } catch (error) {
+      notify(error.message);
+      return false;
+    }
+  }
+  $("guidance-text").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      $("guidance-form").requestSubmit();
+    }
+  });
+  $("guidance-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = $("guidance-form").querySelector("[type=submit]");
+    submit.disabled = true;
+    if (await startReview({ guidance: $("guidance-text").value }))
+      $("guidance-dialog").close();
+    submit.disabled = false;
   });
   $("files-toggle").addEventListener("click", () => {
     const overlay =

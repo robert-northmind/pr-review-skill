@@ -212,6 +212,29 @@
         ×
       </button>
     </div>
+    <dialog id="guidance-dialog" class="guidance-dialog" aria-labelledby="guidance-heading">
+      <form id="guidance-form">
+        <h2 id="guidance-heading">Run AI review with guidance</h2>
+        <label
+          >What should the reviewer know or focus on?<textarea
+            id="guidance-text"
+            rows="5"
+            maxlength="2000"
+            placeholder="Only iOS code changed; validate on iOS only.&#10;Docs-only change; skip builds and tests."
+          ></textarea
+        ></label>
+        <p class="muted">
+          Steers scope and validation for this run only. The reviewer still
+          reports serious issues it notices.
+        </p>
+        <div class="note-actions">
+          <button class="button primary" type="submit">Start review</button
+          ><button class="button" type="button" id="guidance-cancel">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </dialog>
     <div id="workspace-toast" class="toast" role="status" hidden></div>
   </body>
 </html>

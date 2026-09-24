@@ -67,6 +67,16 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await page.locator('#review-tab').click();
   await page.frameLocator('.review-frame').getByRole('heading',{name:'Fixture AI review'}).waitFor();
   assert.equal(await page.locator('.review-frame').getAttribute('sandbox'),'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+  // Guided launches post the steering text from a dialog that survives report refreshes.
+  const launches=[];
+  await page.route('**/regenerate-review',async route=>{launches.push(route.request().postDataJSON());await route.fulfill({json:{run_id:'guided-run',existing:false,transport:'in-app'}});});
+  await page.locator('#generate-review-guided').click();
+  await page.locator('#guidance-text').fill('Only iOS changed; validate on iOS.');
+  await page.locator('#guidance-form [type=submit]').click();
+  await page.waitForFunction(()=>!document.getElementById('guidance-dialog').open);
+  assert.equal(launches.length,1);
+  assert.equal(launches[0].guidance,'Only iOS changed; validate on iOS.');
+  await page.unroute('**/regenerate-review');
   await page.locator('#code-tab').click();
   await page.locator('#question').fill('Cancel this question');
   await page.locator('#send-question').click();await page.locator('#stop-chat').click();

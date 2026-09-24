@@ -748,6 +748,39 @@
   color: var(--muted);
   margin-bottom: 22px;
 }
+.guidance-dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 22px;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.guidance-dialog::backdrop {
+  background: rgb(0 0 0 / 35%);
+}
+.guidance-dialog h2 {
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+.guidance-dialog label {
+  display: block;
+}
+.guidance-dialog textarea {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  resize: vertical;
+  margin: 6px 0 8px;
+}
+.guidance-dialog .muted {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 14px;
+}
 .review-empty {
   max-width: 550px;
   margin: 55px auto;

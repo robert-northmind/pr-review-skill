@@ -298,3 +298,4 @@ progress::-webkit-progress-bar{background:var(--line);border-radius:8px}progress
  .queue-hint{flex-basis:100%;padding-left:20px}
  .queue-card .pr-actions .primary{order:-1}
 }
+#guidance-dialog{width:min(560px,calc(100% - 32px));background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:24px}#guidance-dialog::backdrop{background:#0007}#guidance-dialog h2{font-size:19px;margin:0 0 8px}#guidance-dialog label{display:block;margin:16px 0 8px}#guidance-text{display:block;width:100%;resize:vertical;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14px;background:var(--bg);color:var(--fg);padding:10px;margin-top:6px}#guidance-dialog .muted{font-size:12px;margin:0 0 16px}.run-guidance{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:600px){#guidance-text{font-size:16px}}

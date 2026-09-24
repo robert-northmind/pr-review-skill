@@ -236,6 +236,14 @@ The review buttons create a tracker run before starting the agent, then pass
 that exact ID to the agent. Reuse it. The tracker ID is the launch identity;
 never attach whichever unrelated run happens to finish next.
 
+**Run with guidance…** opens a dialog for optional steering text (up to 2,000
+characters). `/regenerate-review` accepts it as `guidance`; the text is
+appended to the agent prompt as reviewer guidance for scope, validation and
+effort, stored in the run's launch metadata and shown under the card's AI run
+details. It never overrides the no-publishing and secret-handling rules, and
+the report must state which checks the guidance skipped. Plain launches send no
+guidance.
+
 **Copy review prompt** is available beside the
 launch actions and in My reviews → Review tools. They copy the same workflow
 prompt for pasting into any agent session, without opening Terminal, creating

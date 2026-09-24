@@ -37,6 +37,27 @@ class DashboardLaunch(unittest.TestCase):
                 self.assertNotIn('launch-exit',prompt)
         finally:fixture.tearDown()
 
+    def test_guidance_steers_prompt_and_is_recorded_with_the_run(self):
+        from test_dashboard import Isolated, URL
+        import dashboard_runtime as runtime
+        fixture=Isolated();fixture.setUp()
+        try:
+            with patch.object(runtime.reviews,'start') as launch:
+                runtime.start_launch(URL,'review',retry=True,guidance='  Docs only; skip tests.  ')
+            run_id,prompt,_=launch.call_args.args
+            self.assertIn('<<<\nDocs only; skip tests.\n>>>',prompt)
+            self.assertTrue(prompt.rstrip().endswith('which checks it skipped.'))
+            meta=json.loads(runtime.launch_path(run_id).read_text())
+            self.assertEqual(meta['guidance'],'Docs only; skip tests.')
+            with patch.object(runtime.reviews,'start') as launch:
+                runtime.start_launch(URL,'review',retry=True,guidance='   ')
+            run_id,prompt,_=launch.call_args.args
+            self.assertNotIn('Reviewer guidance',prompt)
+            self.assertNotIn('guidance',json.loads(runtime.launch_path(run_id).read_text()))
+            with self.assertRaises(dashboard.DashboardError):
+                runtime.start_launch(URL,'review',retry=True,guidance='x'*(runtime.GUIDANCE_LIMIT+1))
+        finally:fixture.tearDown()
+
 
 if __name__ == '__main__':
     unittest.main()

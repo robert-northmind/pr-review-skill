@@ -160,6 +160,10 @@ They use the skill prompt and
 the selected agent's authentication. Use **Copy review prompt** to paste the
 same instructions into another agent session.
 
+**Run with guidance…** (in the PR actions menu and the workspace AI review tab)
+starts the same review with a short steering note, such as "Docs only; skip
+tests" or "Only iOS changed; validate on iOS". The note applies to that run only.
+
 The agent records progress and artifacts in the local tracker. When finished,
 click **Open notes** on the card. There is one report and one review skill:
 
