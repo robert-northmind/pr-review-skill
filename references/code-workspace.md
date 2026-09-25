@@ -10,7 +10,12 @@ Standalone report files retain their own controls and layout. The repository/PR
 identity in the workspace header opens the GitHub PR in a new tab. Review
 generation uses the existing configured provider and live activity flow; report
 completion never launches an external browser.
-Both providers expose live review activity in the dashboard. If the GitHub comparison cannot load, the error offers a
+Both providers expose live review activity in the dashboard. For a finished
+report with a recorded Claude Code or Codex session, **Continue in …** copies a
+fork command and **Copy handoff prompt** copies a cross-agent prompt
+(`scripts/review_continuation.py`). The session ID must be a UUID. Transcripts
+are located under `CLAUDE_CONFIG_DIR`/`CODEX_HOME` (default `~/.claude`,
+`~/.codex`), and paths in the command are shell-quoted. If the GitHub comparison cannot load, the error offers a
 direct link to any saved report, with its current commit freshness unverified.
 
 Code changes use GitHub's PR head and merge base, pinned by full commit SHA.

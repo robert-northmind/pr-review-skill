@@ -67,6 +67,14 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await page.locator('#review-tab').click();
   await page.frameLocator('.review-frame').getByRole('heading',{name:'Fixture AI review'}).waitFor();
   assert.equal(await page.locator('.review-frame').getAttribute('sandbox'),'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+  // Continuing copies the finished review's fork command or a handoff prompt.
+  await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(page.url()).origin});
+  await page.getByRole('button',{name:'Continue in Claude Code'}).click();
+  await page.locator('#workspace-toast',{hasText:'Paste it into a terminal'}).waitFor();
+  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'cd /tmp/reviews && claude --resume 4c099c4b-400d-4914-a857-53605e88f11a --fork-session');
+  await page.getByRole('button',{name:'Copy handoff prompt'}).click();
+  await page.locator('#workspace-toast',{hasText:'Handoff prompt copied'}).waitFor();
+  assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/^Pick up where an earlier Claude Code review left off\.\nSession ID: 4c099c4b/);
   // Guided launches post the steering text from a dialog that survives report refreshes.
   const launches=[];
   await page.route('**/regenerate-review',async route=>{launches.push(route.request().postDataJSON());await route.fulfill({json:{run_id:'guided-run',existing:false,transport:'in-app'}});});

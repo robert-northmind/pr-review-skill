@@ -857,6 +857,15 @@ import { installChatResize } from "./chat-resize.mjs";
       }
     }
     if (button.id === "refresh-comments") loadComments(true);
+    if (d.continue !== undefined) {
+      const continuation = data.review?.continuation;
+      try {
+        await navigator.clipboard.writeText(continuation[d.continue]);
+        notify(d.continue === "command"
+          ? `Command copied. Paste it into a terminal to continue in ${continuation.agent}.`
+          : "Handoff prompt copied. Paste it into a new Claude Code or Codex session.");
+      } catch { notify("Could not copy. Reload the AI review tab and try again."); }
+    }
     if (button.id === "generate-review") {
       button.disabled = true;
       if (!(await startReview({}))) button.disabled = false;

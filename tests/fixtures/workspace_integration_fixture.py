@@ -21,6 +21,7 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import pr_server
 
+SESSION='4c099c4b-400d-4914-a857-53605e88f11a'
 URL='https://github.com/example/telemetry-sdk/pull/248'
 CHAT_ANSWER = """Synthetic transport answer. <script>must stay text</script>
 
@@ -85,7 +86,7 @@ def main():
         real_start=chat.start
         stack.enter_context(patch.object(github,'manifest',side_effect=load_manifest))
         stack.enter_context(patch.object(github,'file_diff',side_effect=file_diff))
-        stack.enter_context(patch.object(workspace,'review',return_value={'artifact':artifact,'run':None}))
+        stack.enter_context(patch.object(workspace,'review',return_value={'artifact':artifact,'run':None,'continuation':{'agent':'Claude Code','session_id':SESSION,'command':'cd /tmp/reviews && claude --resume '+SESSION+' --fork-session','prompt':'Pick up where an earlier Claude Code review left off.\nSession ID: '+SESSION}}))
         stack.enter_context(patch.object(chat,'start',side_effect=lambda url,request:real_start(url,request,launcher=launch)))
         stack.enter_context(patch.object(dashboard,'discover_claude_options',return_value=([''],[''])))
         stack.enter_context(patch.object(comments,'fetch',side_effect=lambda url:fixture.review_comments(comparison['head'])))

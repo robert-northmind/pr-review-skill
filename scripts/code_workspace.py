@@ -6,6 +6,7 @@ import workspace_github as github
 import workspace_store as store
 import workspace_chat as chat
 import ai_settings
+import review_continuation
 
 
 def review(url, head):
@@ -14,7 +15,11 @@ def review(url, head):
     artifacts = runtime.collect_artifacts(runs, head)
     artifact = artifacts.get('review-html') or artifacts.get('review-markdown')
     latest = max(runs, key=lambda r: r.get('created_at', ''), default=None)
-    return {'artifact': artifact, 'run': runtime.summarize_run(latest, head) if latest else None}
+    # Continue the session that wrote the shown report, not a newer failed run.
+    source = next((r for r in runs if artifact and r['run_id'] == artifact['run_id']), None)
+    return {'artifact': artifact, 'run': runtime.summarize_run(latest, head) if latest else None,
+            'continuation': review_continuation.continuation(
+                source, runtime.summarize_run(source)['status']) if source else None}
 
 
 def load(url, rev=None):
