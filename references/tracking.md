@@ -170,8 +170,21 @@ When GitHub reports a PR closed or merged:
   user when a worktree is dirty or cannot be verified;
 - continue refreshing a closed PR during retention so a reopened PR is restored;
 - treat merged PRs as terminal;
-- retain archived data for 20 days from GitHub’s actual closure/merge timestamp;
-- after 20 days, remove the run directory and tracker-owned artifacts.
+- retain archived runs for 7 days from GitHub’s actual closure/merge timestamp;
+- after 7 days, remove the run directory and tracker-owned artifacts.
+
+`scripts/storage_cleanup.py` also runs after every dashboard refresh. It checks
+the GitHub state of every run's PR, not only PRs in the inbox, applies the 7-day
+rule, keeps the newest three runs per PR, removes build caches and report-check
+screenshots from finished runs, removes leftover `checkouts/<run-id>` folders of finished runs (never one
+that still holds a Git checkout), and
+drops workspace caches unused for 7 days. Active reviews, checkouts, chats and
+locked caches are skipped. Its last result is in `storage-cleanup.json`.
+Preview everything it would remove with:
+
+```shell
+python3 ~/.agents/skills/pr-review/scripts/storage_cleanup.py --dry-run
+```
 
 Automatic cleanup may delete managed files only under
 `~/.local/share/pr-review-tracker/` or

@@ -186,6 +186,25 @@ selected test, documentation or housekeeping suggestions; state that they are
 non-blocking in the comment when useful. A general PR comment needs no invented
 line attachment. Do not force numeric severity onto optional suggestions.
 
+### Findings already discussed on the PR
+
+When the saved PR discussion already covers a finding, say so where the reader
+looks first. Put `Already discussed` in the metadata line with a link to the
+thread, and name who raised it and its state in “Is it real?”:
+
+```markdown
+**P2 · Already discussed · Reproduced** · [open thread by alex-maintainer](https://github.com/owner/repo/pull/7#discussion_r123) · [src/a.swift:142](https://github.com/owner/repo/blob/HEAD_SHA/src/a.swift#L142)
+```
+
+Write the draft as a reply for that thread, adding only what is new: a
+reproduction, a concrete fix sketch, a case the thread missed, or confirmation
+that the latest commit still has the problem. Do not restate the original
+comment. When there is nothing new to add, write “No reply needed; the open
+thread covers it” instead of a draft. The same applies to comments the
+requesting reviewer already made. Mention already-discussed findings in the
+assessment (for example “two of three findings are already raised in open
+threads”) so the next action is clear.
+
 For `Needs confirmation`, put it in both the summary and the metadata line,
 provide the missing evidence and how to obtain it, and add no review-comment
 block. Do not turn unresolved hypotheses into copyable defect comments. Omit
@@ -235,8 +254,10 @@ controls.
   catch the regression where it is placed.
 - Every default defect draft has a demonstrated scenario and a checked
   remediation direction. Unknown deployment facts remain unknown.
-- Scope and previous discussion have been considered. Superseded and rejected
-  candidates appear only in the verification/history artifact.
+- Scope and previous discussion have been considered: every finding raised in
+  an existing thread is marked Already discussed with its link, and no draft
+  repeats an existing comment. Superseded and rejected candidates appear only
+  in the verification/history artifact.
 - Links identify the pinned source; placement is exact or explicitly general.
 - Validation claims match observed results and revisions. Screenshots show the
   stated view/state, exist outside the disposable checkout, and have useful

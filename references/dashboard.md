@@ -191,7 +191,9 @@ without acknowledging any unseen changes. The retired done action routes to wait
 1,000-result limit is reported rather than silently truncating history.
 
 Closed/merged PR entries expire 20 days after their actual GitHub `closedAt` or
-`mergedAt`, not their latest comment, first discovery or sync date. Open PRs remain.
+`mergedAt`, not their latest comment, first discovery or sync date. Their review
+runs are removed sooner, 7 days after closure, by `storage_cleanup.py` (see
+[Tracking](tracking.md)); the inbox entry and reporting history remain. Open PRs remain.
 Expiration runs after successful observations during the visible page's automatic
 refresh and Sync GitHub. Reopened PRs are kept. Failed checks never authorize
 cleanup. `dashboard_retention.py` removes the personal entry, workflow-owned
@@ -504,6 +506,11 @@ Reviews run in a detached Python worker through a shared provider interface.
 Codex uses `openai-codex`; Claude uses the pinned JS Agent SDK with the installed
 Claude Code executable. Install its dependencies with
 `npm ci --prefix scripts/claude-runtime` (Node.js 22.16+).
+Before the model starts, the worker saves the PR's review threads (with resolved
+and outdated state), top-level comments and review summaries into the run as
+`discussion.json` and `discussion.md`, using the same read-only queries as the
+code workspace. A GitHub failure is noted in the activity and does not stop the
+review; the skill then reads the discussion itself.
 The review button opens a live activity panel with stage progress and cancellation.
 Finished runs show their outcome and blocked/failed stage counts instead of a
 percentage or progress bar. Stage details retain incomplete checks and their reasons.

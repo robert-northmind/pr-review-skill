@@ -6,6 +6,7 @@ import json
 import re
 import secrets
 import subprocess
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -475,6 +476,12 @@ def refresh(include_closed=False):
         failures.extend(error for error in pool.map(fetch, urls) if error)
     import dashboard_retention
     failures.extend(dashboard_retention.cleanup(started))
+    import storage_cleanup
+    try:
+        # Storage problems are recorded in storage-cleanup.json, not shown as refresh failures.
+        storage_cleanup.maintain()
+    except Exception as error:  # never let housekeeping break a GitHub refresh
+        print(f'Storage cleanup failed ({type(error).__name__})', file=sys.stderr)
     if failures:
         raise dashboard.DashboardError(' '.join(dict.fromkeys(failures)))
 

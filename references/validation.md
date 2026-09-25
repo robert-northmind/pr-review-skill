@@ -46,6 +46,10 @@ trigger remote workflows as part of local verification.
 
 Use a disposable writable copy of the exact head revision. Keep installations,
 caches, generated files and fixtures separate from the shared read-only source.
+Put disposable workspaces under the run's checkout folder, for example
+`checkouts/<run-id>/runtime`, which is removed with the checkout; never under the
+run directory. Evidence directories keep only logs, result JSON, probe sources
+and screenshots; storage cleanup deletes build caches left in a finished run.
 Record any temporary test/probe additions; do not change product code to make
 a check pass. Label adapted harnesses and mocks so their limits stay visible.
 

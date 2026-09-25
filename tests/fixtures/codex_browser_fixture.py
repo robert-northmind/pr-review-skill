@@ -16,7 +16,7 @@ import pr_server as s
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='codex-review-fixture-') as root, patch.dict(os.environ,{'PR_REVIEW_TRACKER_HOME':root}):
+    with tempfile.TemporaryDirectory(prefix='codex-review-fixture-') as root, patch.dict(os.environ,{'PR_REVIEW_TRACKER_HOME':root,'PR_REVIEW_TRACKER_GH':'/usr/bin/false'}):
         url='https://github.com/example/repo/pull/42'
         d.save_dashboard({'prs':{url:{'owner':'example','repository':'repo','number':42,'title':'Sample review: handle disconnected clients','reasons':['review-requested'],'hidden':False,'first_seen_at':t.utc_now()}}})
         d.save_agent_config('codex','','')

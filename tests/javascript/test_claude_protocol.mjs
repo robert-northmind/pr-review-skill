@@ -11,6 +11,11 @@ const chat=buildOptions({...request,mode:'chat',effort:''});
 assert.equal(chat.effort,undefined);assert.equal(chat.permissionMode,'dontAsk');
 assert.equal(chat.tools.includes('Bash'),false);assert.equal(chat.tools.includes('Read'),true);
 assert.deepEqual(chat.settingSources,[]);assert.equal(chat.settings.disableAllHooks,true);
+// Chat may read only its checkout plus explicitly named review files, never the whole disk.
+assert.equal(chat.allowedTools.includes('Read'),false);
+const scoped=buildOptions({...request,mode:'chat',context:{readable:['/runs/r1/','/claude/t.jsonl','relative/x','/bad/../x','/a(b)/','/star/*']}});
+assert.deepEqual(scoped.allowedTools.filter(r=>/^(Read|Grep|Glob)\(/.test(r)),
+  ['Read(//runs/r1/**)','Grep(//runs/r1/**)','Glob(//runs/r1/**)','Read(//claude/t.jsonl)','Grep(//claude/t.jsonl)','Glob(//claude/t.jsonl)']);
 const events=publicEvents({type:'assistant',message:{content:[{type:'thinking',thinking:'secret'},{type:'tool_use',name:'Read',input:{file_path:'secret-path'}},{type:'text',text:'Public update'}]}});
 assert.ok(events.some(e=>e.type==='update'&&e.text==='Public update'));assert.ok(!JSON.stringify(events).includes('secret'));
 assert.deepEqual(publicEvents({type:'stream_event',parent_tool_use_id:'subagent',event:{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'not parent answer'}}}),[]);

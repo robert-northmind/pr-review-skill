@@ -38,6 +38,14 @@ Chat starts with selected lines plus the PR diff. Additional selections join the
 active conversation, duplicates are ignored, and removal changes future questions
 without rewriting earlier messages. Each question retains its source snapshot.
 The server reconstructs attachments from pinned source, ignoring client snippets.
+When the PR has an AI review, the first question also carries a short reference
+to it: the run folder and its files (`review.md`, `verification.md`,
+`discussion.md`, `input.json`, `context.json`), whether it matches the current
+head, and for a finished review the session ID and transcript path from
+`review_continuation.py`. Nothing from the review is pasted; the AI reads the
+files when a question needs them and treats them as claims to verify. The Claude
+chat may read its checkout plus exactly that run folder and transcript; it has no
+blanket file access.
 The selected AI can investigate the full repository using its native tools. The backend
 prepares an isolated, shallow Git checkout at the comparison's head SHA, with the
 base commit available through `git show` and `git diff`. Setup uses authenticated

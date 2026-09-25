@@ -257,21 +257,6 @@ def run_gh_pr_list(repo: str) -> list[dict[str, Any]]:
     return payload
 
 
-def run_tracker_maintenance(warnings: list[str]) -> None:
-    """Piggyback the pr-review-tracker's own archive/retention pass onto the
-    dashboard's refresh. Without this, a run's explainer/review artifacts
-    only get archived and eventually purged when the tracker's own list/
-    refresh runs — which the dashboard never otherwise triggers, since it
-    only reads run data via load_all_runs()."""
-    try:
-        _updates, refresh_errors = tracker.refresh_github_states(1.0, force=False)
-        _released, checkout_errors = tracker.cleanup_archived_checkouts(force=False)
-        _purged, purge_errors = tracker.purge_archived(30, dry_run=False)
-        warnings.extend(f"tracker: {e}" for e in [*refresh_errors, *checkout_errors, *purge_errors])
-    except tracker.TrackerError as error:
-        warnings.append(f"tracker maintenance failed: {error}")
-
-
 def fetch_pr_details(canonical: str) -> dict[str, Any]:
     try:
         result = subprocess.run(

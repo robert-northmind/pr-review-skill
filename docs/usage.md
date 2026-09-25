@@ -53,7 +53,11 @@ click **Open review** on the card and select **AI review**. There is one report 
    model and effort settings.
 
 The workflow covers the full diff with correctness, security, and contract
-review lenses, then verifies candidates before reporting them. Model selection
+review lenses, then verifies candidates before reporting them. Existing review
+threads, comments and reviews on the PR are saved into the run first. A finding
+someone already raised is marked **Already discussed** with a link to the
+thread, and its draft becomes a reply that adds something new instead of a
+duplicate comment. Model selection
 is an adaptive policy, not a guarantee of review quality. See the
 [review approach](../references/review-practices.md) and
 [allocation policy](../references/reviewer-allocation.md).
@@ -102,8 +106,12 @@ Completing an AI run does not submit a GitHub review or finish your work.
 GitHub sync automatically places confirmed closed/merged PRs in **Merged or
 closed**, sorted by latest activity. Open PRs you commented on or reviewed are
 followed in Waiting for author unless already tracked or explicitly stopped.
-Closed/merged entries, reports, private notes, code conversations and PR caches
-expire 20 days after GitHub's close/merge date, on the next successful check.
+Closed/merged entries, private notes and code conversations expire 20 days after
+GitHub's close/merge date, on the next successful check. AI review runs expire
+sooner, 7 days after the close/merge date, and only the newest three runs per PR
+are kept. Build caches, report-check screenshots and workspace caches unused for
+7 days are removed automatically. Preview the cleanup with
+`python3 scripts/storage_cleanup.py --dry-run`.
 Running work and cleanup failures defer deletion and show an error.
 Reporting keeps its separate activity window.
 
