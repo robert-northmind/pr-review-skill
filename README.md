@@ -236,9 +236,9 @@ selected provider. Enable them only for repositories you can share with it.
 Private notes stay local and are not included in AI requests.
 
 Reports, cached source and conversations are stored outside this repository.
-AI review runs expire 7 days after the PR's confirmed close/merge date, and only
-the newest three runs per PR are kept. Other data for tracked PRs expires after
-20 days. Running work or cleanup errors defer deletion. Provider
+Local data for a PR, including its AI review runs, expires 7 days after the PR's
+confirmed close/merge date, and only the newest three runs per PR are kept.
+Reporting keeps its own history. Running work or cleanup errors defer deletion. Provider
 session history is separate and is not deleted by tracker cleanup.
 
 Follow-up checks run every five minutes while the dashboard is visible; there

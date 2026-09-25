@@ -369,7 +369,7 @@ def apply_fetch(url, payload, started, error=None):
         save(data)
 
 
-HISTORY_DAYS = 20
+HISTORY_DAYS = tracker.RUN_RETENTION_DAYS  # inbox history, notes, chats and review runs expire together
 
 
 def participated(metadata):

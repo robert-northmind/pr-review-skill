@@ -106,10 +106,9 @@ Completing an AI run does not submit a GitHub review or finish your work.
 GitHub sync automatically places confirmed closed/merged PRs in **Merged or
 closed**, sorted by latest activity. Open PRs you commented on or reviewed are
 followed in Waiting for author unless already tracked or explicitly stopped.
-Closed/merged entries, private notes and code conversations expire 20 days after
-GitHub's close/merge date, on the next successful check. AI review runs expire
-sooner, 7 days after the close/merge date, and only the newest three runs per PR
-are kept. Build caches, report-check screenshots and workspace caches unused for
+Closed/merged entries, private notes, code conversations and AI review runs
+expire 7 days after GitHub's close/merge date, on the next successful check, and
+only the newest three runs per PR are kept. Reporting keeps its own history. Build caches, report-check screenshots and workspace caches unused for
 7 days are removed automatically. Preview the cleanup with
 `python3 scripts/storage_cleanup.py --dry-run`.
 Running work and cleanup failures defer deletion and show an error.

@@ -106,7 +106,7 @@ results per source; hitting that cap is visible and prevents absence-based
 removal. The dashboard does not claim to have fetched beyond the cap.
 
 Inbox discovery does not delete artifacts. The accompanying personal-history
-refresh applies the 20-day retention policy below. Tracker CLI retention remains
+refresh applies the 7-day retention policy below. Tracker CLI retention remains
 available as described in SKILL.md. Dashboard state/config transactions are serialized across CLI and
 HTTP callers; a refresh merges fetched data into current local preferences.
 
@@ -190,10 +190,11 @@ Discovery never starts an AI review. Legacy done/history stages become waiting
 without acknowledging any unseen changes. The retired done action routes to wait. Search failures preserve existing data; the GitHub
 1,000-result limit is reported rather than silently truncating history.
 
-Closed/merged PR entries expire 20 days after their actual GitHub `closedAt` or
+Closed/merged PR entries expire 7 days after their actual GitHub `closedAt` or
 `mergedAt`, not their latest comment, first discovery or sync date. Their review
-runs are removed sooner, 7 days after closure, by `storage_cleanup.py` (see
-[Tracking](tracking.md)); the inbox entry and reporting history remain. Open PRs remain.
+runs expire on the same schedule through `storage_cleanup.py` (see
+[Tracking](tracking.md)), which also covers runs of PRs that are not in the inbox.
+Reporting keeps its own activity history. Open PRs remain.
 Expiration runs after successful observations during the visible page's automatic
 refresh and Sync GitHub. Reopened PRs are kept. Failed checks never authorize
 cleanup. `dashboard_retention.py` removes the personal entry, workflow-owned

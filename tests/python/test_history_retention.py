@@ -16,8 +16,8 @@ import workspace_store
 URL='https://github.com/example/repo/pull/1'
 NOW=datetime.now(timezone.utc)
 STAMP=NOW.isoformat()
-OLD=(NOW-timedelta(days=21)).isoformat()
-RECENT=(NOW-timedelta(days=19)).isoformat()
+OLD=(NOW-timedelta(days=queue.HISTORY_DAYS+1)).isoformat()
+RECENT=(NOW-timedelta(days=queue.HISTORY_DAYS-1)).isoformat()
 
 
 class Retention(unittest.TestCase):
@@ -36,8 +36,8 @@ class Retention(unittest.TestCase):
   return run
  def test_exact_boundary_and_actual_merge_date(self):
   at=queue.epoch(OLD)
-  self.assertFalse(queue.expired({'pr_state':'closed','closed_at':OLD},at+20*86400-1))
-  self.assertTrue(queue.expired({'pr_state':'closed','closed_at':OLD},at+20*86400))
+  self.assertFalse(queue.expired({'pr_state':'closed','closed_at':OLD},at+queue.HISTORY_DAYS*86400-1))
+  self.assertTrue(queue.expired({'pr_state':'closed','closed_at':OLD},at+queue.HISTORY_DAYS*86400))
   self.assertFalse(queue.expired({'pr_state':'merged','closed_at':OLD,'merged_at':RECENT},NOW.timestamp()))
   self.assertFalse(queue.expired({'pr_state':'open','closed_at':OLD},NOW.timestamp()))
   self.assertFalse(queue.expired({'pr_state':'closed'},NOW.timestamp()))
@@ -80,7 +80,7 @@ class Retention(unittest.TestCase):
  def test_retention_does_not_use_archive_discovery_date(self):
   run=self.run_record();directory=tracker.run_dir(run)
   tracker.atomic_write(directory/'github.json',{'state':'closed','closed_at':OLD,'archived_at':STAMP})
-  purged,errors=tracker.purge_archived(20,dry_run=True,pr_urls={URL})
+  purged,errors=tracker.purge_archived(queue.HISTORY_DAYS,dry_run=True,pr_urls={URL})
   self.assertEqual(purged,[run]);self.assertEqual(errors,[]);self.assertTrue(directory.exists())
 
 if __name__=='__main__':unittest.main()
