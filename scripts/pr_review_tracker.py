@@ -28,6 +28,7 @@ DEFAULT_TASKS = (
     "runtime-verification",
     "synthesis",
     "drafts",
+    "accuracy-check",
     "report",
 )
 TASK_STATUSES = (

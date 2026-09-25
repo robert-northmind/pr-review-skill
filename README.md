@@ -24,7 +24,7 @@ the dashboard does not post comments, approve or merge PRs.
 | **My reviews** | Keep an ordered queue, save private notes and reminders, and see when new commits or replies bring a PR back to you. |
 | **Effort estimates** | Get optional Quick, Moderate, Involved or Uncertain estimates, with reasons, filters and a daily call limit. |
 | **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Keep previous reports and run history. |
-| **Review reports** | Read the outcome and assessment, before/after examples, exact source excerpts, expandable findings, copyable draft comments and verification limits in one HTML report. |
+| **Review reports** | Read the outcome and assessment, a plain-words summary, a diagram of the change, a grid of situations before and after, exact source excerpts, step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits in one HTML report. |
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
 | **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions. |
@@ -47,13 +47,17 @@ review assistance; you decide which comments to send and whether to approve.
 <details>
 <summary>More screenshots: reports, review queue, live AI reviews, settings and reporting</summary>
 
-**Review report:** the outcome and current assessment lead into a before/after example.
+**Review report:** the outcome and current assessment lead into a plain-words summary.
 
 ![Review report opening with its assessment and a fictional parser example](docs/screenshots/review-overview-light.jpg)
 
-**Findings:** expand a finding to read the example, impact, fix direction and draft comment.
+**Explanation:** a diagram of the change marks where each finding goes wrong, and a grid shows each situation before and after.
 
-![Two fictional findings, one expanded with evidence and a copyable comment](docs/screenshots/review-findings-light.jpg)
+![Fictional parser diagram with finding badges, followed by a before/after situation grid](docs/screenshots/review-explainer-light.jpg)
+
+**Findings:** expand a finding for the problem in one sentence, a walkthrough, whether it is real, a fix sketch and the draft comment.
+
+![Two fictional findings, one expanded with its walkthrough, fix sketch and copyable comment](docs/screenshots/review-findings-light.jpg)
 
 **My reviews:** see whose turn it is, what changed and where you stopped.
 

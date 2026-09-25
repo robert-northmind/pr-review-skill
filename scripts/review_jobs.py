@@ -29,7 +29,8 @@ STAGES = (
     ('runtime-verification', 'Validate behavior', 15),
     ('synthesis', 'Reconcile findings & explanation', 10),
     ('drafts', 'Draft feedback', 5),
-    ('report', 'Build report', 10),
+    ('accuracy-check', 'Fact-check report', 5),
+    ('report', 'Build report', 5),
 )
 
 
@@ -77,7 +78,8 @@ def progress(run, status):
     stages, score = [], 0
     for name, label, weight in STAGES:
         task = tasks.get(name, {})
-        state = task.get('status', 'queued')
+        # Runs created before a stage existed never register it; do not show it as pending.
+        state = task.get('status', 'skipped' if name not in tasks and status in FINAL else 'queued')
         counts = task.get('progress') or {}
         fraction = 1 if state in ('completed', 'skipped') else 0
         if state == 'running' and counts.get('total', 0) > 0:

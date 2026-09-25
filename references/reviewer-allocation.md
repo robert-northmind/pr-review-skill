@@ -50,6 +50,11 @@ edit differs from changing an authorization condition. Conversely, a six-line
 permission change can warrant a stronger reviewer than a thousand-line rename.
 Keep all three review lenses and full file coverage regardless of allocation.
 
+The report fact-check (`accuracy-check` in `SKILL.md`) reads the whole draft
+against source and evidence. Give it a strong coding model at medium or high
+effort, as for an ordinary behavior change; raise it with the PR's complexity.
+It must be a fresh context, not the lead that wrote the draft.
+
 Final verification of a substantive candidate needs capability appropriate to
 that candidate's complexity and impact. Do not assign it to a cheaper model
 merely because it is a shorter task. If the lead is insufficiently equipped,

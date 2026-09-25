@@ -124,4 +124,27 @@ class Validation(unittest.TestCase):
         self.assertEqual(validate(body)[0], [])
 
 
+    def test_compact_metadata_line_blocks_unresolved_drafts(self):
+        body = '<details class="review-finding">\n<summary>Needs confirmation · Background delegates</summary>\n\n**Needs confirmation · Source-traced** · General\n\n<!-- review-comment:start -->\nCould we fix it?\n<!-- review-comment:end -->\n\n</details>'
+        self.assertTrue(validate(body)[0])
+        self.assertTrue(validate(body.replace('**Needs confirmation · Source-traced**', '**P2 · Comment · Reproduced**'))[0], 'summary disposition still applies')
+        ok = body.replace('Needs confirmation · Background', 'P2 · Background').replace('**Needs confirmation · Source-traced**', '**P2 · Comment · Reproduced**')
+        self.assertEqual(validate(ok)[0], [])
+
+    def test_draft_code_must_match_the_explained_sketch(self):
+        finding = '<details class="review-finding">\n<summary>P2 · Tests fail</summary>\n\n**How to fix it:**\n\n```dart\nfinal received = <Object>[];\n// setup\nexpect(received.single, isA<FormatException>());\n```\n\n<!-- review-comment:start -->\nSomething like:\n\n```dart\nDRAFT\n```\n<!-- review-comment:end -->\n\n<details>\n<summary>Evidence</summary>\n\n```dart\nother();\n```\n\n</details>\n\n</details>'
+        subset = finding.replace('DRAFT', 'expect(received.single, isA<FormatException>());')
+        self.assertEqual(validate(subset), ([], []))
+        different = finding.replace('DRAFT', 'other();\nthrowsA(anything);')
+        self.assertIn('differs', ' '.join(validate(different)[1]))
+        unexplained = different.replace('```dart\nfinal received = <Object>[];\n// setup\nexpect(received.single, isA<FormatException>());\n```', 'Use a handler.')
+        self.assertIn('does not show', ' '.join(validate(unexplained)[1]))
+
+    def test_draft_and_finding_limits_ignore_code(self):
+        code = '```dart\n' + 'call();\n' * 200 + '```'
+        draft = '<details class="review-finding">\n<summary>P2 · X</summary>\n\n' + code + '\n\n<!-- review-comment:start -->\nShort.\n\n' + code + '\n<!-- review-comment:end -->\n\n</details>'
+        self.assertEqual(validate(draft), ([], []))
+        long = draft.replace('<summary>P2 · X</summary>\n\n', '<summary>P2 · X</summary>\n\n' + 'word ' * 460 + '\n\n')
+        self.assertIn('exceeds 450', ' '.join(validate(long)[1]))
+
 if __name__ == '__main__': unittest.main()

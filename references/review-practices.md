@@ -42,10 +42,17 @@ permissions, and keep final verification independent of reviewer agreement.
   why. Apply progressive detail: a visible outcome and example, then exact code,
   then optional background. Do not infer undocumented author motivation as fact.
 
-Our presentation choice is one concrete before/after scenario, followed through
-causal steps, with excerpts beside the relevant claims. This is a synthesis of
-those guidelines, not a proven optimal teaching method. Use a comparison or flow
-only when it clarifies the behavior. Keep the current assessment and drafts in
+Our presentation choice is plain words first, one purpose-built diagram of the
+change, a grid of concrete situations before and after, then exact excerpts tied
+to the diagram's steps. Findings are taught as a one-sentence problem, a
+numbered walkthrough, an explicit “Is it real?” check and a self-contained fix
+sketch. In a local blind comparison in September 2026 (six PRs across five
+repositories, reports written by Claude and Codex, judged by both), this
+combination scored best for understanding the change and the findings; analogies
+did not help. Fuller explanations and sketches introduced more factual errors,
+mostly incomplete sketches and over-broad simplifications, which motivates the
+fact-check stage. The judges favored their own model's output, so treat this as
+indicative, not a user study or a proven optimal teaching method. Keep the current assessment and drafts in
 the same document so explanation and review cannot silently describe different
 revisions or conclusions.
 

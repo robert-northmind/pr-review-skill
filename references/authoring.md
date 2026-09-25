@@ -19,15 +19,24 @@ block types that explain this particular change.
   "head": "FULL_REVIEWED_HEAD_SHA",
   "context": "Historical comparison, prepared YYYY-MM-DD. PR state checked separately.",
   "sections": [
-    {"id": "example", "title": "Before and after", "blocks": [
-      {"type": "comparison", "lanes": [
-        {"title": "Before", "steps": ["Exact input", "Observed source behavior"]},
-        {"title": "After", "steps": ["Same input", "New source behavior"]}
-      ], "caption": "The assumption needed to interpret this example."}
+    {"id": "plain-words", "title": "In plain words", "blocks": [
+      {"type": "paragraph", "text": "Who is affected, what used to happen, what happens now, and the condition that matters."}
+    ]},
+    {"id": "shape", "title": "How the decision is made", "blocks": [
+      {"type": "diagram", "title": "Which driver a widget gets",
+       "html": "<div class=\"dg-stack\"><div class=\"dg-node\">A widget builds</div><div class=\"dg-arrow\"></div><div class=\"dg-node dg-bad\">Custom binding: answers no <span class=\"dg-badge\">⚠ Finding 1</span></div></div>",
+       "caption": "Source-traced from the pinned head. What to notice."}
+    ]},
+    {"id": "cases", "title": "What happens in each situation", "blocks": [
+      {"type": "cases", "columns": ["Situation", "Before", "After"], "caption": "Source-traced; row 2 reproduced.",
+       "rows": [
+         {"situation": "Normal widget test", "cells": [{"status": "works", "text": "test driver"}, {"status": "works", "text": "test driver"}]},
+         {"situation": "Custom test binding", "finding": "Finding 1", "cells": [{"status": "works", "text": "test driver"}, {"status": "breaks", "text": "real driver"}]}
+       ]}
     ]},
     {"id": "code", "title": "How it works", "blocks": [
       {"type": "source", "path": "lib/example.dart", "side": "head", "start": 10, "end": 15,
-       "caption": "How this excerpt produces the example's result."}
+       "caption": "Step 2 in the diagram: how this excerpt produces the result."}
     ]}
   ],
   "questions": [
@@ -99,28 +108,63 @@ are supplementary evidence, not required narrative. The dashboard rewrites these
 links through its evidence route. Files must remain outside disposable checkouts.
 HTTPS source links are allowed; raw HTML and other URL schemes are not active.
 
-Report order: outcome and assessment, context, before/after and mechanism, findings,
-optional self-check, expandable verification and provenance. Explanation depth
-and prose ceilings apply to the opening; never cut valid findings to meet them.
+Report order: outcome and assessment, plain words, diagram, cases grid and
+mechanism (see [Explanation](explanation.md)), findings, self-check, expandable
+verification and provenance. Explanation depth
+and prose targets apply to the opening; never cut valid findings to meet them.
 The reading estimate covers the opening and walkthrough prose, excluding code,
 findings and disclosures. Findings and evidence take additional time; this does
 not estimate how long a review should take.
 Keep a coherent reading path with descriptive headings. Group related code and
 explanation together; avoid making readers open several disclosures to understand
-one concern. A small report can use only a comparison and one source excerpt.
+one concern. A small report can use only a cases grid or diagram and one source excerpt.
 
 Additional block shapes:
 
 - Paragraph: `{"type":"paragraph","text":"Plain prose."}`
 - List: `{"type":"list","items":["A specific condition and consequence."]}`
 - Table: `{"type":"table","headers":["Input","Result"],"rows":[["x","y"]]}`
+- Comparison (two lanes of steps; prefer a cases grid or diagram): `{"type":"comparison","lanes":[{"title":"Before","steps":["..."]},{"title":"After","steps":["..."]}],"caption":"..."}`
 - Background: `{"type":"details","title":"New to this component?","blocks":[...]}`
 - Authored code: `{"type":"example","language":"Dart","code":"...","caption":"Illustrative caller example."}`
 
-### Diagrams and optional interaction
+### Diagrams, cases grids and optional interaction
 
 Choose the representation using [Explanation](explanation.md); reuse a block
-only when it fits the concept. The shared renderer also supports:
+only when it fits the concept.
+
+- `diagram`: `html`, `caption` and optional `title`. Static HTML and inline SVG
+  for a purpose-built picture of the change. The renderer parses and
+  re-serializes it through an allowlist and rejects anything else, so fix the
+  markup when rendering fails. Allowed: layout and text elements (`div`,
+  `span`, `p`, `strong`, `em`, `b`, `i`, `s`, `code`, `small`, `sub`, `sup`,
+  `mark`, `kbd`, `br`, `hr`, lists, `h4`, `h5`, tables) and SVG shapes (`svg`,
+  `g`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`,
+  `text`, `tspan`, `defs`, `marker`, `title`, `desc`) with presentation
+  attributes, `style`, `role` and `aria-*`. Not allowed: links, images,
+  scripts, event handlers, `<style>`, `use`, `foreignObject`, `data-*`, and
+  `url()` other than `url(#dg-…)` for a marker. Classes and ids must start
+  with `dg-`. Prefer the diagram kit over inline styles:
+  - containers: `dg-stack` (vertical), `dg-row` (wraps on phones), `dg-branch`
+    (side-by-side lanes that stack on phones), `dg-lane` (dashed lane box);
+  - nodes: `dg-node`, plus `dg-good`, `dg-bad`, `dg-warn`, `dg-accent` or
+    `dg-muted` for the state; state must also be in the words (✓, ✗, “throws”);
+  - connectors and text: an empty `dg-arrow` shows ↓, `dg-arrow dg-arrow-right`
+    shows →; `dg-label` (small heading), `dg-code` (identifier), `dg-note`;
+  - `dg-badge` (finding marker), `dg-badge-good`, `dg-badge-warn`.
+  For SVG, use a `viewBox` so it scales to a phone, keep labels at least 12px,
+  and use `fill="currentColor"` or `var(--fg)`, `var(--muted)`, `var(--line)`,
+  `var(--panel)`, `var(--soft)`, `var(--accent)`, `var(--good)`, `var(--bad)`,
+  `var(--warn)` so both themes work. Give an SVG `role="img"` and an
+  `aria-label` that states the takeaway.
+- `cases`: `columns` (a situation column plus one to four outcome columns),
+  `rows` (one to eight) and `caption`, optional `title`. Each row has
+  `situation`, optional `finding` (for example `"Finding 1"`, shown as a badge)
+  and one `cells` entry per outcome column with `text` and `status`: `works`
+  ✅, `breaks` ❌, `changes` ⚠️, `unknown` ❔ or `same` (no mark). Marks are
+  also given in words for screen readers.
+
+The shared renderer also supports:
 
 - `flow`: `title`, `caption`, and `steps` with `label`, `detail`, optional `icon`
   (`app`, `memory`, `storage`, `network`) and `state` (`normal`, `active`, `muted`,
@@ -135,8 +179,8 @@ only when it fits the concept. The shared renderer also supports:
   central condition outside the control. This illustrates source behavior, not
   execution of PR code.
 
-For a graphic inside a finding, define it in `review.visuals`, keyed by a short
-identifier, and place `<!-- review-visual:timeout -->` on its own line where it
+For a graphic inside a finding, define a `diagram`, `cases`, `table`, `flow`,
+`sequence` or `scenario` block in `review.visuals`, keyed by a short identifier, and place `<!-- review-visual:timeout -->` on its own line where it
 belongs. For example:
 
 ```json
@@ -152,18 +196,14 @@ belongs. For example:
 ```
 
 Place review visuals outside comment-copy markers. The draft must remain
-self-contained text. Raw HTML and authored scripts remain unsupported. When a
-different kind of diagram is materially clearer, extend the shared assets and
-validation rather than forcing the change into a flow or comparison.
+self-contained text. Raw HTML outside a `diagram` block and authored scripts
+remain unsupported. When a recurring kind of diagram needs something the kit
+cannot express, extend the shared assets and validation rather than forcing it.
 
-For the visible quick context, use an ordinary first section with `paragraph`
-blocks and, when useful, a `comparison` or `table`. No new schema field is needed.
-For example, a comparison can follow one incoming request before and after the
-change: label steps with concrete actions and roles, then explain the relevant
-technical names in the adjacent prose. A table can map a few unfamiliar objects
-to their roles in that same scenario; it should not become a general glossary.
-Keep required context out of `details` blocks. Put longer optional background
-there, and let the later `source` blocks connect the scenario to exact code.
+For the visible plain-words opening, use an ordinary first section with
+`paragraph` blocks. No new schema field is needed. Keep required context out of
+`details` blocks. Put longer optional background there, and let the later
+`source` blocks connect the diagram and grid to exact code.
 
 A source block extracts exact lines, defaulting to `side: "head"`. Use `base`
 for old code. Added/removed markers are derived from the comparison. Adjacent

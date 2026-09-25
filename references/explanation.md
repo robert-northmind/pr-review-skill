@@ -24,47 +24,96 @@ decide it: one large file can be complex, many mechanical files can be simple.
 Use **Deep** when the user asks for an in-depth explanation. “Full PR review”
 selects the review pipeline; it does not by itself request a Deep explainer.
 
-Prose ceilings: Small 800 words, Standard 1,200, Deep 3,000, including collapsed
-background. Optional self-checks remain short; findings have no word ceiling.
-These are ceilings, not targets. Stop when the reader can explain the changed
-behavior, its mechanism and the consequential condition. Add detail when it
-resolves a real difficulty; do not fill the budget or compress away needed context.
-Use short sentences as a guideline; retain essential conditions and caveats
-instead of cutting them merely to satisfy a sentence-length limit.
+Prose targets: Small 800 words, Standard 1,200, Deep 3,000, including collapsed
+background. The browser check warns above the target and fails above 1.5× it.
+Diagram labels, code and grid text are not counted; they support the prose and
+are not a place to move a long explanation. Targets are limits to aim under,
+not a length to reach. Stop when
+the reader can explain the changed behavior, its mechanism and the consequential
+condition. Add detail when it resolves a real difficulty; do not fill the budget
+or compress away needed context. Use short sentences as a guideline; retain
+essential conditions and caveats instead of cutting them to satisfy a limit.
 
-## Give the reader a quick way back into the project
+## Plain words before names
 
-Default to a short, visible **Quick context** section after the outcome and
-before the technical walkthrough when the change relies on domain or repository
-knowledge. The reader should understand the purpose before meeting method
-names, factories, configuration keys, or diff excerpts. For a self-explanatory
-change, fold this into the opening paragraph instead of adding a section.
+Explaining simply is the goal. Before any project-specific identifier (class,
+method, configuration key, package), say in everyday words what the thing is
+and does; define each unfamiliar term at first use, inline, in a few words. Do
+not assume the reader remembers the architecture from an earlier review. Use
+neutral reader-facing labels such as “In plain words”; never label the reader
+or a section “dumbed down”.
 
-Use one concrete scenario to explain what this part of the system does, what
-happens today, and what the PR changes for a caller or user. Define only the few
-terms needed for that scenario, at first use, in everyday language. Explain a
-package or component boundary when it changes the interpretation, such as an
-API defining calls while an SDK records and exports data. Do not assume the
-reader remembers the architecture from an earlier review.
+A simplification must stay true. Re-check every “always”, “never”, “only”,
+“every”, “nothing changes” and “can't” against the pinned source before keeping
+it; narrow the claim instead. Keep essential mode differences visible:
+simplifying a no-op and a recording path into one universal behavior would
+mislead the reader. Analogies rarely help and often restate the mechanism; use
+one only when it genuinely shortens the explanation, connect it immediately to
+the real objects and say where it stops being accurate.
 
-Aim for roughly 100–200 words when a separate section helps, within the existing
-page budget. A brief analogy can help, but connect it immediately to the real
-objects and preserve important limits. For example, tracing a request and its
-database query can introduce parent/child spans before showing the method that
-connects them. Keep essential mode differences visible; simplifying a no-op and
-a recording path into one universal behavior would mislead the reader.
+## Shape the page to the change
 
-Add a compact relationship diagram, before/after comparison, or short labeled
-flow when it makes the scenario easier to grasp. Show actual roles and what
-moves or changes between them. Use the existing renderer blocks where possible;
-choose interaction only when changing the scenario teaches something a static
-visual cannot. Skip decorative visuals and avoid a glossary or generic tutorial.
-Carry the same scenario into the later code explanation instead of repeating it.
+Lead with a concrete title and a short outcome paragraph: the problem, new
+behavior, and essential condition or trade-off. Put this before navigation and
+long metadata. The renderer shows the PR link and assessment beside it, retains
+full SHAs in expandable provenance, and estimates overview reading time.
 
-When explaining a verified review concern, describe the observable consequence
-in terms of that scenario before naming the offending line. Keep the current
-verdict in the overview assessment and copyable comments with the findings. Use neutral reader-facing
-labels such as “Quick context”; never label the reader or section “dumbed down.”
+Then use this order, keeping only the parts that add understanding:
+
+1. **In plain words.** Two to four sentences with no code identifiers: who is
+   affected, what used to happen, what happens now, and the one condition that
+   matters. For a self-explanatory change, fold this into the outcome.
+2. **One purpose-built diagram** of the change's shape (see below). Where a
+   finding's failure happens inside the diagram, mark that step with a small
+   badge such as `⚠ Finding 1: titles collide`, so the reader connects the
+   mechanism to the review before reaching the findings.
+3. **What happens in each situation.** A `cases` grid of three to six concrete
+   situations × before/after: the normal path, the case the PR fixes, relevant
+   edge cases and each finding's case, marked works / breaks / changes. Skip it
+   only when every situation behaves the same.
+4. **How it works.** Exact source excerpts in data/control-flow order, each
+   caption tied to a step of the diagram or a row of the grid (“Step 3 in the
+   diagram happens here”). Name the main entry point and a short reading route
+   when several files interact. Beside the main excerpt, briefly identify the
+   supporting test or check when useful, distinguishing source inspection from
+   execution. Keep commands and logs in verification.
+5. **What deserves attention** (optional): one to three specific conditions or
+   trade-offs not already covered by findings, distinguishing documented
+   decisions from inference.
+6. **Also in this PR** (optional): tests, docs and mechanical changes in a
+   short table or collapsed `details` block, unless a test is needed to
+   understand the changed contract.
+7. **Self-check:** one or two questions (see below).
+
+The diagram and grid replace a Before/After `comparison` and replace prose that
+restates them; do not describe the same flow three times. A tiny change may need
+only the outcome, one grid or diagram, and one excerpt. Put general stack
+concepts beyond the plain-words section in collapsed “New to …?” blocks;
+prerequisites and essential caveats remain visible. Deep mode can add
+alternatives; distinguish inferred trade-offs from documented author decisions.
+
+## Choose the diagram for the idea
+
+Decide what the reader needs to *see* before choosing a form: a decision tree
+for branching, a timeline for ordering, races or windows, a pipeline for data
+transformations, an ownership or dependency map for responsibility changes, a
+call sequence for propagation, a state machine for lifecycle, or real code with
+numbered callouts. The shape should follow the change; there is no rotation or
+requirement to make every report look different.
+
+Build it with the `diagram` block (static HTML and inline SVG using the report's
+diagram kit, see [Authoring](authoring.md)), or with `flow`, `sequence` or
+`scenario` when those fit exactly. Label nodes with plain words plus the real
+name. Use at most about 12 nodes; add a second diagram only for a different
+relationship. Every node, arrow, ordering and label must match the pinned
+source: do not draw “every rule” when some rules take another path, and do not
+reorder steps to make the picture tidier. Captions say what to notice and label
+the diagram as source-traced unless it was executed. Do not animate invented
+timings or imply delivery from an export attempt.
+
+Interaction should expose a meaningful choice or state transition; keep the
+central takeaway visible and controls optional. The same approach applies inside
+a finding when a diagram makes its failure path easier to understand.
 
 ## Establish the explanation before rendering
 
@@ -73,79 +122,27 @@ main narrative. Record:
 
 - The main behavior claim and supporting pinned source location. Distinguish
   implementation behavior, intended policy, and a verified external contract.
-- Each toy example's exact input, relevant assumptions, before/after output,
-  and how those outputs were checked. Include separators, missing fields,
-  default values, error handling and ownership when they affect the result.
+- Each grid row's and toy example's exact input, relevant assumptions,
+  before/after output, and how those outputs were checked. Include separators,
+  missing fields, default values, error handling and ownership when they affect
+  the result.
 - For substantive claims such as “the spec requires,” “always,” or “every SDK,”
   verify an authoritative source or narrow the claim. A code comment or PR title
   is not independent evidence that its interpretation of a standard is correct.
 - Which tests assert the behavior. Do not imply that reading a test executed it,
   or that the existence of a test proves its assertions cover a scenario.
 
-Trace examples through actual callers and branches. A hand-authored simulator
+Trace examples through actual callers and branches. A hand-authored diagram
 illustrates the source; it does not independently validate the implementation.
-Do not invent an observed failure, user impact, consumer, or author rationale.
-Label uncertainty that changes the explanation. Preserve deliberate scope and
-material trade-offs even when the intended behavior appears reasonable.
+Do not invent an observed failure, user impact, consumer, build result or author
+rationale. Label uncertainty that changes the explanation. Preserve deliberate
+scope and material trade-offs even when the intended behavior appears reasonable.
 
-After drafting, check the outcome, example diagram, source captions and each
-quiz answer against this record. Correct contradictions together. When this is
-part of a full review, reconcile with its final synthesis: remove rejected
-warnings, retain material supported caveats, and reconcile with the findings below without duplicating the defect list.
-
-## Shape the page to the change
-
-Lead with a concrete title and a short outcome paragraph: the problem, new
-behavior, and essential condition or trade-off. Put this before navigation and
-long metadata. Show the PR link and mode near the top; retain full SHAs in
-expandable provenance. The renderer estimates overview reading time separately
-from optional findings and evidence; this is not a promise about review duration.
-
-Use only sections that add understanding, usually:
-
-1. **Concrete example:** carry one scenario through the page. Show the changed
-   outcome in the form that best explains it; before/after cards are one option.
-2. **How it works:** the mechanism in data/control-flow order. Where relevant,
-   connect the caller, the component responsible for the behavior and the downstream
-   effect; explain why that boundary matters. Show only source excerpts that help
-   explain the mechanism, with captions connecting each to the scenario. Beside
-   the main example or excerpt, briefly identify the supporting test or check when
-   useful, distinguishing source inspection from execution. Keep commands and logs
-   in verification.
-3. **What deserves attention:** usually one to three specific conditions and
-   consequences that guide the reader to the relevant behavior or source. Include
-   a consequential trade-off at any depth, distinguishing documented decisions
-   from inference. Omit generic edge cases and concerns already explained in findings.
-4. **Optional background/self-check:** add when useful. Explain general stack
-   concepts beyond the quick context in collapsed “New to …?” blocks; prerequisites
-   for understanding the change and essential caveats remain visible.
-
-A tiny change may need only an outcome, one comparison, and one excerpt.
-Avoid repeating the summary in background, captions, and closing paragraphs.
-Fold context, rationale and evidence into the existing narrative; they do not
-each need a section. Prefer one clear example or visual over several views
-teaching the same thing.
-Give tests, docs and mechanical changes a short explanation unless a test itself
-is necessary to understand the changed contract. Deep mode can add alternatives;
-distinguish inferred trade-offs from documented author decisions.
-
-## Choose a visual for the idea
-
-Decide what the reader needs to see before choosing a block. For example, use
-a value transformation for parsing or serialization, an ownership map for
-responsibility changes, a call sequence for propagation, a timeline for races
-or windows, a decision tree for branching, or a state diagram for lifecycle.
-Use before/after columns when comparing two outcomes is the actual teaching task.
-These are possibilities, not a checklist or rotation: meaningful variety follows
-the change, not a requirement to make every report look different.
-
-Use more than one graphic when each explains a different difficult relationship.
-Replace the prose it makes redundant. Interaction should expose a meaningful
-choice or state transition; keep the central takeaway visible and the controls
-optional. Label authored traces as source-based illustrations, and check every
-state against evidence. Do not animate invented timings or imply delivery from
-an export attempt. The same approach applies inside a finding when a diagram
-makes its failure path easier to understand.
+After drafting, check the outcome, diagram, grid, source captions and each quiz
+answer against this record, then pass it to the fact-check stage in `SKILL.md`.
+When this is part of a full review, reconcile with its final synthesis: remove
+rejected warnings, retain material supported caveats, and reconcile with the
+findings below without duplicating the defect list.
 
 ## Exact source and authored examples
 
@@ -163,18 +160,18 @@ pseudocode; they must not masquerade as exact lines. Preserve real source blank
 lines, with one compact visual row per line.
 
 The shared renderer supports pinned PRs/commits and local working-tree sources.
-For an interaction or diagram it cannot express, adapt the shared assets rather
-than replacing all layout and controls. Continue to satisfy the browser,
+For an interaction it cannot express, adapt the shared assets rather than
+replacing all layout and controls. Continue to satisfy the browser,
 source-fidelity, and security checks below. Do not add dependencies merely for
-decoration. Diagrams use semantic HTML/CSS, not ASCII art.
+decoration. Diagrams use semantic HTML/SVG, not ASCII art.
 
 ## Self-checks
 
-Use zero to three questions in Brief mode, up to five in Deep. A small change
-may warrant one or none. Favor a scenario that tests a consequential distinction:
-which branch runs, whether data is retained, whose resource closes, or how a
-partial input behaves. Do not ask merely which file changed or which name was
-printed when that adds no understanding.
+Default to one or two questions; three at most in Brief mode, five in Deep.
+Favor a scenario that tests a consequential distinction: which branch runs,
+whether data is retained, whose resource closes, or how a partial input
+behaves. A grid row or finding makes a good question source. Do not ask merely
+which file changed or which name was printed when that adds no understanding.
 
 Use two to four plausible choices, one correct. Keep options comparable in
 length and specificity. Avoid nonsense distractors, gotchas, and “all/none of
@@ -183,21 +180,18 @@ page's own prose. The shared controls balance answer positions, permit retries
 and reset, reveal feedback in words, and provide keyboard focus. Keep the quiz
 collapsed by default and do not expose correctness before a choice.
 
-
 ## Colleague-style explanation check
 
 Start with “what problem does this solve for someone?” and one concrete input
-or user action. Walk through the old and new outcome, then follow the mechanism
-in causal order. Group by behavior, not alphabetical file order. Name the main
-entry point and a short suggested reading route when several files interact.
-Place a small source excerpt beside the claim it explains; use visuals only
-when they clarify a relationship, branch or change of state.
+or user action. Can a colleague who reads only the title, outcome, plain-words
+section and diagram say what changed and where the findings sit? Can they read
+the grid and say who is better or worse off? Group by behavior, not
+alphabetical file order. Place each excerpt beside the claim it explains.
 
 Keep the short explanation and essential caveats visible; deeper background,
 provenance and self-checks may collapse. A self-check must be optional and must
-never separate the reader from the findings. Re-read the opening without its
-code: can a colleague explain the problem, changed behavior, and key condition?
-Do not invent author intent; distinguish documented rationale from inference.
+never separate the reader from the findings. Do not invent author intent;
+distinguish documented rationale from inference.
 
 The report renderer, offline security and visual validation requirements are
 in [Authoring](authoring.md) and the main skill. Do not produce a separate page.

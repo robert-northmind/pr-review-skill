@@ -150,6 +150,9 @@ responsible for sandbox execution and app lifecycle to avoid duplicate builds.
 
 Follow [Explanation](references/explanation.md) using the same pinned source.
 Draft the JSON narrative sections; do not render or register a separate HTML.
+The opening is: plain words, one purpose-built diagram of the change with
+finding badges, a cases grid of situations before and after, source excerpts
+tied to the diagram's steps, and one or two self-check questions.
 Use the normal concise depth unless the user asks for more detail. After finding
 verification, reconcile the opening, examples and caveats with the final review.
 The lead assembles and validates the complete report only after synthesis.
@@ -299,15 +302,20 @@ before writing the artifact.
 - Put each finding in a collapsible section with severity and a descriptive
   title visible when closed. Keep the overall assessment outside these sections;
   follow the review-note format for the wrapper and expand-all behavior.
-- Before each defect's copyable draft, add a colleague-style explanation
-  with a concrete example: trigger, expected versus actual behavior, why the
-  code produces it, practical consequence, and how the fix would help. Follow
-  the review-note reference for depth and evidence rules; keep this explanation
-  outside the comment body and nested evidence disclosure, visible when the
-  finding is opened.
-- Keep one concern per comment, with a concrete example or consequence and a
-  focused question or suggestion. Often 40–100 words suffice; longer comments
-  are useful when a reproduction or nuanced contract genuinely needs them.
+- Title each finding by the consequence in plain words. Before its copyable
+  draft, teach it: the problem in one sentence, why you should care, a numbered
+  walkthrough with a real value, “Is it real?” (confidence, strongest
+  counter-argument, likely author reply) and how to fix it. Follow the
+  review-note reference for the format, sketch rules and evidence rules; keep
+  this explanation outside the comment body and nested evidence disclosure,
+  visible when the finding is opened.
+- When a simple fix is known, show a self-contained code sketch in the finding
+  and normally in the draft, or a GitHub `suggestion` block when it replaces
+  exactly the attached lines. When there is no easy fix, say so and name the
+  trade-off.
+- Keep one concern per comment, leading with the concrete case, then the
+  suggestion. Often 40–100 words outside code suffice; up to about 150 is fine
+  when a reproduction or nuanced contract genuinely needs it.
 - Use a clear, collegial tone. Do not mechanically add a hedge,
   emoji, confusion story and closing question to every comment. State evidence
   directly and hedge interpretations or preferences. Do not invent the user's
@@ -321,6 +329,35 @@ before writing the artifact.
 
 Drafting is not publishing. Never submit, post, or otherwise send a comment.
 Show drafts to the user first; publish only with separate explicit authorization.
+
+## Fact-check before rendering
+
+Plain explanations, diagrams and fix sketches add claims that can be wrong.
+Before rendering the final report, give the drafted `input.json`, `review.md`,
+the pinned SHAs, the checkout and the run's evidence directory to a fresh,
+independent read-only subagent (tracker task `accuracy-check`). It receives the
+draft to check, not an instruction to agree with it. Ask it to verify against
+the pinned source and evidence, and to report each problem with the exact
+location and the correct fact:
+
+- every “always”, “never”, “only”, “every”, “all”, “nothing changes” and “can't”
+  in the explanation, diagrams, grid rows and findings;
+- every diagram node, arrow and ordering, and every grid cell;
+- every fix sketch and suggestion block against the fix-sketch rules in
+  [Review notes](references/review-notes.md): declared variables, imports,
+  wiring, dropped branches, exact names and literals, and whether a suggestion
+  block applies cleanly to the attached lines;
+- whether each suggested test would actually catch the regression where it is
+  placed;
+- quoted logs, cited line numbers, and any claim of a build, run, CI result or
+  author action, against the recorded evidence.
+
+The lead applies each correction or records why it was rejected, re-checks
+anything affected in the drafts, and notes the pass in verification. Use a
+capable model for this role (see [Reviewer allocation](references/reviewer-allocation.md)).
+Without delegation, run the same checklist yourself after drafting and disclose
+that it was not independent. Mark the task completed, or blocked with the gap,
+before the report task: a run does not finish while it is queued.
 
 ## Assemble, verify and hand off one report
 

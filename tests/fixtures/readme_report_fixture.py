@@ -40,61 +40,90 @@ def main():
         git('add', 'parser.py'); git('commit', '-qm', 'Synthetic head')
         head = git('rev-parse', 'HEAD')
         findings = []
-        for title, example, cause, fix, comment in [
-            ('One malformed item discards the whole batch',
-             '`["12", "bad", "7"]` previously returned `[12, 7]`; it now returns `[]`.',
-             'The catch surrounds the whole comprehension. A conversion failure discards earlier results and skips later items.',
-             'Catch conversion errors per item, preserving valid results on either side of an invalid item.',
-             'Should we skip the invalid item here instead of dropping the whole batch? For `["12", "bad", "7"]`, the catch returns `[]`, so we lose both valid entries. Could we handle the failure inside the item loop?'),
+        for title, problem, care, steps, real, sketch, comment in [
+            ('One bad item empties the whole batch',
+             'If one value fails to parse, the parser now returns nothing, including the values that were fine.',
+             'Callers importing mixed data silently lose every valid value in that batch.',
+             ['The batch is `["12", "bad", "7"]`.', '`int("12")` succeeds inside the list comprehension.',
+              '`int("bad")` raises `ValueError`. The catch surrounds the whole comprehension, so it returns `[]` and `"7"` is never read.',
+              'Before, the catch sat inside the loop, so the result was `[12, 7]`.'],
+             'High confidence from the source trace; not executed. It would only be intentional if batches were meant to be all-or-nothing, which nothing in the change says.',
+             'result = []\nfor value in values:\n    try:\n        result.append(int(value))\n    except ValueError:\n        pass\nreturn result',
+             'For `["12", "bad", "7"]` we now get `[]`, since the catch wraps the whole comprehension and stops at the first bad value. Should we catch per item instead? Something like:'),
             ('Valid zero values disappear from the result',
-             '`["0", "7"]` previously returned `[0, 7]`; it now returns `[7]`.',
-             'The new filter rejects the zero string before conversion. No exception occurs, so changing the catch cannot fix this separate problem.',
-             'Remove the zero filter. Check that a mixed batch retains zero and a zero-only batch returns `[0]`.',
-             'Could we keep zero values here? For `["0", "7"]`, this filter returns `[7]` instead of `[0, 7]`, even though both inputs are valid integers. Removing the filter would preserve the previous behavior. A zero-only input would be useful to cover too.'),
+             'The new filter drops the value `"0"` even though it is a valid integer.',
+             'Any batch containing zero loses it without an error, so totals and counts come out wrong.',
+             ['The batch is `["0", "7"]`.', 'The comprehension filter `if value != "0"` rejects `"0"` before conversion.',
+              'Only `"7"` is converted, so the result is `[7]` instead of `[0, 7]`.'],
+             'High confidence from the source trace. No exception is involved, so fixing the catch does not fix this one.',
+             'return [int(value) for value in values]',
+             'Could we keep zero values here? For `["0", "7"]` this filter returns `[7]` instead of `[0, 7]`. Something like:'),
         ]:
+            walk = '\n'.join(f'{i}. {step}' for i, step in enumerate(steps, 1))
             findings.append(f'''<details class="review-finding">
 <summary>P2 · {title}</summary>
 
-**Disposition:** Comment · P2
+**P2 · Comment · Source-verified** · parser.py:3, right side. Synthetic fixture; no GitHub PR.
 
-**Evidence:** Source-verified
+**The problem in one sentence:** {problem}
 
-**Placement:** parser.py:3, right side. Synthetic fixture; no GitHub PR.
+**Why you should care:** {care}
 
-**Why this matters**
+**Walk me through it:**
 
-**Example:** {example}
+{walk}
 
-**How it happens:** {cause}
+**Is it real?** {real}
 
-**Consequence:** Valid input values disappear from the result.
+**How to fix it:** sketch, not a tested patch:
 
-**Fix direction:** {fix} This is a source trace, not a runtime-tested patch.
+```python
+{sketch}
+```
 
 <!-- review-comment:start -->
 {comment}
+
+```python
+{sketch}
+```
 <!-- review-comment:end -->
 
 <details>
 <summary>Evidence and remediation check</summary>
 
-Compared both synthetic revisions of parser.py. The old loop handles each value independently and retains zero. Runtime tests were not run.
+Compared both synthetic revisions of parser.py. Runtime tests were not run.
 
 </details>
 
 </details>''')
+        diagram = ('<div class="dg-stack"><div class="dg-node">Batch arrives <span class="dg-code">parse(["12", "bad", "0", "7"])</span></div><div class="dg-arrow"></div>'
+            '<div class="dg-branch"><div class="dg-lane"><div class="dg-label">Before: one value at a time</div>'
+            '<div class="dg-node dg-good">✓ Bad value skipped, the rest kept</div><div class="dg-node dg-good">✓ Zero kept</div></div>'
+            '<div class="dg-lane"><div class="dg-label">After: one comprehension</div>'
+            '<div class="dg-node dg-bad">✗ Zero filtered out first <span class="dg-badge">⚠ Finding 2: zero disappears</span></div>'
+            '<div class="dg-node dg-bad">✗ Bad value ends the whole batch <span class="dg-badge">⚠ Finding 1: batch emptied</span></div></div></div></div>')
         data = {'title': 'A shorter parser changes how invalid items are handled',
             'outcome': 'This sample change replaces an item-by-item loop with a filtered list comprehension. One malformed value discards the batch, and valid zero values are skipped.',
             'stack': 'Python · Synthetic review preview', 'repository': str(repo),
             'base': base, 'head': head, 'context': 'Fictional parser and review; no real GitHub PR.',
-            'sections': [{'id': 'example', 'title': 'One batch, before and after', 'blocks': [
-                {'type': 'comparison', 'lanes': [
-                    {'title': 'Before', 'steps': ['Input: ["12", "bad", "7"]', 'Keep 12, skip "bad", then keep 7.', 'Return [12, 7].']},
-                    {'title': 'After', 'steps': ['Input: ["12", "bad", "7"]', 'Conversion stops at "bad".', 'The outer catch returns [].']}],
-                 'caption': 'Source-traced example. The difference is where the exception is caught.'}]},
-                {'id': 'code', 'title': 'How the change works', 'blocks': [
+            'sections': [
+                {'id': 'plain-words', 'title': 'In plain words', 'blocks': [
+                    {'type': 'paragraph', 'text': 'The parser turns a list of text values into numbers and used to skip values it could not read. The shorter version reads everything in one step, so a single bad value now empties the result, and it also drops every zero.'}]},
+                {'id': 'shape', 'title': 'What happens to one batch', 'blocks': [
+                    {'type': 'diagram', 'title': 'The same batch before and after', 'html': diagram,
+                     'caption': 'Source-traced. The difference is where the error is caught and the new zero filter.'}]},
+                {'id': 'cases', 'title': 'What happens in each situation', 'blocks': [
+                    {'type': 'cases', 'columns': ['Situation', 'Before', 'After'], 'caption': 'Source-traced from both revisions; not executed.',
+                     'rows': [
+                        {'situation': 'All values valid', 'cells': [{'status': 'works', 'text': 'all numbers'}, {'status': 'works', 'text': 'all numbers'}]},
+                        {'situation': 'One bad value in the batch', 'finding': 'Finding 1', 'cells': [{'status': 'works', 'text': 'bad value skipped'}, {'status': 'breaks', 'text': 'empty result'}]},
+                        {'situation': 'Batch contains zero', 'finding': 'Finding 2', 'cells': [{'status': 'works', 'text': 'zero kept'}, {'status': 'breaks', 'text': 'zero dropped'}]}]}]},
+                {'id': 'code', 'title': 'How it works', 'blocks': [
                     {'type': 'source', 'path': 'parser.py', 'side': 'head', 'start': 1, 'end': 5,
-                     'caption': 'The catch covers the entire batch; the filter also removes zero.'}]}],
+                     'caption': 'The catch covers the entire comprehension (Finding 1); the filter removes zero (Finding 2).'}]}],
+            'questions': [{'question': 'What does the new parser return for ["3", "x"]?', 'options': ['[3]', '[]', 'It raises ValueError'], 'answer': 1,
+                           'explanation': 'int("x") raises inside the comprehension; the outer catch returns an empty list.'}],
             'review': {'base': base, 'head': head,
                 'assessment': 'Two source-verified P2 defects. Preserve per-item error handling and retain zeros before merging. Runtime tests were not run.',
                 'markdown': '\n\n'.join(findings)},

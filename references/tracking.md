@@ -83,6 +83,7 @@ Standard tasks are:
 - `runtime-verification`
 - `synthesis`
 - `drafts`
+- `accuracy-check`
 - `report`
 
 Set a task to `running` immediately before it starts, then to `completed`,

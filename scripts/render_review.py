@@ -12,6 +12,7 @@ import subprocess
 from urllib.parse import quote, urlsplit, unquote
 from pr_dashboard import markdown_inline_to_html
 from review_markdown import render as render_markdown
+from review_diagram import sanitize as sanitize_diagram
 from validate_review_notes import validate
 import pr_review_tracker as tracker
 
@@ -88,8 +89,8 @@ def review_markdown(text, data):
         return re.sub(r'<a href="([^"<>]*)"[^>]*>(.*?)</a>', link, rendered)
     def visual(key):
         value = data.get('review', {}).get('visuals', {}).get(key)
-        if not isinstance(value, dict) or value.get('type') not in {'flow', 'sequence', 'scenario'}:
-            raise ValueError('Review visual must reference a defined flow, sequence or scenario')
+        if not isinstance(value, dict) or value.get('type') not in VISUAL_TYPES:
+            raise ValueError('Review visual must reference a defined diagram, cases, table, flow, sequence or scenario')
         return blocks([value], data)
     return render_markdown(text, inline, esc, visual=visual)
 
@@ -174,6 +175,43 @@ ICONS = {
     'network': '<path d="M9 25h15a6 6 0 0 0 1-12 9 9 0 0 0-17-2 7 7 0 0 0 1 14"/>',
 }
 
+VISUAL_TYPES = {'diagram', 'cases', 'table', 'flow', 'sequence', 'scenario'}
+CASE_MARKS = {'works': ('✅', 'Works'), 'breaks': ('❌', 'Breaks'), 'changes': ('⚠️', 'Changes'), 'same': ('', ''), 'unknown': ('❔', 'Not established')}
+
+def diagram(block):
+    title = f'<figcaption class="diagram-title">{esc(block["title"])}</figcaption>' if block.get('title') else ''
+    return (f'<figure class="diagram">{title}<div class="diagram-body">{sanitize_diagram(block["html"])}</div>'
+            f'<p class="caption">{esc(block["caption"])}</p></figure>')
+
+def cases(block):
+    columns = block['columns']
+    if not 2 <= len(columns) <= 5:
+        raise ValueError('A cases grid needs a situation column and one to four outcome columns')
+    rows = block['rows']
+    if not 1 <= len(rows) <= 8:
+        raise ValueError('A cases grid needs one to eight situations')
+    body = []
+    for row in rows:
+        cells = row['cells']
+        if len(cells) != len(columns) - 1:
+            raise ValueError('Each cases row needs one cell per outcome column')
+        badge = f' <span class="case-finding">⚠ {esc(row["finding"])}</span>' if row.get('finding') else ''
+        out = [f'<th scope="row">{esc(row["situation"])}{badge}</th>']
+        for cell in cells:
+            status = cell.get('status', 'same')
+            if status not in CASE_MARKS:
+                raise ValueError('Cases status must be works, breaks, changes, same or unknown')
+            mark, word = CASE_MARKS[status]
+            prefix = f'<span class="case-mark" aria-hidden="true">{mark}</span><span class="visually-hidden">{word}: </span>' if mark else ''
+            out.append(f'<td class="case-{status}">{prefix}{esc(cell["text"])}</td>')
+        body.append('<tr>' + ''.join(out) + '</tr>')
+    headers = ''.join(f'<th scope="col">{esc(x)}</th>' for x in columns)
+    title = f'<figcaption class="diagram-title">{esc(block["title"])}</figcaption>' if block.get('title') else ''
+    return (f'<figure class="cases">{title}<p class="table-hint">Scroll the table horizontally if needed.</p>'
+            f'<div class="table-scroll" tabindex="0" role="region" aria-label="{esc(block.get("title") or "Situations")}">'
+            f'<table><thead><tr>{headers}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
+            f'<p class="caption">{esc(block["caption"])}</p></figure>')
+
 def blocks(items, data):
     output = []
     for block in items:
@@ -199,16 +237,20 @@ def blocks(items, data):
             output.append(f'<figure><div class="source-meta">Illustrative {esc(block.get("language","pseudocode"))} · not an exact source excerpt</div><pre class="example"><code>{esc(block["code"])}</code></pre><figcaption class="caption">{esc(block["caption"])}</figcaption></figure>')
         elif kind == 'details':
             output.append(f'<details><summary>{esc(block["title"])}</summary>{blocks(block["blocks"],data)}</details>')
+        elif kind == 'diagram':
+            output.append(diagram(block))
+        elif kind == 'cases':
+            output.append(cases(block))
         elif kind == 'flow':
             steps = []
-            for step in block['steps']:
+            for number, step in enumerate(block['steps'], 1):
                 state = step.get('state', 'normal')
                 if state not in {'normal', 'active', 'muted', 'blocked'}:
                     raise ValueError('Unsupported flow state')
                 icon = step.get('icon')
                 if icon is not None and icon not in ICONS:
                     raise ValueError('Unsupported flow icon')
-                graphic = ('<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">' + ICONS[icon] + '</svg>') if icon else ''
+                graphic = ('<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">' + ICONS[icon] + '</svg>') if icon else f'<span class="flow-number" aria-hidden="true">{number}</span>'
                 steps.append(f'<li class="flow-step {state}"><div class="flow-symbol">{graphic}</div><strong>{esc(step["label"])}</strong><span>{esc(step["detail"])}</span></li>')
             output.append(f'<figure class="flow"><figcaption>{esc(block["title"])}</figcaption><ol>{"".join(steps)}</ol><p class="caption">{esc(block["caption"])}</p></figure>')
         elif kind == 'sequence':
@@ -258,7 +300,7 @@ def render(data):
         if not isinstance(text, str) or not text.strip():
             raise ValueError('Assessment must be non-empty Markdown')
         assessment_html = review_markdown(text, data)
-        if re.search(r'<details\b|class="(?:review-comment|scenario|flow|sequence)"', assessment_html):
+        if re.search(r'<details\b|class="(?:review-comment|scenario|flow|sequence|diagram|cases)"', assessment_html):
             raise ValueError('Keep assessment visible and copyable comments in findings')
         assessment = ('<div class="review-assessment" id="review-assessment" '
                       'aria-labelledby="assessment-title"><h2 id="assessment-title">Current assessment</h2>'

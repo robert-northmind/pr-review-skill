@@ -155,5 +155,45 @@ class RendererTests(unittest.TestCase):
         with self.assertRaises(ValueError):render(d)
         d['review']['markdown']='<!-- review-visual:missing -->'
         with self.assertRaises(ValueError):render(d)
+    def test_authored_diagram_is_allowlisted_and_rendered_inert(self):
+        d=copy.deepcopy(self.data)
+        markup='<div class="dg-stack"><div class="dg-node dg-bad">Throws &lt;error&gt; <span class="dg-badge">⚠ Finding 1</span></div><div class="dg-arrow"></div><svg viewBox="0 0 10 10" role="img" aria-label="Arrow"><defs><marker id="dg-head"><path d="M0 0L5 5"/></marker></defs><line x1="0" y1="0" x2="5" y2="5" marker-end="url(#dg-head)"/><text x="1" y="9">A &amp; B</text></svg></div>'
+        d['sections'].append({'id':'shape','title':'Shape','blocks':[{'type':'diagram','title':'Decision','html':markup,'caption':'Source-traced.'}]})
+        output=render(d)
+        self.assertIn('<figure class="diagram">',output);self.assertIn('Throws &lt;error&gt;',output);self.assertIn('marker-end="url(#dg-head)"',output)
+        self.assertIn('viewbox="0 0 10 10"',output);self.assertIn('A &amp; B',output)
+        for bad in ('<script>alert(1)</script>','<div onclick="x">a</div>','<a href="https://example.com">x</a>','<img src="data:image/png;base64,AA">',
+                    '<div style="background:url(https://example.com/x)">x</div>','<div class="review-comment">x</div>','<div id="review-findings">x</div>',
+                    '<style>.x{}</style>','<svg><use href="#dg-a"/></svg>','<svg><foreignObject>x</foreignObject></svg>','<div>unclosed','<b><i>x</b></i>',
+                    '<div style="color:re\\64">x</div>','<div data-x="1">x</div>'):
+            with self.subTest(bad=bad):
+                d['sections'][-1]['blocks'][0]['html']=bad
+                with self.assertRaises(ValueError):render(d)
+    def test_cases_grid_marks_outcomes_in_words_and_links_findings(self):
+        d=copy.deepcopy(self.data)
+        grid={'type':'cases','title':'What happens in each situation','columns':['Situation','Before','After'],'caption':'Source-traced.',
+              'rows':[{'situation':'Normal test','cells':[{'status':'works','text':'test driver'},{'status':'works','text':'test driver'}]},
+                      {'situation':'Custom <binding>','finding':'Finding 1','cells':[{'status':'works','text':'test driver'},{'status':'breaks','text':'real driver'}]}]}
+        d['sections'].append({'id':'cases','title':'Cases','blocks':[grid]})
+        output=render(d)
+        self.assertIn('<figure class="cases">',output);self.assertIn('Custom &lt;binding&gt;',output);self.assertIn('⚠ Finding 1',output)
+        self.assertIn('<span class="visually-hidden">Breaks: </span>real driver',output)
+        for broken in ({'columns':['Only']},{'rows':[]},{'rows':[{'situation':'x','cells':[{'status':'works','text':'a'}]}]},{'rows':[{'situation':'x','cells':[{'status':'great','text':'a'},{'text':'b'}]}]}):
+            with self.subTest(broken=broken):
+                d['sections'][-1]['blocks'][0]={**grid,**broken}
+                with self.assertRaises(ValueError):render(d)
+    def test_finding_visuals_accept_diagrams_and_cases(self):
+        d=copy.deepcopy(self.data)
+        d['review']['visuals']={'path':{'type':'diagram','html':'<div class="dg-node dg-bad">Retry skipped</div>','caption':'Where it fails.'}}
+        d['review']['markdown']='<details class="review-finding">\n<summary>P2 · Retry is skipped</summary>\n\n<!-- review-visual:path -->\n\n<!-- review-comment:start -->\nCould we retry?\n<!-- review-comment:end -->\n\n</details>'
+        output=render(d)
+        self.assertLess(output.index('Retry skipped'),output.index('Could we retry?'))
+        d['review']['assessment']='<!-- review-visual:path -->'
+        with self.assertRaises(ValueError):render(d)
+    def test_flow_without_icon_shows_step_number(self):
+        d=copy.deepcopy(self.data)
+        d['sections'].append({'id':'flow','title':'Flow','blocks':[{'type':'flow','title':'Check','caption':'Trace.','steps':[{'label':'A','detail':'first'},{'label':'B','detail':'second','icon':'app'}]}]})
+        output=render(d)
+        self.assertIn('<span class="flow-number" aria-hidden="true">1</span>',output);self.assertNotIn('flow-number" aria-hidden="true">2',output)
 
 if __name__=='__main__':unittest.main()

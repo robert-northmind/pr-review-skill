@@ -108,10 +108,12 @@ async function fixture(name, action) {
   const page = await browser.newPage({viewport: {width: 1440, height: 1050}, colorScheme: 'light'});
   await page.goto(pathToFileURL(report).href);
   await capture(page, 'review-overview-light');
-  await page.locator('.review-finding > summary').nth(1).click();
+  await page.locator('#shape').evaluate(el => el.scrollIntoView());
+  await capture(page, 'review-explainer-light');
+  await page.locator('.review-finding > summary').nth(0).click();
   await page.locator('#review-findings').evaluate(el => el.scrollIntoView());
   await capture(page, 'review-findings-light');
-  console.log('Captured eight README images from production assets and synthetic fixtures.');
+  console.log('Captured nine README images from production assets and synthetic fixtures.');
 })().catch(error => {console.error(error); process.exitCode = 1;}).finally(async () => {
   if (browser) await browser.close();
   fs.rmSync(temporary, {recursive: true, force: true});

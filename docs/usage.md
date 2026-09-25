@@ -27,11 +27,14 @@ tests" or "Only iOS changed; validate on iOS". The note applies to that run only
 The agent records progress and artifacts in the local tracker. When finished,
 click **Open review** on the card and select **AI review**. There is one report and one review skill:
 
-1. **Understand the change:** purpose, essential context, a concrete before/after
-   example, and exact source excerpts.
+1. **Understand the change:** a plain-words summary, a diagram of the change
+   with badges where findings occur, a grid of situations before and after, and
+   exact source excerpts tied to the diagram's steps. A short self-check at the
+   end tests the key distinction.
 2. **Read the assessment and findings:** each finding starts collapsed with its
-   severity and title visible. Open it for expected versus actual behavior, why
-   it happens, why it matters, the proposed fix, evidence, and a copyable comment.
+   severity and a plain-words title visible. Open it for the problem in one
+   sentence, why it matters, a numbered walkthrough, whether it is real (with the
+   strongest counter-argument), a fix sketch, evidence, and a copyable comment.
    Multiple findings have **Expand all / Collapse all** controls.
 3. **Check the verification appendix:** inspected scope, checks and outcomes,
    unresolved gaps, and reviewer allocation with requested versus known effective
