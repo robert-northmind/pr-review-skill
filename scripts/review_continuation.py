@@ -70,5 +70,5 @@ def continuation(run, status):
     # Claude finds sessions by working directory; Codex finds them anywhere.
     command = (f'cd {shlex.quote(cwd)} && claude --resume {session_id} --fork-session' if claude
                else f'codex fork -C {shlex.quote(cwd)} {session_id}')
-    return {'agent': label, 'session_id': session_id, 'command': command,
+    return {'agent': label, 'session_id': session_id, 'command': command, 'transcript': str(transcript),
             'prompt': handoff_prompt(run, label, session_id, transcript)}

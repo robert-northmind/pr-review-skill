@@ -26,7 +26,7 @@ class Isolated(unittest.TestCase):
  def setUp(self):
   self.author_fetch=patch.object(d,'fetch_author_profile',return_value={});self.author_fetch.start();self.addCleanup(self.author_fetch.stop)
   self.tmp=tempfile.TemporaryDirectory(); self.root=Path(self.tmp.name).resolve()
-  self.env=patch.dict(os.environ,{'PR_REVIEW_TRACKER_HOME':str(self.root)});self.env.start()
+  self.env=patch.dict(os.environ,{'PR_REVIEW_TRACKER_HOME':str(self.root),'PR_REVIEW_TRACKER_GH':'/usr/bin/false'});self.env.start()
   self.options=patch.object(d,'discover_claude_options',return_value=(['','claude-example'],['','high']));self.options.start()
   d.save_dashboard({'prs':{URL:copy.deepcopy(ENTRY)}})
  def tearDown(self):

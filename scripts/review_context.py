@@ -17,6 +17,9 @@ Use THIS skill checkout and its scripts, not another installed pr-review version
 PR_REVIEW_TRACKER_HOME={root} is the registry for this review. All run artifacts and
 checkouts go beneath that root, even if a reference shows the default root.
 Run ID: {run_id}. Do not create another run. The backend records your session ID.
+The backend saved the PR discussion to discussion.md and discussion.json in this
+run's directory before you started (if a GitHub read failed, they are absent;
+follow SKILL.md to fetch or read it yourself).
 
 Progress is part of the review deliverable. Give brief commentary when a stage
 starts, when a meaningful checkpoint finishes, or a blocker appears. During long

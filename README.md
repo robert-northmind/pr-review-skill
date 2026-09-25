@@ -23,7 +23,7 @@ the dashboard does not post comments, approve or merge PRs.
 | **PR inbox** | Browse review requests, watched repositories and your own PRs. Filter by author, repository, review status or draft state; snooze or hide items. |
 | **My reviews** | Keep an ordered queue, save private notes and reminders, and see when new commits or replies bring a PR back to you. |
 | **Effort estimates** | Get optional Quick, Moderate, Involved or Uncertain estimates, with reasons, filters and a daily call limit. |
-| **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Continue a finished review's session in either agent. Keep previous reports and run history. |
+| **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Existing PR comments are read first, so findings already raised become replies to their threads. Continue a finished review's session in either agent. Keep the newest reports and run history. |
 | **Review reports** | Read the outcome and assessment, a plain-words summary, a diagram of the change, a grid of situations before and after, exact source excerpts, step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits in one HTML report. |
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
@@ -236,8 +236,9 @@ selected provider. Enable them only for repositories you can share with it.
 Private notes stay local and are not included in AI requests.
 
 Reports, cached source and conversations are stored outside this repository.
-For tracked PRs, local data expires 20 days after the confirmed close/merge date
-on a successful check; running work or cleanup errors defer deletion. Provider
+Local data for a PR, including its AI review runs, expires 7 days after the PR's
+confirmed close/merge date, and only the newest three runs per PR are kept.
+Reporting keeps its own history. Running work or cleanup errors defer deletion. Provider
 session history is separate and is not deleted by tracker cleanup.
 
 Follow-up checks run every five minutes while the dashboard is visible; there

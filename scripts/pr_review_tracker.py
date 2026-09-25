@@ -19,6 +19,7 @@ from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 
+RUN_RETENTION_DAYS = 7
 DEFAULT_TASKS = (
     "checkout",
     "explanation",
@@ -371,6 +372,11 @@ def command_release_checkout(args: argparse.Namespace) -> None:
             "updated_at": now,
         },
     )
+    # Agents remove the worktree themselves; drop its now-empty owned folder.
+    try:
+        (tracker_root() / "checkouts" / args.run_id).rmdir()
+    except OSError:
+        pass
 
 
 def load_named_files(directory: Path, child: str) -> list[dict[str, Any]]:
@@ -866,26 +872,9 @@ def cleanup_archived_checkouts(*, force: bool) -> tuple[list[str], list[str]]:
     return released, errors
 
 
-def purge_archived(
-    retention_days: float, *, dry_run: bool, pr_urls: set[str] | None = None
-) -> tuple[list[str], list[str]]:
-    if retention_days < 0:
-        raise TrackerError("Retention period cannot be negative")
-
-    root = tracker_root().resolve()
-    runs_root = root / "runs"
-    allowed_artifact_roots = (
-        root,
-        (Path.home() / ".local" / "share" / "explain-diff").resolve(),
-    )
-    now = datetime.now(timezone.utc)
-    directories = [path for path in runs_root.iterdir() if path.is_dir()]
-    errors: list[str] = []
-    records: list[
-        tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]
-    ] = []
-
-    for directory in directories:
+def _run_records(errors: list[str]) -> list[tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]]:
+    records = []
+    for directory in [path for path in (tracker_root() / "runs").iterdir() if path.is_dir()]:
         try:
             if directory.is_symlink():
                 raise TrackerError(f"Refused to purge run through symlink: {directory}")
@@ -899,42 +888,21 @@ def purge_archived(
             )
         except (KeyError, TrackerError) as error:
             errors.append(str(error))
+    return records
 
-    if errors:
-        errors.append(
-            "Retention cleanup was skipped because the registry could not be "
-            "fully inspected."
-        )
-        return [], errors
 
-    eligible: list[
-        tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]
-    ] = []
-    for record in records:
-        directory, run, github, _ = record
-        if pr_urls is not None and run["pr_url"] not in pr_urls:
-            continue
-        try:
-            archived_at = github.get("merged_at") or github.get("closed_at")
-            expired = (
-                github.get("state") in {"closed", "merged"}
-                and archived_at
-                and not github.get("last_error")
-                and now - parse_time(archived_at)
-                >= timedelta(days=retention_days)
-            )
-            if not expired:
-                continue
-            checkout = read_json(directory / "checkout.json", required=False)
-            if checkout.get("status") == "active":
-                errors.append(
-                    f"Retained {directory.name} because checkout cleanup is pending."
-                )
-                continue
-            eligible.append(record)
-        except TrackerError as error:
-            errors.append(f"Could not evaluate {directory.name}: {error}")
-
+def _delete_runs(
+    eligible: list[tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]],
+    records: list[tuple[Path, dict[str, Any], dict[str, Any], list[dict[str, Any]]]],
+    dry_run: bool,
+    errors: list[str],
+) -> list[str]:
+    """Delete run directories and their managed artifacts not shared with survivors."""
+    root = tracker_root().resolve()
+    allowed_artifact_roots = (
+        root,
+        (Path.home() / ".local" / "share" / "explain-diff").resolve(),
+    )
     eligible_directories = {record[0] for record in eligible}
     surviving_references: set[Path] = set()
     for directory, _, _, artifacts in records:
@@ -986,13 +954,78 @@ def purge_archived(
                 shutil.rmtree(directory)
         except (KeyError, OSError, TrackerError) as error:
             errors.append(f"Could not purge {directory.name}: {error}")
-    return purged, errors
+    return purged
+
+
+def _retained_for_checkout(directory: Path, errors: list[str]) -> bool:
+    checkout = read_json(directory / "checkout.json", required=False)
+    if checkout.get("status") == "active":
+        errors.append(f"Retained {directory.name} because checkout cleanup is pending.")
+        return True
+    return False
+
+
+def purge_archived(
+    retention_days: float,
+    *,
+    dry_run: bool,
+    pr_urls: set[str] | None = None,
+    exclude: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    if retention_days < 0:
+        raise TrackerError("Retention period cannot be negative")
+    now = datetime.now(timezone.utc)
+    errors: list[str] = []
+    records = _run_records(errors)
+    if errors:
+        errors.append(
+            "Retention cleanup was skipped because the registry could not be "
+            "fully inspected."
+        )
+        return [], errors
+
+    eligible = []
+    for record in records:
+        directory, run, github, _ = record
+        if pr_urls is not None and run["pr_url"] not in pr_urls:
+            continue
+        if exclude and run["run_id"] in exclude:
+            continue
+        try:
+            archived_at = github.get("merged_at") or github.get("closed_at")
+            expired = (
+                github.get("state") in {"closed", "merged"}
+                and archived_at
+                and not github.get("last_error")
+                and now - parse_time(archived_at)
+                >= timedelta(days=retention_days)
+            )
+            if expired and not _retained_for_checkout(directory, errors):
+                eligible.append(record)
+        except TrackerError as error:
+            errors.append(f"Could not evaluate {directory.name}: {error}")
+    return _delete_runs(eligible, records, dry_run, errors), errors
+
+
+def purge_runs(run_ids: set[str], *, dry_run: bool) -> tuple[list[str], list[str]]:
+    """Delete specific finished runs, such as superseded reruns of a PR."""
+    errors: list[str] = []
+    if not run_ids:
+        return [], errors
+    records = _run_records(errors)
+    if errors:
+        return [], [*errors, "Run cleanup was skipped because the registry could not be fully inspected."]
+    eligible = [
+        record for record in records
+        if record[1]["run_id"] in run_ids and not _retained_for_checkout(record[0], errors)
+    ]
+    return _delete_runs(eligible, records, dry_run, errors), errors
 
 
 def command_refresh(args: argparse.Namespace) -> None:
     updates, errors = refresh_github_states(0, force=True)
     released, checkout_errors = cleanup_archived_checkouts(force=True)
-    purged, purge_errors = purge_archived(20, dry_run=False)
+    purged, purge_errors = purge_archived(RUN_RETENTION_DAYS, dry_run=False)
     if updates:
         print("\n".join(updates))
     else:
@@ -1026,7 +1059,7 @@ def command_list(args: argparse.Namespace) -> None:
             args.refresh_after_hours, force=False
         )
     _, checkout_errors = cleanup_archived_checkouts(force=False)
-    _, purge_errors = purge_archived(20, dry_run=False)
+    _, purge_errors = purge_archived(RUN_RETENTION_DAYS, dry_run=False)
     runs, errors = load_all_runs(args.stale_after_hours)
     cached_refresh_errors = sorted(
         {
@@ -1143,7 +1176,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.set_defaults(handler=command_refresh)
 
     purge = commands.add_parser("purge", help="Purge expired archived runs")
-    purge.add_argument("--retention-days", type=float, default=20.0)
+    purge.add_argument("--retention-days", type=float, default=RUN_RETENTION_DAYS)
     purge.add_argument("--dry-run", action="store_true")
     purge.set_defaults(handler=command_purge)
 

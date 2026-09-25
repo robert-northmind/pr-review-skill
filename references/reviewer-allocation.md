@@ -35,24 +35,33 @@ capability metadata; don't benchmark models or search the web on every PR.
 | Initial assessment | Starting allocation |
 | --- | --- |
 | Clearly mechanical or prose-only, with limited behavioral risk | An efficient capable model at its default or medium effort; scrutinize any behavioral exception separately |
-| Ordinary behavior change within understood components | A strong coding model at medium or high effort, chosen by the reasoning required for that role |
-| Subtle, high-impact, cross-component, or materially uncertain behavior | The strongest suitable allowed model at high effort; increase to a higher supported level for a focused unresolved problem when justified |
+| Ordinary behavior change within understood components | The lead's model tier at medium or high effort, chosen by the reasoning required for that role |
+| Subtle, high-impact, cross-component, or materially uncertain behavior | The strongest suitable allowed model (at least the lead's tier) at high effort; increase to a higher supported level for a focused unresolved problem when justified |
 
 These are relative capability tiers. Effort names are model-specific and are
 not comparable measures of intelligence across providers. Confirm each exact
 model/effort combination is supported. More effort is not automatically more
 accurate, and a weaker model at maximum effort need not equal a stronger one.
 
-Allocate by the role's actual work. A complex PR may use a lighter worker for
-mechanical file checks while correctness and contract reviewers use a stronger
-model. Security-related work is not automatically expensive: a narrow wording
-edit differs from changing an authorization condition. Conversely, a six-line
-permission change can warrant a stronger reviewer than a thousand-line rename.
+Allocate by the role's actual work, within these floors:
+
+- **Correctness, contracts and the report fact-check** use a model in the same
+  capability tier as the lead session (the model the user chose for the review),
+  unless the change is clearly mechanical or prose-only. Do not pick a cheaper
+  model for these roles merely because it is also described as a coding model.
+- **Security and reliability** also start at the lead's tier. Drop one tier only
+  for a narrow change with no trust-boundary, data-handling, dependency or
+  resource impact, and state that reason in the allocation table. A narrow
+  wording edit differs from changing an authorization condition; a six-line
+  permission change warrants the strongest reviewer.
+- **Runtime verification and mechanical file checks** may use an efficient
+  model, because they execute and report checks rather than judge behavior.
+
 Keep all three review lenses and full file coverage regardless of allocation.
 
 The report fact-check (`accuracy-check` in `SKILL.md`) reads the whole draft
-against source and evidence. Give it a strong coding model at medium or high
-effort, as for an ordinary behavior change; raise it with the PR's complexity.
+against source and evidence. Give it the lead's model tier at medium or high
+effort; raise the effort with the PR's complexity.
 It must be a fresh context, not the lead that wrote the draft.
 
 Final verification of a substantive candidate needs capability appropriate to

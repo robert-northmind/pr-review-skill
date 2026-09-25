@@ -129,10 +129,10 @@ function check(ok,message){if(!ok)result.errors.push(message);}
    await page.evaluate(()=>scrollTo(0,0));
    const geometry=await page.evaluate(()=>({viewport:innerWidth,width:document.documentElement.scrollWidth,background:getComputedStyle(document.body).backgroundColor,overviewBottom:document.querySelector('.outcome')?.getBoundingClientRect().bottom}));
    check(geometry.width<=width,'Document overflow at '+width+'px ('+scheme+'): '+geometry.width+'px');if(width===1280)check(geometry.overviewBottom<900,'Outcome is below the first desktop viewport');result.themes.push({scheme,...geometry});
-   const screenshot=path.join(output,(width===390?'phone':'desktop')+'-'+scheme+'.png');await page.screenshot({path:screenshot,fullPage:true});result.screenshots.push(screenshot);
+   const screenshot=path.join(output,(width===390?'phone':'desktop')+'-'+scheme+'.jpg');await page.screenshot({path:screenshot,fullPage:true,type:'jpeg',quality:80});result.screenshots.push(screenshot);
    if(result.findings){
     await findings.evaluateAll(items=>items.forEach(item=>item.open=false));
-    const collapsed=path.join(output,(width===390?'phone':'desktop')+'-'+scheme+'-collapsed.png');await page.screenshot({path:collapsed,fullPage:true});result.screenshots.push(collapsed);
+    const collapsed=path.join(output,(width===390?'phone':'desktop')+'-'+scheme+'-collapsed.jpg');await page.screenshot({path:collapsed,fullPage:true,type:'jpeg',quality:80});result.screenshots.push(collapsed);
     check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Collapsed findings cause overflow');
     await findings.evaluateAll(items=>items.forEach(item=>item.open=true));
    }

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from difflib import SequenceMatcher
 import hashlib
 import json
+import os
 import re
 import subprocess
 from urllib.parse import quote
@@ -40,10 +41,20 @@ def revision(base, head):
     return base + '-' + head
 
 
+def touch(path):
+    """Mark a cache entry as used so storage cleanup keeps it."""
+    try:
+        os.utime(path)
+    except OSError:
+        pass
+
+
 def cached(url, rev):
     if not re.fullmatch(r'[0-9a-f]{40}-[0-9a-f]{40}', str(rev)):
         raise ValueError('Invalid comparison revision.')
-    return tracker.read_json(store.directory(url) / (rev + '.json'))
+    path = store.directory(url) / (rev + '.json')
+    touch(path)
+    return tracker.read_json(path)
 
 
 def manifest(url):
@@ -57,6 +68,7 @@ def manifest(url):
     rev = revision(base, head)
     cache = store.directory(url) / (rev + '.json')
     if cache.exists():
+        touch(cache)
         result = tracker.read_json(cache)
         result.update(title=pr['title'], author=pr['user']['login'], prState=pr['state'])
         return result
@@ -136,6 +148,7 @@ def file_diff(url, rev, path):
     key = hashlib.sha256((rev + path).encode()).hexdigest()
     cache = store.directory(url) / ('file-' + key + '.json')
     if cache.exists():
+        touch(cache)
         return tracker.read_json(cache)
     def load(side):
         if item.get(side + 'Mode') in ('120000', '160000'):

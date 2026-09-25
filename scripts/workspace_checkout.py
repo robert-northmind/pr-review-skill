@@ -37,6 +37,7 @@ def prepare(comparison):
                 raise ValueError('Cached source checkout changed. Remove its cache and retry.')
             if run(destination, 'status', '--porcelain'):
                 raise ValueError('Cached source has local changes. Remove its cache and retry.')
+            os.utime(destination)  # recently used; storage cleanup keeps it
             return destination
         with tempfile.TemporaryDirectory(dir=root, prefix='checkout-download-') as temporary:
             path = Path(temporary) / 'source'

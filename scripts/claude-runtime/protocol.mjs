@@ -1,4 +1,14 @@
 /** Pure settings/event translation, independently testable without credentials. */
+// Chat reads the checkout (its working directory) plus explicitly named review
+// files; a bare Read rule would allow any file on the machine.
+const SAFE_PATH=/^\/[^\x00-\x1f()*?[\]{}]*$/;
+export function readRules(readable) {
+  const paths=(Array.isArray(readable)?readable:[]).filter(p=>typeof p==='string'&&SAFE_PATH.test(p)&&!p.split('/').includes('..'));
+  return paths.flatMap(p=>{
+    const target=p.endsWith('/')?`/${p}**`:`/${p}`;
+    return ['Read','Grep','Glob'].map(name=>`${name}(${target})`);
+  });
+}
 export function buildOptions(request) {
   const review=request.mode==='review';
   return {
@@ -13,7 +23,7 @@ export function buildOptions(request) {
     permissionMode:review?'auto':'dontAsk',
     ...(review?{}:{
       tools:['Read','Glob','Grep','WebSearch','WebFetch'],
-      allowedTools:['Read','Glob','Grep','WebSearch','WebFetch','mcp__review-reads__git_read','mcp__review-reads__github_read'],
+      allowedTools:[...readRules(request.context?.readable),'WebSearch','WebFetch','mcp__review-reads__git_read','mcp__review-reads__github_read'],
       disallowedTools:['Bash','Edit','Write','NotebookEdit','Agent','Skill'],
       settings:{disableAllHooks:true},strictMcpConfig:true,
     }),

@@ -11,6 +11,8 @@ import threading
 import time
 
 import ai_runtime
+import pr_discussion
+import storage_cleanup
 from review_context import WRAP_UP_PROMPT, message_prompt, review_prompt
 import pr_review_tracker as tracker
 from review_jobs import (
@@ -90,8 +92,9 @@ def send_message(run_id, text, wrap_up=False):
 class ReviewWorker:
     """Own one SDK client, activity writer, and cancellation watcher."""
 
-    def __init__(self, run_id, job, client_factory):
+    def __init__(self, run_id, job, client_factory, discussion=pr_discussion.save):
         self.run_id = run_id
+        self.discussion = discussion
         self.activity = Activity(run_id, job)
         self.client_factory = client_factory
         self.client = None
@@ -205,6 +208,7 @@ class ReviewWorker:
         def session(session_id):
             tracker.command_set_session(Namespace(run_id=self.run_id, reference=session_id))
             self.activity.state('running', 'Review in progress', thread_id=session_id)
+        self.save_discussion()
         self.activity.state('running', 'Connecting to the selected provider…')
         result = self.client.run(ai_runtime.Request(
             mode='review', cwd=str(tracker.tracker_root()),
@@ -213,6 +217,17 @@ class ReviewWorker:
         ), ai_runtime.Callbacks(emit=self.event, session=session))
         if not self.cancel_requested.is_set():
             self.finish_turn({'turn': {'status': 'completed' if result.get('completed') else 'failed'}})
+
+    def save_discussion(self):
+        """Give every reviewer the same PR discussion; the skill falls back to gh if this fails."""
+        self.activity.state('running', 'Reading PR discussion…')
+        try:
+            _, note = self.discussion(self.run_id)
+            self.activity.emit('update', f'Saved the PR discussion: {note}.')
+        except Exception as error:
+            # Messages may echo GitHub output; record only the type.
+            self.activity.emit('update', f'Could not save the PR discussion ({type(error).__name__}); '
+                               'the reviewer will read it from GitHub.')
 
     def run(self):
         watcher = threading.Thread(target=self.monitor, daemon=True)
@@ -240,6 +255,11 @@ class ReviewWorker:
                 job = self.activity.job
                 finish_unfinished_tasks(self.run_id, job['status'], job.get('message', ''))
                 self.activity.emit('status', job.get('message', 'Review ended.'))
+                try:
+                    # The report is final; build caches and check screenshots are no longer needed.
+                    storage_cleanup.prune_run(tracker.run_dir(self.run_id))
+                except OSError:
+                    pass
 
 
 def run_worker(run_id, client_factory=None):
