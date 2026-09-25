@@ -43,8 +43,8 @@ to it: the run folder and its files (`review.md`, `verification.md`,
 `discussion.md`, `input.json`, `context.json`), whether it matches the current
 head, and for a finished review the session ID and transcript path from
 `review_continuation.py`. Nothing from the review is pasted; the AI reads the
-files when a question needs them and treats them as claims to verify. The Claude
-chat may read its checkout plus exactly that run folder and transcript; it has no
+files when a question needs them and treats them as claims to verify. Both chats
+may read their checkout plus exactly that run folder and transcript; neither has
 blanket file access.
 The selected AI can investigate the full repository using its native tools. The backend
 prepares an isolated, shallow Git checkout at the comparison's head SHA, with the
@@ -60,24 +60,39 @@ it never starts another provider or silently discards context. The dashboard
 supplies the diff and history once, then only the current question, selections
 and revision metadata.
 
-Built-in live web search/page opening supports public documentation. Codex native shell
-tools and Claude’s bounded github_read tool can read private GitHub issues, PRs and comments with the user's existing
-`gh` login and permissions. No separate dashboard GitHub login is required. The
-worker must inherit access to the configured CLI and its credentials. GitHub
-commands use an explicit repository because the pinned checkout has no remote.
-The assistant is instructed to keep searches relevant, use read-only GitHub
-operations, and never put private code, issue text or identifiers in public web
-queries. Public web access itself does not authenticate to private GitHub pages.
+Both chats can search the web and open pages live. Their `github_read` tool
+(`scripts/github_read.py`, shared by both) reads GitHub with the user's existing
+`gh` login and permissions: an issue or PR with comments, an issue/PR search, or a
+file or folder at a ref. It works in any repository the login can read and defaults
+to the PR repository, since the pinned checkout has no remote. The AI supplies only
+an operation and validated values; the dashboard builds one fixed `gh` read (`view`,
+`search issues` or `api --method GET …/contents`), so nothing can write. Output is
+capped at 100,000 characters. No separate dashboard GitHub login is required; the
+worker must inherit access to the configured CLI and its credentials. The assistant
+is instructed never to put private code, issue text or identifiers in web queries,
+page URLs or GitHub search terms. Public web access itself does not authenticate to
+private GitHub pages.
 
-Codex chat starts in its read-only filesystem sandbox with automatic approval review
-for requested permission escalations. Native shell access is enabled for reads;
-review instructions prohibit edits, repository scripts/tests and GitHub writes.
-These instructions do not turn a GitHub token into a read-only token. Configured
-plugins, MCP servers, hooks and subagents remain disabled for this chat profile.
-Claude chat permits Read/Glob/Grep/WebSearch/WebFetch and two SDK MCP read tools:
-`git_read` for pinned files/diffs and `github_read` for issues/PRs in the current
-repository. Shell, edits, subagents, skills, hooks and imported MCP servers are
-disabled. Tool commands use argument arrays and bounded output/timeouts.
+Codex chat uses the `pr_review_chat` permission profile, set up in
+`codex_runtime.chat_overrides`:
+- Shell commands may read only the checkout, the review files above and platform
+  runtime paths. `/tmp` and everything else, including the home folder, is denied.
+- Commands have no network access. The approval policy is `never`, so nothing can
+  ask for escalation. The profile's deny rule also keeps commands matched by the
+  user's Codex exec-policy `allow` rules (for example `gh api`) inside the sandbox;
+  Codex runs those unsandboxed when a profile has no deny rule.
+- Commands inherit only core environment variables, with `*KEY*`, `*SECRET*` and
+  `*TOKEN*` removed. Git ignores the unreadable user config.
+- Web search is live, as in the Claude chat. It is a hosted tool outside the
+  sandbox, so the read scope above is what limits the data a query or URL could carry.
+- `github_read` is a dynamic tool stored with the thread. Conversations started
+  before it existed resume under the same profile but without GitHub reads.
+Configured plugins, MCP servers, hooks and subagents remain disabled for this chat
+profile. Instructions prohibit edits and repository scripts/tests.
+Claude chat permits Read/Glob/Grep for the paths above, WebSearch/WebFetch and two
+SDK MCP read tools: `git_read` for pinned files/diffs and `github_read`. Shell, edits,
+subagents, skills, hooks and imported MCP servers are disabled. Tool commands use
+argument arrays and bounded output/timeouts.
 The triage estimator remains a tool-disabled classifier. Full AI reviews retain
 their existing configuration and permissions.
 Source context is sent to the selected provider. Private notes remain local
@@ -158,6 +173,7 @@ leave room for the code pane. Narrow screens use the existing overlay layout.
 - `ai_runtime.py` / `provider_*.py`: shared requests and provider-specific adapters.
 - `claude-runtime/`: pinned JS SDK bridge and bounded chat read tools.
 - `codex_runtime.py`: shared restrictive configuration and native chat profile.
+- `github_read.py`: fixed read-only GitHub reads for both chats.
 - `code_workspace.py`: application service for HTTP routes and report selection.
 - `assets/code-workspace/model.mjs`: pure context/history/state transformations.
 - `diff.mjs`: pure unified/split projection, expansion and selection semantics.

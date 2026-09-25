@@ -41,8 +41,8 @@ def collect_response(events, progress, on_tool=lambda _: None, on_draft=lambda _
                 progress(f'{label} · {request.get("url") or request.get("query") or "External documentation"}')
                 if method == 'item/completed':
                     on_tool(request)
-            elif kind == 'commandExecution':
-                github = bool(re.search(r'\bgh\s', item.get('command', '')))
+            elif kind in ('commandExecution', 'dynamicToolCall'):
+                github = kind == 'dynamicToolCall' and item.get('tool') == 'github_read'
                 progress('Reading GitHub context…' if github else 'Exploring repository source…')
                 if method == 'item/completed':
                     on_tool({'kind': 'github_read' if github else 'repository_read'})

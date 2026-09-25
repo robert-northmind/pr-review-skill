@@ -1,3 +1,4 @@
+import base64
 import json
 import sys
 import unittest
@@ -7,6 +8,9 @@ import workspace_chat_provider as provider
 import test_code_workspace as fixtures
 import workspace_chat as chat
 import codex_runtime
+import provider_codex
+import github_read
+import ai_runtime
 
 URL, REV = fixtures.URL, fixtures.REV
 
@@ -35,11 +39,11 @@ class ProviderProgress(unittest.TestCase):
         self.assertEqual(requests[1]['url'], 'https://www.w3.org/TR/trace-context/')
         self.assertNotIn('raw search content', str(progress) + str(requests))
 
-    def test_live_web_is_opt_in_and_other_host_tools_stay_disabled(self):
+    def test_web_search_is_opt_in_and_other_host_tools_stay_disabled(self):
         default = codex_runtime.restricted_overrides()
-        enabled = codex_runtime.restricted_overrides(web_search=True)
+        enabled = codex_runtime.restricted_overrides(web_search='cached')
         self.assertIn('web_search="disabled"', default)
-        self.assertIn('web_search="live"', enabled)
+        self.assertIn('web_search="cached"', enabled)
         self.assertEqual(default[1:], enabled[1:])
         for feature in ('shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent'):
             self.assertIn(f'features.{feature}=false', enabled)
@@ -56,10 +60,13 @@ class ProviderProgress(unittest.TestCase):
     def test_native_commands_and_response_deltas_are_visible_without_tool_output(self):
         requests, drafts = [], []
         events = [event('item/agentMessage/delta', {'itemId':'a','delta':'Public update'}),
-                  event('item/completed', {'item': {'type':'commandExecution', 'command':'gh issue view 1 --repo example/repo', 'aggregatedOutput':'secret output'}}),
+                  event('item/completed', {'item': {'type':'commandExecution', 'command':'rg login', 'aggregatedOutput':'secret output'}}),
+                  event('item/completed', {'item': {'type':'dynamicToolCall', 'tool':'github_read', 'arguments':{'kind':'issue','number':1},
+                                                    'contentItems':[{'type':'inputText','text':'issue body'}]}}),
                   *response_events()]
         provider.collect_response(events, lambda _:None, requests.append, drafts.append)
-        self.assertEqual(requests, [{'kind':'github_read'}])
+        self.assertEqual(requests, [{'kind':'repository_read'}, {'kind':'github_read'}])
+        self.assertNotIn('issue body',str(requests)+str(drafts))
         self.assertIn('Public update', drafts)
         self.assertNotIn('secret output',str(requests)+str(drafts))
         self.assertNotIn('private reasoning',str(drafts))
@@ -85,6 +92,67 @@ class ProviderProgress(unittest.TestCase):
             provider.ask(NS(turn=turn), 'source', 'high', lambda _: None)
         self.assertEqual(options['effort'], 'high')
         self.assertEqual(closed, [True])
+
+
+class CodexChatTools(unittest.TestCase):
+    def test_github_read_builds_fixed_read_only_gh_calls(self):
+        context = {'repository': 'example/repo', 'github_cli': '/bin/gh'}
+        build = lambda **arguments: github_read.arguments_for(context, arguments)
+        self.assertEqual(build(operation='pr', number=7)[0], ['pr', 'view', '7', '--repo', 'example/repo', '--json', 'title,body,comments,state,url'])
+        self.assertEqual(build(operation='issue', repository='open-telemetry/opentelemetry-specification', number=3)[0][3:5],
+                         ['--repo', 'open-telemetry/opentelemetry-specification'])
+        search = build(operation='search', query='--web baggage is:open')[0]
+        self.assertNotIn('--repo', search)  # search is global unless scoped
+        self.assertEqual(search[search.index('--'):], ['--', '--web', 'baggage', 'is:open'])
+        self.assertEqual(build(operation='file', repository='o/r', path='docs/a b.md', ref='v1.2/x')[0],
+                         ['api', '--method', 'GET', 'repos/o/r/contents/docs/a%20b.md?ref=v1.2%2Fx'])
+        for arguments in ({'operation': 'api'}, {'operation': 'pr', 'number': '1; id'}, {'operation': 'pr', 'number': True},
+                          {'operation': 'pr', 'number': 1, 'repository': 'x/y --web'}, {'operation': 'search', 'query': 'a\nb'},
+                          {'operation': 'search', 'query': 'x' * 257}, {'operation': 'file', 'path': '../etc'},
+                          {'operation': 'file', 'path': '/etc/passwd'}, {'operation': 'file', 'path': 'a', 'ref': 'main?x=1'},
+                          {'operation': 'file', 'path': 'a', 'ref': '../main'}):
+            self.assertIsNone(github_read.arguments_for(context, arguments)[0], arguments)
+        with patch('github_read.subprocess.run') as run:
+            self.assertFalse(github_read.read(context, {'operation': 'api'})[0])
+            self.assertFalse(github_read.read(context, 'not a dict')[0])
+        run.assert_not_called()
+
+    def test_github_read_decodes_files_lists_folders_and_caps_output(self):
+        context = {'repository': 'o/r'}
+        def reply(value):
+            return patch('github_read.subprocess.run', return_value=NS(returncode=0, stdout=json.dumps(value).encode()))
+        with reply({'encoding': 'base64', 'content': base64.b64encode(b'# Spec').decode()}):
+            self.assertEqual(github_read.read(context, {'operation': 'file', 'path': 'README.md'}), (True, '# Spec'))
+        with reply([{'name': 'a.md', 'type': 'file', 'path': 'd/a.md', 'sha': 'x'}]):
+            self.assertEqual(json.loads(github_read.read(context, {'operation': 'file', 'path': 'd'})[1]), [{'name': 'a.md', 'type': 'file', 'path': 'd/a.md'}])
+        with reply({'title': 'x' * 200_000}):
+            ok, text = github_read.read(context, {'operation': 'issue', 'number': 1})
+        self.assertTrue(ok); self.assertTrue(text.endswith('[Truncated at 100,000 characters.]'))
+        with patch('github_read.subprocess.run', return_value=NS(returncode=1, stdout=b'', stderr=b'token abc')):
+            ok, text = github_read.read(context, {'operation': 'pr', 'number': 1})
+        self.assertFalse(ok); self.assertNotIn('abc', text)
+
+    def test_chat_answers_only_its_tool_and_declines_approvals(self):
+        handlers = []
+        class Client:
+            def __init__(self, request, handler): handlers.append(handler)
+            def start(self): pass
+            def initialize(self): pass
+            def close(self): pass
+            def thread_start(self, params): return NS(thread=NS(id='t'))
+        request = ai_runtime.Request(mode='chat', cwd='/tmp', prompt='{}', context={'repository': 'example/repo'})
+        with patch.dict(sys.modules, {'openai_codex': NS(Thread=lambda *_: None)}), patch('workspace_chat_provider.ask', return_value={'answer': 'A', 'sources': []}):
+            provider_codex.Session(Client).run(request, ai_runtime.Callbacks())
+        handler = handlers[0]
+        with patch('github_read.read', return_value=(True, 'issue')) as read:
+            self.assertEqual(handler('item/tool/call', {'tool': 'github_read', 'arguments': {'operation': 'issue', 'number': 2}}),
+                             {'success': True, 'contentItems': [{'type': 'inputText', 'text': 'issue'}]})
+            self.assertFalse(handler('item/tool/call', {'tool': 'shell', 'arguments': {}})['success'])
+            self.assertFalse(handler('item/tool/call', {'tool': 'github_read', 'namespace': 'x', 'arguments': {}})['success'])
+        read.assert_called_once_with(request.context, {'operation': 'issue', 'number': 2}, '/tmp')
+        for method in ('item/commandExecution/requestApproval', 'item/fileChange/requestApproval'):
+            self.assertEqual(handler(method, {}), {'decision': 'decline'})
+        self.assertEqual(handler('item/permissions/requestApproval', {}), {'permissions': {}})
 
 
 class DurableProgress(unittest.TestCase):

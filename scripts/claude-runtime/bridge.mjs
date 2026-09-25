@@ -5,11 +5,13 @@ import {query, createSdkMcpServer, tool} from '@anthropic-ai/claude-agent-sdk';
 import {z} from 'zod';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 import {createInterface} from 'node:readline';
 import {randomUUID} from 'node:crypto';
 import {buildOptions} from './protocol.mjs';
 import {consumeSession} from './session.mjs';
 const exec = promisify(execFile);
+const GITHUB_READ = fileURLToPath(new URL('../github_read.py', import.meta.url));
 const emit = event => process.stdout.write(JSON.stringify(event)+'\n');
 let active, started = false, interrupted = false;
 // Messages sent before the session starts wait here until input() drains them.
@@ -33,10 +35,16 @@ function readTools(request) {
         if(!path||path.startsWith('/')||path.split('/').includes('..')||/[\x00-\x1f]/.test(path)) return {...result('Invalid repository path.'),isError:true};
         return run('git',[...prefix,'show',`${args.side==='base'?context.base:context.head}:${path}`]);
       }),
-    tool('github_read','Read a GitHub issue or pull request in this PR repository, including comments.',
-      {kind:z.enum(['issue','pr']),number:z.number().int().positive()}, async args => {
-        if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(context.repository||'')) return {...result('No verified repository.'),isError:true};
-        return run(context.github_cli||'gh',[args.kind,'view',String(args.number),'--repo',context.repository,'--json','title,body,comments,state,url']);
+    // Validation and the gh calls live in github_read.py, shared with the Codex chat.
+    tool('github_read',"Read GitHub with the user's login: view an issue or PR with comments, search issues and PRs, or read a file or folder at a ref. Works in any repository the user can read; defaults to the PR repository. Read-only.",
+      {operation:z.enum(['issue','pr','search','file']),repository:z.string().optional().describe('owner/repo; defaults to the PR repository'),
+       number:z.number().int().positive().optional(),query:z.string().optional(),path:z.string().optional(),ref:z.string().optional()}, async args => {
+        try {
+          const input={context:{repository:context.repository,github_cli:context.github_cli},arguments:args,cwd:request.cwd};
+          const value=await exec(context.python||'python3',[GITHUB_READ,JSON.stringify(input)],{cwd:request.cwd,timeout:25000,maxBuffer:1000000});
+          const reply=JSON.parse(value.stdout);
+          return reply.ok?result(reply.text):{...result(reply.text),isError:true};
+        } catch { return {...result('Read failed or exceeded the output limit.'),isError:true}; }
       }),
   ]});
 }

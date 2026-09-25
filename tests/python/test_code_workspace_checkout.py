@@ -56,12 +56,24 @@ class Checkout(unittest.TestCase):
             self.assertFalse((Path(tmp)/('checkout-'+REV)).exists())
 
     def test_chat_enables_native_tools_and_keeps_classifier_restricted(self):
-        chat_options=codex_runtime.chat_overrides()
+        chat_options=codex_runtime.chat_overrides('/work/checkout',['/runs/r1/','/sessions/t.jsonl'])
         self.assertIn('features.shell_tool=true',chat_options)
         self.assertIn('features.unified_exec=true',chat_options)
         self.assertIn('web_search="live"',chat_options)
         self.assertIn('history.persistence="save-all"',chat_options)
+        self.assertIn('default_permissions="pr_review_chat"',chat_options)
+        self.assertIn('permissions.pr_review_chat.filesystem={":minimal"="read", ":slash_tmp"="deny", '
+                      '"/work/checkout"="read", "/runs/r1"="read", "/sessions/t.jsonl"="read"}',chat_options)
+        self.assertIn('permissions.pr_review_chat.network.enabled=false',chat_options)
+        self.assertIn('shell_environment_policy.inherit="core"',chat_options)
         self.assertIn('features.shell_tool=false',codex_runtime.restricted_overrides())
+
+    def test_chat_reads_only_safe_absolute_paths(self):
+        rules=codex_runtime.read_scope('/work/checkout',['/', 'relative/x', '/runs/../etc', '/runs/*', '/a\nb', None, '/runs/r"1/'])
+        self.assertEqual(rules,{':minimal':'read',':slash_tmp':'deny','/work/checkout':'read','/runs/r"1':'read'})
+        # The deny rule is what keeps exec-policy allow rules sandboxed.
+        self.assertIn('deny',rules.values())
+        self.assertIn('"/runs/r\\"1"="read"',' '.join(codex_runtime.chat_overrides('/work/checkout',['/runs/r"1/'])))
 
 
 class Conversation(unittest.TestCase):
@@ -70,20 +82,21 @@ class Conversation(unittest.TestCase):
 
     def test_worker_resumes_native_session_and_keeps_old_messages(self):
         calls=[]
-        class Codex:
-            def __init__(self,*args,**kwargs): pass
-            def __enter__(self): return self
-            def __exit__(self,*args): pass
-            def thread_start(self,**kwargs):
-                calls.append(('start',kwargs)); return NS(id='native-123')
-            def thread_resume(self,id,**kwargs):
-                calls.append(('resume',id)); return NS(id=id)
+        class Client:
+            def __init__(self,request,handler): self.handler=handler
+            def start(self): pass
+            def initialize(self): pass
+            def close(self): pass
+            def thread_start(self,params):
+                calls.append(('start',params)); return NS(thread=NS(id='native-123'))
+            def thread_resume(self,id,params):
+                calls.append(('resume',id,params)); return NS(thread=NS(id=id))
         inputs=[]
         def ask(session,content,*args):
             inputs.append(json.loads(content))
             return {'answer':'Answer','sources':[]}
-        sdk=NS(Codex=Codex,CodexConfig=lambda **kw:kw,ApprovalMode=NS(auto_review='auto'),Sandbox=NS(read_only='read-only'))
-        with patch.dict(sys.modules,{'openai_codex':sdk}), patch.object(checkout,'prepare',return_value=Path(self.temp.name)), patch('workspace_chat_provider.ask',side_effect=ask):
+        sdk=NS(Thread=lambda client,id:NS(id=id))
+        with patch.dict(sys.modules,{'openai_codex':sdk}), patch('provider_codex.chat_client',Client), patch.object(checkout,'prepare',return_value=Path(self.temp.name)), patch('workspace_chat_provider.ask',side_effect=ask):
             first=chat.start(URL,{'revision':REV,'question':'Explain','contexts':[]},launcher=lambda *_:None)
             chat.worker(URL,first['id'])
             saved=chat.read(URL,first['id'])
@@ -92,10 +105,14 @@ class Conversation(unittest.TestCase):
             chat.start(URL,{'revision':REV,'question':'Why?','thread_id':first['id'],'contexts':[]},launcher=lambda *_:None)
             chat.worker(URL,first['id'])
         self.assertEqual([c[0] for c in calls],['start','resume'])
-        self.assertFalse(calls[0][1]['ephemeral'])
-        self.assertEqual(calls[0][1]['sandbox'],'read-only')
+        started,resumed=calls[0][1],calls[1][2]
+        self.assertFalse(started['ephemeral'])
+        self.assertEqual([t['name'] for t in started['dynamicTools']],['github_read'])
+        for params in (started,resumed):
+            self.assertEqual((params['permissions'],params['approvalPolicy']),('pr_review_chat','never'))
+            self.assertNotIn('sandbox',params); self.assertNotIn('approvalsReviewer',params)
         self.assertIn('diff',inputs[0]); self.assertNotIn('diff',inputs[1])
+        self.assertNotIn('github_cli',inputs[0])
         self.assertEqual(len(chat.read(URL,first['id'])['messages']),4)
-
 
 if __name__=='__main__': unittest.main()

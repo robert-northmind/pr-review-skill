@@ -217,9 +217,12 @@ comparisons. Private notes and revision-labeled conversations are saved locally.
 Select lines to focus a question, then let the selected AI investigate beyond it.
 Each conversation pins its provider, model, reasoning and PR revision. Follow-ups
 resume the same native session; switching providers requires a new conversation.
-Both providers can read source, inspect the pinned base version, search public
-documentation, and read GitHub issues/PRs. Codex uses its read-only sandbox and
-automatic approval review. Claude uses a restricted read/web tool set plus bounded
+Both providers can read source, inspect the pinned base version, search the web,
+and read GitHub through a fixed read-only tool: issues and PRs with comments, issue
+search, and files at any ref, in any repository your `gh` login can read. Local
+reads are limited to the checkout and the PR's AI review files. Codex runs shell
+commands in its sandbox without network access, token-like environment variables or
+approval requests. Claude uses a restricted read/web tool set plus bounded
 Git/GitHub read tools; shell, edits, hooks and imported MCP servers are disabled.
 Private notes remain local. Streamed answers, public activity and source links
 appear in the conversation.
