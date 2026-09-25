@@ -24,6 +24,18 @@ same instructions into another agent session.
 starts the same review with a short steering note, such as "Docs only; skip
 tests" or "Only iOS changed; validate on iOS". The note applies to that run only.
 
+After a review finishes, the AI review tab can continue its conversation outside
+the dashboard. **Continue in Claude Code** (or **Continue in Codex**) copies a
+terminal command that forks the review's own session with its full history:
+`claude --resume <id> --fork-session` from the review's working directory, or
+`codex fork <id>`. Forking leaves the original review session unchanged.
+**Copy handoff prompt** copies a short prompt for a new session in either agent.
+It names the session ID, the transcript path and the run's review notes, so a
+Codex session can pick up a Claude Code review and the other way round. Both
+buttons use the session behind the report shown. They are disabled when the
+agent has deleted that transcript. By default, Claude Code deletes transcripts
+after 30 days (`cleanupPeriodDays`).
+
 The agent records progress and artifacts in the local tracker. When finished,
 click **Open review** on the card and select **AI review**. There is one report and one review skill:
 

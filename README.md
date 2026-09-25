@@ -23,7 +23,7 @@ the dashboard does not post comments, approve or merge PRs.
 | **PR inbox** | Browse review requests, watched repositories and your own PRs. Filter by author, repository, review status or draft state; snooze or hide items. |
 | **My reviews** | Keep an ordered queue, save private notes and reminders, and see when new commits or replies bring a PR back to you. |
 | **Effort estimates** | Get optional Quick, Moderate, Involved or Uncertain estimates, with reasons, filters and a daily call limit. |
-| **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Keep previous reports and run history. |
+| **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Continue a finished review's session in either agent. Keep previous reports and run history. |
 | **Review reports** | Read the outcome and assessment, a plain-words summary, a diagram of the change, a grid of situations before and after, exact source excerpts, step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits in one HTML report. |
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
@@ -195,6 +195,8 @@ troubleshooting, see [GitHub and AI authentication](docs/authentication.md).
    **Stop review** cancels the worker and preserves saved activity.
 5. Read the completed report in **AI review**: assessment, explanation, findings
    and verification evidence. Review and edit draft comments before posting on GitHub.
+   **Continue in Claude Code/Codex** copies a command that opens the review's
+   session in a terminal; **Copy handoff prompt** hands it to either agent.
 6. Use **Hand back to author** in My reviews when you are waiting for a response.
    New commits, relevant replies or a due reminder can bring the PR back to you.
 
