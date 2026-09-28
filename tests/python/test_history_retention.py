@@ -65,6 +65,20 @@ class Retention(unittest.TestCase):
  def test_running_review_defers_cleanup(self):
   tracker.command_start(Namespace(pr_url=URL,tool='codex',title='Example',working_directory='',session_reference='',base_sha='',head_sha=''),emit=False)
   self.assertTrue(retention.cleanup(STAMP));self.assertIn(URL,queue.load()['prs'])
+ def test_abandoned_review_does_not_block_cleanup(self):
+  # Mirrors a run left with one task queued: it reads as potentially-stale forever.
+  for started in ('running','queued'):
+   run=tracker.command_start(Namespace(pr_url=URL,tool='codex',title='Example',working_directory='',session_reference='',base_sha='',head_sha=''),emit=False)
+   if started=='running':
+    tracker.command_set_task(Namespace(run_id=run,task='explainer',status='completed',message='',completed_units=None,total_units=None,unit='items'))
+    tracker.command_set_task(Namespace(run_id=run,task='synthesis',status='queued',message='',completed_units=None,total_units=None,unit='items'))
+   old=(NOW-timedelta(hours=dashboard.STALE_RUN_HOURS+1)).isoformat()
+   for path in tracker.run_dir(run).rglob('*.json'):
+    value=tracker.read_json(path)
+    tracker.atomic_write(path,{**value,**{k:old for k in ('created_at','updated_at') if k in value}})
+   runs,_=tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+   self.assertEqual(next(r['status'] for r in runs if r['run_id']==run),'potentially-stale' if started=='running' else 'queued')
+  self.assertEqual(retention.cleanup(STAMP),[]);self.assertNotIn(URL,queue.load()['prs'])
  def test_running_chat_defers_cleanup(self):
   import time
   workspace=workspace_store.directory(URL)

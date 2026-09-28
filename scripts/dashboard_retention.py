@@ -25,8 +25,7 @@ def cleanup(checked_at):
                 continue
             try:
                 related = [r for r in runs if r['pr_url'] == url]
-                if any(r['status'] in ('running', 'queued', 'potentially-stale') or
-                       (review_jobs.read_job(r['run_id']) and review_jobs.worker_alive(r['run_id'])) for r in related):
+                if any(review_jobs.run_active(r, dashboard.STALE_RUN_HOURS) for r in related):
                     raise ValueError('a review is still active; finish or cancel it before cleanup')
                 triage_path = tracker.tracker_root() / 'triage.json'
                 triage = tracker.read_json(triage_path, required=False)

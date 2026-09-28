@@ -200,7 +200,8 @@ refresh and Sync GitHub. Reopened PRs are kept. Failed checks never authorize
 cleanup. `dashboard_retention.py` removes the personal entry, workflow-owned
 reports/runs, workspace diffs, code checkouts, notes/chats and effort metadata.
 Active reviews, chats, estimates and cleanup failures defer deletion with a visible
-error. Checkout cleanup keeps the tracker's ownership and non-force rules;
+error. A review counts as active while its dashboard worker runs or while its tasks
+were updated in the last six hours; an abandoned run does not block cleanup. Checkout cleanup keeps the tracker's ownership and non-force rules;
 unmanaged external files are never deleted. The workspace lock file is retained
 for synchronization. Reporting maintains its independent activity window.
 
