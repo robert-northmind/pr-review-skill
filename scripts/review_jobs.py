@@ -64,6 +64,21 @@ def worker_alive(run_id):
         return True
 
 
+def run_active(run, stale_hours):
+    """Whether cleanup must leave a tracked run alone.
+
+    A dashboard worker that is still alive always counts. Otherwise only runs
+    updated within stale_hours do: an abandoned run ("potentially-stale", or
+    queued and never started) would block cleanup of its PR forever.
+    """
+    job = read_job(run['run_id'])
+    if job and job.get('status') not in FINAL and worker_alive(run['run_id']):
+        return True
+    if run['status'] == 'queued':
+        return time.time() - tracker.parse_time(run['updated_at']).timestamp() < stale_hours * 3600
+    return run['status'] == 'running'
+
+
 def job_state(run_id):
     job = read_job(run_id)
     if job and job['status'] not in FINAL and not worker_alive(run_id):

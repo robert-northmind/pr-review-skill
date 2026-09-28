@@ -24,7 +24,7 @@ RUN_RETENTION_DAYS = tracker.RUN_RETENTION_DAYS
 KEEP_RUNS_PER_PR = 3
 WORKSPACE_CACHE_DAYS = 7
 STATE_REFRESH_HOURS = 6
-ACTIVE = {'running', 'queued', 'potentially-stale'}
+STALE_RUN_HOURS = 6  # runs without task updates for this long count as abandoned
 # Build, package and sandbox caches that verification leaves behind. Evidence
 # (logs, result JSON, probe sources, app screenshots) is kept.
 CACHE_DIRS = {'.dart_tool', 'node_modules', '.yarn', '.gradle', '.build', 'DerivedData', '.pub-cache',
@@ -49,14 +49,12 @@ def size(path):
 def active_runs():
     """Run ids that must not be modified: live reviews and active checkouts."""
     import review_jobs
-    runs, errors = tracker.load_all_runs(6)
+    runs, errors = tracker.load_all_runs(STALE_RUN_HOURS)
     if errors:
         raise tracker.TrackerError('the review registry could not be fully inspected')
     active = set()
     for run in runs:
-        job = review_jobs.read_job(run['run_id'])
-        if (run['status'] in ACTIVE or run.get('checkout', {}).get('status') == 'active'
-                or (job and job.get('status') not in review_jobs.FINAL and review_jobs.worker_alive(run['run_id']))):
+        if review_jobs.run_active(run, STALE_RUN_HOURS) or run.get('checkout', {}).get('status') == 'active':
             active.add(run['run_id'])
     return runs, active
 

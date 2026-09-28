@@ -275,7 +275,9 @@ that may create many browser tabs.
 By default, a running run with no update for six hours is displayed as
 `potentially-stale`. This is a warning, not proof that its process stopped.
 Never silently change its recorded task states. Tell the user which tool and
-session reference to revisit.
+session reference to revisit. Cleanup treats `potentially-stale` runs, and queued
+runs with no update for six hours, as abandoned unless a dashboard worker still
+holds them, so they cannot block cleanup of their PR indefinitely.
 
 Malformed entries must not hide healthy runs. Report registry warnings
 separately and do not repair or delete data without the user's permission.
