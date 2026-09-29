@@ -290,7 +290,7 @@ reasoning; existing custom values remain visible until changed.
 
 Maintain presets and feature defaults in `scripts/agent_options.py` when models
 are released. The dashboard never queries providers for its dropdowns. Triage
-uses GPT-5.6 Luna or Claude Haiku by default; Claude Haiku has no reasoning override.
+uses GPT-6 Luna or Claude Haiku by default; Claude Haiku has no reasoning override.
 The UI saves all features atomically through POST `/ai-config`, guarded by a
 revision hash so stale windows cannot overwrite newer settings. Existing settings
 are migrated in memory and persisted only on explicit save. Reports, estimates
@@ -458,7 +458,7 @@ A daily limit of 30 model attempts (UTC) is the shipped default; failed calls
 count. Settings can change the daily limit. For example:
 
 ```shell
-python3 scripts/dashboard_triage.py configure --enabled true --provider codex --model gpt-5.6-luna --daily-limit 60
+python3 scripts/dashboard_triage.py configure --enabled true --provider codex --model gpt-6-luna --daily-limit 60
 python3 scripts/dashboard_triage.py status
 ```
 
@@ -470,7 +470,7 @@ and the daily limit. Newly pasted My reviews PRs need a successful Check for
 updates to populate their verified revision metadata first.
 
 Choose model IDs available to the selected provider. The Codex default is
-`gpt-5.6-luna`; Claude defaults to Haiku 4.5. Switching to OpenAI API may require a different API model ID.
+`gpt-6-luna`; Claude defaults to Haiku 4.5. Switching to OpenAI API may require a different API model ID.
 The worker stops its run on failure and backs off the same comparison for an
 hour. There is no independent polling schedule: new PRs are discovered by
 Refresh GitHub, not simply by the page's saved-state polling. A running batch

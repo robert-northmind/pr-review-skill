@@ -29,7 +29,7 @@ CASES = [
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--provider',choices=('codex','openai'),default='codex')
-    p.add_argument('--model',default='gpt-5.6-luna')
+    p.add_argument('--model',default='gpt-6-luna')
     p.add_argument('--output',required=True)
     args=p.parse_args()
     results=[]
