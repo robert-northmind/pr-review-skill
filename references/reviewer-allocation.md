@@ -49,11 +49,12 @@ Allocate by the role's actual work, within these floors:
   capability tier as the lead session (the model the user chose for the review),
   unless the change is clearly mechanical or prose-only. Do not pick a cheaper
   model for these roles merely because it is also described as a coding model.
-- **Security and reliability** also start at the lead's tier. Drop one tier only
-  for a narrow change with no trust-boundary, data-handling, dependency or
-  resource impact, and state that reason in the allocation table. A narrow
-  wording edit differs from changing an authorization condition; a six-line
-  permission change warrants the strongest reviewer.
+- **Security and reliability** use the lead's tier or stronger, even for a
+  change that looks narrow. The initial assessment comes before the full
+  review, so it cannot rule out trust-boundary, data-handling, dependency or
+  resource impact. A six-line permission change warrants the strongest reviewer.
+  Only a clearly mechanical or prose-only change, under the table above, may
+  use an efficient model.
 - **Runtime verification and mechanical file checks** may use an efficient
   model, because they execute and report checks rather than judge behavior.
 
