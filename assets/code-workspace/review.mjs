@@ -12,7 +12,15 @@ export function reviewHTML(info, comparison, esc) {
       "cancelled",
       "no-activity",
     ].includes(run.status);
-  const actions = `<div class="review-meta"><button class="button" id="generate-review" ${running ? "disabled" : ""}>${running ? "AI review in progress" : artifact ? "Run AI review again" : "Generate AI review"}</button>${running ? "" : '<button class="button" id="generate-review-guided">Run with guidance…</button>'}${run?.transport === "in-app" ? `<a class="button" href="/?review=${encodeURIComponent(run.run_id)}">Review activity</a>` : ""}${artifact ? continueHTML(info.continuation, esc) : ""}</div>`;
+  const check = info?.update_check;
+  // A finished report of an older commit can be updated unless the fixed rules require a full review.
+  const updatable =
+    !running &&
+    artifact?.name === "review-html" &&
+    artifact.status === "completed" &&
+    artifact.head_sha !== comparison?.head &&
+    !(check?.decided_by === "rules" && check.scope === "full");
+  const actions = `<div class="review-meta">${updatable ? '<button class="button" id="generate-review-update" title="Re-check the previous findings and review only the new commits and the code they affect">Update AI review</button>' : ""}<button class="button" id="generate-review" ${running ? "disabled" : ""}>${running ? "AI review in progress" : artifact ? "Run full AI review" : "Generate AI review"}</button>${running ? "" : '<button class="button" id="generate-review-guided">Run with guidance…</button>'}${run?.transport === "in-app" ? `<a class="button" href="/?review=${encodeURIComponent(run.run_id)}">Review activity</a>` : ""}${artifact ? continueHTML(info.continuation, esc) : ""}</div>`;
   if (!artifact)
     return `<div class="review-empty"><h2>${running ? "AI review in progress" : "Start with the code."}</h2><p>${running ? esc(run.message || "Preparing the review. You can keep exploring code.") : "No AI review yet. Explore the files, mark your progress, and ask questions about selected lines."}</p>${actions}</div>`;
   const query = new URLSearchParams({
@@ -21,7 +29,11 @@ export function reviewHTML(info, comparison, esc) {
     version: artifact.version,
   });
   const older = artifact.head_sha !== comparison.head;
-  return `${actions}<p class="${older ? "notice warning" : "muted"}">${older ? "Older commit · " : ""}AI review for ${esc(artifact.head_sha?.slice(0, 12) || "an unrecorded revision")}${artifact.status !== "completed" ? " · Partial report" : ""}</p><iframe class="review-frame" title="AI review report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="/workspace-report?${esc(query.toString())}"></iframe>`;
+  const advice =
+    older && check
+      ? ` · ${check.scope === "full" ? "Full review suggested" : "Update suggested"}: ${esc(check.reason)}`
+      : "";
+  return `${actions}<p class="${older ? "notice warning" : "muted"}">${older ? "Older commit · " : ""}AI review for ${esc(artifact.head_sha?.slice(0, 12) || "an unrecorded revision")}${artifact.status !== "completed" ? " · Partial report" : ""}${advice}</p><iframe class="review-frame" title="AI review report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="/workspace-report?${esc(query.toString())}"></iframe>`;
 }
 
 /** Copy a fork command for the report's own agent, or a prompt for any agent. */

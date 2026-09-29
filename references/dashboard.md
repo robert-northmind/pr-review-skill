@@ -248,6 +248,21 @@ details. It never overrides the no-publishing and secret-handling rules, and
 the report must state which checks the guidance skipped. Plain launches send no
 guidance.
 
+When a finished report covers an older commit, the card and the workspace AI
+review tab offer **Update AI review** beside **Run full AI review**.
+`/regenerate-review` accepts `mode: update`. Before launching, fixed rules
+check (with the GitHub compare API) that the previous head is an ancestor of
+the new head, the comparison merge base is unchanged, the new commits change at
+most 500 lines in 20 files, and fewer than three updates ran since the last full
+review. A failed rule rejects the update with its reason; no model can override
+it. An accepted launch writes `update-context.json` to the new run (previous
+run, revisions, commits, changed files and any matching pre-check), records
+`mode`, `previous_run` and `update_chain` in its launch metadata, and registers
+the `previous-findings` task. A full review of a PR with an earlier finished
+report also receives `update-context.json` (`mode: full`) so the report can say
+what happened to each previous finding. See
+[Updating a previous review](update-review.md) for the review itself.
+
 **Copy review prompt** is available beside the
 launch actions and in My reviews → Review tools. They copy the same workflow
 prompt for pasting into any agent session, without opening Terminal, creating
@@ -353,6 +368,28 @@ Daily charts overlay a separate trailing average for reviews and merges, using 1
 The window and time-off ranges are stored under `pr-inbox-reporting` in browser local storage. Overlapping ranges are merged; invalid saved dates are ignored. Preferences apply across repository selections and do not modify the GitHub cache. Storage failures are visible and leave preferences applied only for the current session. Asset changes take effect on reload without restarting the server.
 
 Validation: `python3 tests/run.py python test_reporting test_dashboard test_dashboard_launch test_review_notes`, `node tests/javascript/test_reporting.cjs`, `node tests/javascript/test_workspace.cjs` and `node tests/browser/test_reporting_browser.cjs` from the repository root. Browser checks use a disposable local server and synthetic activity to cover trend windows, time off, persistence, repository filtering, chart drill-down, incomplete history, bar/line alignment and light/dark desktop and mobile layouts. Set `PR_REVIEW_PLAYWRIGHT_MODULE` to the installed Playwright module path when it is not available through normal Node resolution; `PR_REVIEW_BROWSER_CHANNEL` defaults to `chrome`.
+
+## Review update pre-check
+
+When automatic estimates are enabled, the same worker also checks PRs whose
+finished AI review covers an older commit, after it finishes waiting effort
+estimates. It first applies the fixed update rules above; when they fail it
+records **Full review suggested** with the rule's reason and makes no model
+call. When they pass it sends the new commits' patches (at most 12,000
+characters per file and 60,000 in total), their titles, and the previous
+report's finding titles, placements and section excerpt locations to the
+triage model. The model returns a scope (update or full), a reason, per-finding
+hints (likely addressed, affected, untouched), affected sections and up to
+three hotspots. Oversized patches skip the model and leave the scope to the
+review. Each check uses one call from the daily limit and is keyed by the
+previous run and head, the new base/head and the triage settings; failures
+retry after an hour. Results live under `updates` in `triage.json` and are
+pruned when their PR leaves the inbox and active My reviews.
+
+Cards show the recommendation with the matching button emphasised. The update
+launch copies the pre-check into `update-context.json` for the review lead only.
+It is advice: the review re-checks every previous finding either way, and its
+reviewers never see it.
 
 ## Initial review effort
 

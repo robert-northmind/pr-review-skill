@@ -11,6 +11,7 @@ import pr_review_tracker as tracker
 import dashboard_queue as queue
 import dashboard_reviews as reviews
 import ai_settings
+import review_update
 from agent_options import CATALOG
 
 ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
@@ -109,7 +110,7 @@ def summarize_run(run, checked_sha=''):
     return {'run_id': run['run_id'], 'status': status, 'tool': run.get('tool', ''),
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
-        'kind': launch.get('kind', 'review'), 'guidance': launch.get('guidance', ''), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
+        'kind': launch.get('kind', 'review'), 'mode': launch.get('mode', 'full'), 'guidance': launch.get('guidance', ''), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
         'progress': reviews.progress(run, status) if job else None,
         'message': job.get('message', '') or launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
@@ -124,8 +125,8 @@ def snapshot():
         personal = queue.load()
         entries = queue.merged_entries(data['prs'], personal)
     import dashboard_triage
-    triage = dashboard_triage.snapshot(entries)
     runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+    triage = dashboard_triage.snapshot(entries, runs)
     grouped = {}
     for run in runs:
         grouped.setdefault(run['pr_url'], []).append(run)
@@ -154,11 +155,11 @@ def snapshot():
         profile = data.get('author_profiles', {}).get(login, {})
         prs.append({**entry, 'author_login': login, 'author_name': profile.get('author_name', ''),
                     'author_avatar_url': profile.get('author_avatar_url', ''), 'url': url, 'group':group, 'participation':participation,
-            'triage':triage['prs'].get(url, {}), 'artifacts':artifacts, 'artifact_freshness':freshness, 'mixed_artifacts':mixed,
+            'triage':triage['prs'].get(url, {}), 'update_check':triage['updates'].get(url), 'artifacts':artifacts, 'artifact_freshness':freshness, 'mixed_artifacts':mixed,
             'run':summarize_run(history[0], checked_sha) if history else None,
             'history':[summarize_run(r, checked_sha) for r in history],
             'history_total':len(history)})
-    return {'prs':prs, 'config':config, 'ai': {'settings': ai, 'revision': ai_settings.revision(ai), 'catalog': CATALOG}, 'triage': {k: v for k, v in triage.items() if k != 'prs'}, 'queue_refresh':queue.status(),
+    return {'prs':prs, 'config':config, 'ai': {'settings': ai, 'revision': ai_settings.revision(ai), 'catalog': CATALOG}, 'triage': {k: v for k, v in triage.items() if k not in ('prs', 'updates')}, 'queue_refresh':queue.status(),
         'last_github_refresh_at':data.get('last_github_refresh_at', ''),
         'last_refresh_attempt_at':data.get('last_refresh_attempt_at', ''),
         'warnings':data.get('refresh_warnings', []) + errors,
@@ -190,24 +191,58 @@ def guidance_prompt(guidance):
         'Say in the report which guidance was applied and which checks it skipped.')
 
 
-def start_launch(url, kind, retry=False, guidance=''):
+def active_runs(canonical, runs):
+    return [r for r in runs if r['pr_url'] == canonical and
+            (summarize_run(r)['status'] not in TERMINAL or
+             (reviews.read_job(r['run_id']) and reviews.worker_alive(r['run_id'])))]
+
+
+def previous_review(canonical, entry, mode):
+    """The review to build on and the fixed-rule check; network reads happen outside the state lock."""
+    runs, _ = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+    if active_runs(canonical, runs):
+        return None, None
+    prior = review_update.prior_reviews([r for r in runs if r['pr_url'] == canonical]).get(canonical)
+    if not prior:
+        if mode == 'update':
+            raise dashboard.DashboardError('There is no finished AI review to update. Run a full AI review.')
+        return None, None
+    if prior['head'] == entry.get('head_sha') and mode == 'full':
+        return prior, {'eligible': False, 'reason': 'The last AI review already covers the latest commit.'}
+    try:
+        check = review_update.gate(canonical, prior, entry.get('head_sha', ''), entry.get('base_sha', ''))
+    except (OSError, ValueError, review_update.UpdateError):
+        check = {'eligible': False, 'reason': 'The commits since the last AI review could not be checked.'}
+    if mode == 'update' and not check['eligible']:
+        raise dashboard.DashboardError(check['reason'] + ' Run a full AI review instead.')
+    return prior, check
+
+
+def start_launch(url, kind, retry=False, guidance='', mode='full'):
     canonical, *_ = tracker.canonical_pr_url(url)
     guidance = review_guidance(guidance)
     if kind not in ('review', 'explainer'):
         raise dashboard.DashboardError('Unknown review action.')
+    if mode not in ('full', 'update'):
+        raise dashboard.DashboardError('Choose a full review or an update.')
     # Old open tabs may still send the retired action; perform a full review.
     kind = 'review'
     with dashboard.state_lock():
         entry = queue.merged_entries(dashboard.load_dashboard()['prs']).get(canonical)
         if entry is None:
             raise dashboard.DashboardError('This PR is no longer in the inbox. Refresh the page.')
+    prior, check = previous_review(canonical, entry, mode)
+    with dashboard.state_lock():
+        entry = queue.merged_entries(dashboard.load_dashboard()['prs']).get(canonical)
+        if entry is None:
+            raise dashboard.DashboardError('This PR is no longer in the inbox. Refresh the page.')
         runs, errors = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
-        active = [r for r in runs if r['pr_url'] == canonical and
-                  (summarize_run(r)['status'] not in TERMINAL or
-                   (reviews.read_job(r['run_id']) and reviews.worker_alive(r['run_id'])))]
+        active = active_runs(canonical, runs)
         if active and not retry:
             return {'run_id': active[0]['run_id'], 'existing': True,
                     'transport': summarize_run(active[0])['transport']}
+        if mode == 'update' and (not prior or prior['head'] == entry.get('head_sha')):
+            raise dashboard.DashboardError('The PR changed while checking it. Try again.')
         if active and retry:
             for run in active:
                 if reviews.read_job(run['run_id']):
@@ -219,11 +254,23 @@ def start_launch(url, kind, retry=False, guidance=''):
             title=entry.get('title',''), working_directory=str(tracker.tracker_root()),
             session_reference='', base_sha='', head_sha=''), emit=False)
         transport = 'in-app'
-        meta = {'kind':kind, 'agent':config['provider'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
+        meta = {'kind':kind, 'mode':mode, 'agent':config['provider'], 'transport':transport, 'created_at':tracker.utc_now(), 'message':''}
         if guidance:
             meta['guidance'] = guidance
+        if prior:
+            meta.update(previous_run=prior['run_id'], update_chain=prior['chain'] + 1 if mode == 'update' else 0)
+            precheck = None
+            if mode == 'update':
+                import dashboard_triage
+                precheck = dashboard_triage.update_view(canonical, entry, prior)
+            tracker.atomic_write(tracker.run_dir(run_id) / review_update.CONTEXT_FILE, review_update.update_context(
+                canonical, prior, entry.get('head_sha', ''), (check or {}).get('merge_base', ''), mode, check, precheck))
+            # Only runs with a previous review show this stage.
+            tracker.command_set_task(Namespace(run_id=run_id, task='previous-findings', status='queued', message=''))
         tracker.atomic_write(launch_path(run_id), meta)
-        prompt = dashboard.full_review_prompt(canonical)
+        prompt = (dashboard.update_review_prompt if mode == 'update' else dashboard.full_review_prompt)(canonical)
+        if prior and mode == 'full':
+            prompt += dashboard.previous_review_note(tracker.run_dir(run_id) / review_update.CONTEXT_FILE)
         prompt += ('\n\nThe dashboard has already registered this exact run. '
             f'Use run ID {run_id} for every tracker command; do not create another run. '
             'Read the installed skill instructions before proceeding. '
@@ -239,7 +286,7 @@ def start_launch(url, kind, retry=False, guidance=''):
             raise dashboard.DashboardError(str(error)) from error
     if kind == 'review' and not entry.get('workflow'):
         queue.mutate(canonical, 'enqueue')
-    return {'run_id':run_id, 'existing':False, 'transport':transport}
+    return {'run_id':run_id, 'existing':False, 'transport':transport, 'mode':mode}
 
 
 def record_launch_failure(run_id, message):

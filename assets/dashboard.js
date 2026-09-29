@@ -93,7 +93,7 @@ async function copyPrompt(button){
   }
  }catch(error){notify(error.message);}finally{button.disabled=false;}
 }
-function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='in-app'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
+function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':run.mode==='update'?'Review update':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='in-app'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';
@@ -132,9 +132,26 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState(
 window.addEventListener('pageshow',event=>{if(event.persisted){loadState();loadReporting();}});
 document.addEventListener('click',event=>{for(const picker of document.querySelectorAll('.snooze-picker[open]'))if(!picker.contains(event.target))picker.open=false;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const picker of document.querySelectorAll('.snooze-picker[open]')){picker.open=false;picker.querySelector('summary').focus();}});
+// A finished report of an older commit can be updated instead of redone, unless the fixed rules said no.
+function canUpdate(pr){
+ const a=pr.artifacts['review-html'],c=pr.update_check;
+ return !active(pr.run)&&!!a&&a.status==='completed'&&a.freshness==='older'&&!(c?.decided_by==='rules'&&c.scope==='full');
+}
+function updateButton(pr,primary=false){return `<button class="button${primary?' primary':''}" data-action="/regenerate-review" data-mode="update" data-url="${esc(pr.url)}" title="Re-check the previous findings and review only the new commits and the code they affect">Update AI review</button>`;}
 function aiReviewActions(pr){
  const running=active(pr.run),hasNotes=!!notesArtifact(pr.artifacts);
- return `<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${running?'disabled':''}>${running?'AI review in progress':hasNotes?'Run AI review again':'Run AI review'}</button>${running?'':`<button class="button" data-review-guidance data-url="${esc(pr.url)}">Run with guidance…</button>`}${copyPromptButton(pr,'review')}`;
+ return `${canUpdate(pr)?updateButton(pr):''}<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" ${running?'disabled':''}>${running?'AI review in progress':hasNotes?'Run full AI review':'Run AI review'}</button>${running?'':`<button class="button" data-review-guidance data-url="${esc(pr.url)}">Run with guidance…</button>`}${copyPromptButton(pr,'review')}`;
+}
+// The pre-check's recommendation; the review itself re-checks every finding either way.
+function updateHint(pr){
+ const a=pr.artifacts['review-html'],c=pr.update_check;
+ if(active(pr.run)||!a||a.status!=='completed'||a.freshness!=='older')return '';
+ const full=c?.scope==='full',hints=c?.findings||[];
+ const addressed=hints.filter(f=>f.status==='likely-addressed').length;
+ const detail=hints.length?` ${addressed} of ${hints.length} previous finding${hints.length===1?'':'s'} look${addressed===1?'s':''} addressed; the update re-checks all of them.`:'';
+ const text=c?(full?'Full review suggested: ':'Update suggested: ')+c.reason+(full?'':detail):'New commits since the AI review. An update re-checks the previous findings and reviews the new commits; a full review starts over.';
+ const fullButton=`<button class="button${full?' primary':''}" data-action="/regenerate-review" data-url="${esc(pr.url)}">Run full AI review</button>`;
+ return `<div class="update-hint"><p>${esc(text)}${c?.hotspots?.length?` <span class="muted">Also check: ${esc(c.hotspots.join('; '))}</span>`:''}</p><div class="action-bar">${canUpdate(pr)?updateButton(pr,!full):''}${fullButton}</div></div>`;
 }
 function actionDisclosure(pr,label,contents,className='pr-overflow'){
  return `<details class="${className} action-disclosure"><summary class="button" aria-label="${esc(label==='•••'?'More actions for PR '+pr.number:label+' for PR '+pr.number)}">${label}</summary><div class="action-menu">${contents}</div></details>`;
@@ -164,7 +181,7 @@ function card(pr){
  const history=pr.history.length?`<div><p class="detail-heading">Run history (${pr.history_total})</p>${renderHistory(pr)}</div>`:'';
  return `<article class="pr-card" data-pr="${esc(pr.url)}"><div class="pr-main"><div>${prIdentity(pr)}<a class="pr-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${snoozeStatus(pr)}<span title="${esc(when(pr.pr_updated_at||pr.first_seen_at))}">${pr.pr_updated_at?'Updated':'First seen'} ${esc(since(pr.pr_updated_at||pr.first_seen_at))}</span>${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${buttons}</div></div>
  <div class="pr-foot"><span title="Your participation on GitHub">GitHub: ${esc(pr.participation)}</span>${status}</div>
- ${triageCard(pr)}${artifactWarning(pr)}${reviewSummary(run)}
+ ${triageCard(pr)}${artifactWarning(pr)}${updateHint(pr)}${reviewSummary(run)}
  ${run||history||Object.keys(arts).length?`<details class="run-details"><summary>AI run details & history</summary><div class="detail-content">
  ${run?`<section><p class="detail-heading">${esc(statusLabels[run.status]||run.status)} · ${esc(run.tool)}</p><p class="muted">Last recorded AI activity ${esc(since(run.updated_at))}. ${isActive&&run.transport!=='in-app'?'Status comes from the review tracker; it does not prove the terminal is still running.':''}</p>${run.message?`<p class="muted">${esc(run.message)}</p>`:''}${run.guidance?`<p class="muted run-guidance"><strong>Guidance:</strong> ${esc(run.guidance)}</p>`:''}<ul class="task-list">${run.tasks.filter(t=>t.status!=='skipped').map(t=>`<li title="${esc(t.message)}">${esc(t.name.replaceAll('-',' '))}: ${esc(t.status)}</li>`).join('')}</ul>${run.session_reference?`<div class="action-bar"><button class="button" data-copy="${esc(run.session_reference)}">Copy session reference</button>${safeUrl(run.session_reference)!=='#'?`<a class="button" href="${esc(safeUrl(run.session_reference))}" target="_blank" rel="noopener">Open session</a>`:''}</div>`:'<p class="muted">No session reference recorded.</p>'}
  ${run.transport!=='in-app'&&(attention(run)||['starting','queued'].includes(run.status))?`<button class="button" data-action="/regenerate-review" data-url="${esc(pr.url)}" data-retry="true">Retry after closing the previous terminal</button>`:''}</section>`:''}
@@ -292,10 +309,10 @@ document.addEventListener('click',async event=>{
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Sync GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
  const guided=event.target.closest('[data-review-guidance]');if(guided){guided.closest('.action-disclosure')?.removeAttribute('open');openGuidance(guided.dataset.url);return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
- const {action,url,retry,days}=button.dataset;const launching=action.startsWith('/regenerate-');
+ const {action,url,retry,days,mode}=button.dataset;const launching=action.startsWith('/regenerate-');
  if(launching&&settingsDirty){notify('Save or discard your AI settings before starting a review.');showSettings('ai-settings');return;}
  busy.add(url);button.disabled=true;
- try{const result=await post(action,{url,retry:retry==='true',...(days?{days:Number(days)}:{})});
+ try{const result=await post(action,{url,retry:retry==='true',...(days?{days:Number(days)}:{}),...(mode?{mode}:{})});
   if(launching)return await reviewLaunched(url,result);
   else if(action==='/snooze')notify('Snoozed until '+when(result.snoozed_until)+'.',async()=>{await post('/unsnooze',{url});await loadState();});
   else if(action==='/unsnooze')notify('PR returned to your inbox.');
@@ -305,7 +322,7 @@ document.addEventListener('click',async event=>{
  }catch(error){notify(error.message);}finally{busy.delete(url);renderList(true);}
 });
 async function reviewLaunched(url,result){
- notify(result.existing?'This PR already has an active run.':'AI review started. You can follow it here.');
+ notify(result.existing?'This PR already has an active run.':result.mode==='update'?'AI review update started. You can follow it here.':'AI review started. You can follow it here.');
  await loadState();
  const run=state?.prs.find(p=>p.url===url)?.run;if(run?.transport==='in-app')openReview(run.run_id);
 }

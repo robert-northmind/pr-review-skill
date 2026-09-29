@@ -41,7 +41,7 @@ function renderTriageSettings(){
 }
 function triageRunDisabled(t){
  const calls=t.budget?.date===new Date().toISOString().slice(0,10)?t.budget.calls:0;
- return !t.config.enabled||triageDirty||triageStarting||['starting','running'].includes(t.status?.state)||calls>=t.config.daily_limit||(t.counts&&t.counts.waiting===0);
+ return !t.config.enabled||triageDirty||triageStarting||['starting','running'].includes(t.status?.state)||calls>=t.config.daily_limit||(t.counts&&t.counts.waiting===0&&!t.counts.updates_waiting);
 }
 async function startTriageBatch(url=null,estimateId=null){
  triageStarting=true;renderTriageSettings();
@@ -73,7 +73,7 @@ function renderTriageProgress(){
  activityMessage.hidden=!blocked||!activityMessage.textContent;
  $('triage-spinner').hidden=!busy;
  const current=$('triage-progress-current');current.replaceChildren();current.hidden=false;
- const phases={fetching:'Reading GitHub diff',estimating:'Estimating effort',checking:'Checking the PR is still current',preparing:'Preparing the next PR'};
+ const phases={comparing:'Comparing new commits with the last AI review','estimating-update':'Choosing an update or a full review',fetching:'Reading GitHub diff',estimating:'Estimating effort',checking:'Checking the PR is still current',preparing:'Preparing the next PR'};
  if(running){
   current.append(document.createTextNode((phases[s.phase]||'Working')+(s.current_url?' · ':'')));
   if(s.current_url){const link=document.createElement('a');link.href=safeUrl(s.current_url);link.target='_blank';link.rel='noopener';try{const p=new URL(s.current_url).pathname.split('/');link.textContent=p[1]+'/'+p[2]+' #'+p[4];}catch{link.textContent='Current PR';}current.append(link);}
@@ -81,7 +81,7 @@ function renderTriageProgress(){
  else if(s.finished_at)current.textContent='Finished '+when(s.finished_at)+(Number.isFinite(s.uncertain)?` · ${s.uncertain} uncertain in this batch`:'');
  else current.hidden=true;
  const bar=$('triage-progress-bar');bar.hidden=!running||!s.target;if(!bar.hidden){bar.max=s.target;bar.value=Math.min(s.processed||0,s.target);}
- $('triage-progress-counts').textContent=`${c.estimated||0} of ${c.eligible||0} eligible PRs estimated · ${c.waiting||0} waiting${c.outdated?` · ${c.outdated} outdated (manual re-estimate)`:''}${c.active?` · ${c.active} in progress`:''}${c.retrying_later?` · ${c.retrying_later} retrying later`:''} · ${calls||0}/${t.config.daily_limit} model calls today (UTC). Counts cover the inbox and active My reviews, ignoring filters.`;
+ $('triage-progress-counts').textContent=`${c.estimated||0} of ${c.eligible||0} eligible PRs estimated · ${c.waiting||0} waiting${c.updates_waiting?` · ${c.updates_waiting} review update check${c.updates_waiting===1?'':'s'} waiting`:''}${c.outdated?` · ${c.outdated} outdated (manual re-estimate)`:''}${c.active?` · ${c.active} in progress`:''}${c.retrying_later?` · ${c.retrying_later} retrying later`:''} · ${calls||0}/${t.config.daily_limit} model calls today (UTC). Counts cover the inbox and active My reviews, ignoring filters.`;
  const message=$('triage-progress-message');
  message.textContent=s.message||(limited?'More model calls are available after midnight UTC.':c.retrying_later?'Failed or interrupted estimates wait one hour before retrying.':c.uncertain?'Uncertain is a completed assessment: the available context was insufficient for a reliable effort estimate.':'');message.hidden=!message.textContent;
  const button=$('triage-progress-run');button.disabled=triageRunDisabled(t);button.hidden=!blocked||button.disabled;

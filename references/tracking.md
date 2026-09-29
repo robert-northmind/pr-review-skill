@@ -86,6 +86,10 @@ Standard tasks are:
 - `accuracy-check`
 - `report`
 
+Runs that build on a previous review also have `previous-findings`, registered
+by the dashboard at launch (or by the lead with `set-task` for other launches).
+Runs without a previous review do not show it.
+
 Set a task to `running` immediately before it starts, then to `completed`,
 `failed`, `blocked`, `skipped`, or `cancelled` as soon as its outcome is known:
 

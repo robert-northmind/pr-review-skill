@@ -24,6 +24,17 @@ same instructions into another agent session.
 starts the same review with a short steering note, such as "Docs only; skip
 tests" or "Only iOS changed; validate on iOS". The note applies to that run only.
 
+When new commits arrive after a finished review, **Update AI review** (on the
+card and in the workspace AI review tab) builds on the previous report instead
+of starting over. It re-checks every previous finding at the new head, reviews
+the new commits and the code around them, and updates only the explanation
+sections they affect. The report opens with **Since the last review**: which
+findings were resolved, are still open, changed or are new. Updates are only
+offered when the PR was not rebased, still builds on the same base commit, and
+changed at most 500 lines in 20 files, with a full review required after three
+updates in a row. With automatic estimates on, the card also says whether an
+update or a full review is suggested. **Run full AI review** is always available.
+
 After a review finishes, the AI review tab can continue its conversation outside
 the dashboard. **Continue in Claude Code** (or **Continue in Codex**) copies a
 terminal command that forks the review's own session with its full history:

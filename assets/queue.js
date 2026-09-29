@@ -70,7 +70,7 @@ function queueCard(pr){
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   ${queueWhyLine(pr)}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
-  ${artifactWarning(pr)}${reviewSummary(pr.run)}
+  ${artifactWarning(pr)}${updateHint(pr)}${reviewSummary(pr.run)}
   ${queueDetails(pr,false)}
  </article>`;
 }

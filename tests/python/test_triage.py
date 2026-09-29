@@ -161,7 +161,7 @@ class Triage(Isolated):
   state['prs'][URL[:-1]+'2']=record
   failed=copy.deepcopy(record);failed['status']='failed';state['prs'][URL[:-1]+'3']=failed
   t.save(state)
-  self.assertEqual(t.snapshot(data['prs'])['counts'],{'eligible':4,'estimated':2,'uncertain':1,'waiting':1,'active':0,'retrying_later':1,'outdated':0})
+  self.assertEqual(t.snapshot(data['prs'])['counts'],{'eligible':4,'estimated':2,'uncertain':1,'waiting':1,'active':0,'retrying_later':1,'outdated':0,'updates_waiting':0})
  def test_worker_publishes_phases_progress_and_stop_reason(self):
   observed=[];original=t.set_phase
   def phase(url,name):

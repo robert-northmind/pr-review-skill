@@ -270,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in ('/regenerate-review','/regenerate-explainer'):
                 result=runtime.start_launch(str(data.get('url','')),
                     'review' if path.endswith('review') else 'explainer', retry=data.get('retry') is True,
-                    guidance=data.get('guidance', ''))
+                    guidance=data.get('guidance', ''), mode=str(data.get('mode') or 'full'))
                 self._send(202,result); return
             if path in ('/snooze', '/unsnooze'):
                 if path == '/snooze' and data.get('days') is None:

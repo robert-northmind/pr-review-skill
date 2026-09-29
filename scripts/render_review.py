@@ -275,6 +275,51 @@ def blocks(items, data):
         else: raise ValueError(f'Unsupported block type: {kind}')
     return ''.join(output)
 
+UPDATE_STATUSES = {'resolved': 'Resolved', 'still-open': 'Still open', 'changed': 'Changed', 'new': 'New', 'withdrawn': 'Withdrawn'}
+SHA = re.compile('[a-f0-9]{40}')
+
+def update_record(data):
+    """Validate the optional record of what changed since a previous review."""
+    update = data.get('update')
+    if update is None:
+        return None
+    if not isinstance(update, dict) or update.get('scope') not in {'update', 'full'}:
+        raise ValueError('An update record needs scope update or full')
+    previous = update.get('previous')
+    if not isinstance(previous, dict) or not all(isinstance(previous.get(k), str) and SHA.fullmatch(previous[k]) for k in ('base', 'head')):
+        raise ValueError('An update record needs the previous review base and head SHAs')
+    if not isinstance(previous.get('run_id', ''), str) or not re.fullmatch(r'[A-Za-z0-9._-]{0,128}', previous.get('run_id', '')):
+        raise ValueError('Previous run ID is invalid')
+    if update['scope'] == 'update' and (previous['head'] == data['head'] or previous['base'] != data['base']):
+        raise ValueError('An update must keep the previous comparison base and cover a newer head; run a full review otherwise')
+    if not isinstance(update.get('summary'), str) or not update['summary'].strip():
+        raise ValueError('Say in the update summary what changed since the previous review')
+    findings = update.get('findings', [])
+    if not isinstance(findings, list):
+        raise ValueError('Update findings must be a list')
+    for finding in findings:
+        if not isinstance(finding, dict) or not isinstance(finding.get('title'), str) or not finding['title'].strip():
+            raise ValueError('Each update finding needs a title')
+        if finding.get('status') not in UPDATE_STATUSES:
+            raise ValueError('Update finding status must be resolved, still-open, changed, new or withdrawn')
+        if not isinstance(finding.get('note', ''), str):
+            raise ValueError('Update finding notes must be text')
+    return update
+
+def update_section(update, data):
+    scope = 'Updated review' if update['scope'] == 'update' else 'Full re-review'
+    previous = update['previous']
+    summary = review_markdown(update['summary'], data)
+    if re.search(r'<details\b|class="review-comment"', summary):
+        raise ValueError('Keep the update summary visible and copyable comments in findings')
+    rows = ''.join(f'<tr><td><span class="update-status update-{esc(f["status"])}">{esc(UPDATE_STATUSES[f["status"]])}</span></td>'
+                   f'<td>{esc(f["title"])}</td><td>{esc(f.get("note", ""))}</td></tr>' for f in update.get('findings', []))
+    table = (f'<div class="table-scroll" tabindex="0" role="region" aria-label="Findings since the last review"><table class="update-findings">'
+             f'<thead><tr><th scope="col">Status</th><th scope="col">Finding</th><th scope="col">What changed</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ''
+    return (f'<section id="since-last-review" data-section="Since the last review"><h2>Since the last review</h2>'
+            f'<p class="update-scope">{scope} · previous review of <code>{esc(previous["head"][:12])}</code> → this review of <code>{esc(data["head"][:12])}</code></p>'
+            f'{summary}{table}</section>')
+
 def render(data):
     for side in ('base','head'):
         if not re.fullmatch('[a-f0-9]{40}',data[side]) and not (side=='head' and data[side]=='working-tree'):
@@ -307,11 +352,18 @@ def render(data):
                       + assessment_html
                       + '<a class="findings-link" href="#review-findings">Jump to findings and checks</a></div>')
     sections=[]; nav=[]; seen=set()
+    update=update_record(data)
+    if update:
+        sections.append(update_section(update,data));nav.append('<a href="#since-last-review">Since the last review</a>')
     for section in data.get('sections',[]):
         ident=section['id']
-        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification','review-assessment','assessment-title'}: raise ValueError('Use unique section IDs')
+        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification','review-assessment','assessment-title','since-last-review'}: raise ValueError('Use unique section IDs')
         seen.add(ident);nav.append(f'<a href="#{ident}">{esc(section["title"])}</a>')
-        sections.append(f'<section id="{ident}" data-section="{esc(section["title"])}"><h2>{esc(section["title"])}</h2>{blocks(section["blocks"],data)}</section>')
+        verified=section.get('verified_at',data['head'])
+        if verified!=data['head'] and (not isinstance(verified,str) or not SHA.fullmatch(verified) or not update):
+            raise ValueError('A section verified at an older head needs a full SHA and an update record')
+        carried=f'<p class="carried-note">Carried from the review of <code>{esc(verified[:12])}</code>, not re-derived in this update. Source excerpts show this head.</p>' if verified!=data['head'] else ''
+        sections.append(f'<section id="{ident}" data-section="{esc(section["title"])}"><h2>{esc(section["title"])}</h2>{carried}{blocks(section["blocks"],data)}</section>')
     sections.append('<section id="review-findings" data-section="Review findings"><h2>Review findings</h2>' + review_markdown(review['markdown'], data) + '</section>')
     nav.append('<a href="#review-findings">Review findings</a>')
     quiz=[]; questions=data.get('questions',[])
@@ -330,7 +382,7 @@ def render(data):
         nav.append('<a href="#verification">Verification</a>')
     refs=''.join(f'<li>{anchor(x["label"],x["url"])}</li>' for x in data.get('references',[]))
     if refs:sections.append(f'<details class="references" id="references"><summary>Sources and related review</summary><ul>{refs}</ul></details>')
-    provenance=''.join(f'<dt>{esc(k)}</dt><dd>{esc(v)}</dd>' for k,v in [('Repository',data.get('repo_url',data['repository'])),('Comparison base',data['base']),('Reviewed head',data['head']),('Context',data.get('context','Pinned source comparison'))])
+    provenance=''.join(f'<dt>{esc(k)}</dt><dd>{esc(v)}</dd>' for k,v in [('Repository',data.get('repo_url',data['repository'])),('Comparison base',data['base']),('Reviewed head',data['head']),*([('Previous review',update['previous']['head']+(' · run '+update['previous']['run_id'] if update['previous'].get('run_id') else ''))] if update else []),('Context',data.get('context','Pinned source comparison'))])
     pr=anchor('Open pull request',data['pr_url']) if data.get('pr_url') else ''
     content=f'<main><header data-section="Overview"><div class="topbar"><span class="badge">Review notes</span><button id="theme" type="button">Theme: System</button></div><h1>{esc(data["title"])}</h1><p class="outcome">{esc(data["outcome"])}</p>{assessment}<div class="actions"><span class="meta">{esc(data["stack"])} · approximately READING_MINUTES min read</span><span class="pr-link">{pr}</span></div><details class="provenance" id="provenance"><summary>Reviewed revision and context</summary><dl>{provenance}</dl></details></header><nav aria-label="On this page">{"".join(nav)}</nav>{"".join(sections)}</main>'
     words=OverviewWords().count(content)
