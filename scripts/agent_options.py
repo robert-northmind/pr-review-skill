@@ -9,9 +9,8 @@ CODEX_EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 CLAUDE_EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max']
 CODEX_MODEL_EFFORTS = {
     'gpt-6-astra': CODEX_EFFORTS,
-    'gpt-5.6-sol': CODEX_EFFORTS,
-    'gpt-5.6-terra': CODEX_EFFORTS,
-    'gpt-5.6-luna': CODEX_EFFORTS[:-1],
+    'gpt-6-sol': CODEX_EFFORTS,
+    'gpt-6-luna': CODEX_EFFORTS[:-1],
 }
 CLAUDE_MODEL_EFFORTS = {
     'claude-opus-5-5': CLAUDE_EFFORTS,
@@ -32,9 +31,9 @@ CATALOG = {
 DEFAULTS = {
     'review': {'codex': {'model': 'gpt-6-astra', 'effort': 'high'},
                'claude': {'model': 'claude-opus-5-5', 'effort': 'high'}},
-    'chat': {'codex': {'model': 'gpt-5.6-terra', 'effort': 'medium'},
+    'chat': {'codex': {'model': 'gpt-6-sol', 'effort': 'medium'},
              'claude': {'model': 'claude-sonnet-5-5', 'effort': 'medium'}},
-    'triage': {'codex': {'model': 'gpt-5.6-luna', 'effort': ''},
+    'triage': {'codex': {'model': 'gpt-6-luna', 'effort': ''},
                'claude': {'model': 'claude-haiku-4-5-20251001', 'effort': ''},
-               'openai': {'model': 'gpt-5.6-luna', 'effort': ''}},
+               'openai': {'model': 'gpt-6-luna', 'effort': ''}},
 }

@@ -25,7 +25,7 @@ UPDATE_VERSION = 1
 UPDATE_STATUSES = ('likely-addressed', 'affected', 'untouched')
 INACTIVE_RESULT_DAYS, MAX_INACTIVE_RESULTS = 90, 500
 FEEDBACK_DAYS, MAX_FEEDBACK = 180, 1000
-DEFAULT_CONFIG = {'enabled': False, 'provider': 'codex', 'model': 'gpt-5.6-luna',
+DEFAULT_CONFIG = {'enabled': False, 'provider': 'codex', 'model': 'gpt-6-luna',
                   'daily_limit': 30, 'batch_limit': 10, 'reasoning': ''}
 EFFORTS = ('quick', 'moderate', 'involved', 'uncertain')
 MAX_FILES, MAX_PATCH_CHARS, MAX_CONTEXT_CHARS = 300, 24000, 100000
