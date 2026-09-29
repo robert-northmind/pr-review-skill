@@ -1,6 +1,6 @@
 """Maintained AI presets, shared by every feature. Update here on model releases.
 
-Verified 2026-09-23: installed Codex models_cache.json; Claude models/effort docs:
+Verified 2026-09-29: installed Codex models_cache.json; Claude models/effort docs:
 https://platform.claude.com/docs/en/models/overview
 https://platform.claude.com/docs/en/build-with-claude/effort
 Empty effort means runtime default. Haiku does not support an effort override.
@@ -15,7 +15,7 @@ CODEX_MODEL_EFFORTS = {
 }
 CLAUDE_MODEL_EFFORTS = {
     'claude-opus-5-5': CLAUDE_EFFORTS,
-    'claude-sonnet-5': CLAUDE_EFFORTS,
+    'claude-sonnet-5-5': CLAUDE_EFFORTS,
     'claude-haiku-4-5-20251001': [''],
 }
 CODEX_MODELS = ['', *CODEX_MODEL_EFFORTS]
@@ -33,7 +33,7 @@ DEFAULTS = {
     'review': {'codex': {'model': 'gpt-6-astra', 'effort': 'high'},
                'claude': {'model': 'claude-opus-5-5', 'effort': 'high'}},
     'chat': {'codex': {'model': 'gpt-5.6-terra', 'effort': 'medium'},
-             'claude': {'model': 'claude-sonnet-5', 'effort': 'medium'}},
+             'claude': {'model': 'claude-sonnet-5-5', 'effort': 'medium'}},
     'triage': {'codex': {'model': 'gpt-5.6-luna', 'effort': ''},
                'claude': {'model': 'claude-haiku-4-5-20251001', 'effort': ''},
                'openai': {'model': 'gpt-5.6-luna', 'effort': ''}},

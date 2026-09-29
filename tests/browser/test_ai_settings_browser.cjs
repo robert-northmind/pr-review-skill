@@ -24,7 +24,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   const settings=await page.evaluate(()=>state.ai.settings);
   assert.equal(settings.triage.provider,'claude');assert.equal(settings.review.provider,'codex');assert.equal(settings.chat.provider,'claude');
   await page.reload();await page.waitForSelector('.pr-card');await page.click('#settings-show');
-  assert.equal(await page.inputValue('#chat-model'),'claude-sonnet-5');
+  assert.equal(await page.inputValue('#chat-model'),'claude-sonnet-5-5');
   // Dirty windows retain their draft and revision across background polling.
   await page.selectOption('#chat-effort','high');
   await page.evaluate(async()=>{const updated=structuredClone(state.ai.settings);updated.review.profiles.codex.effort='max';await post('/ai-config',{settings:updated,revision:state.ai.revision});await loadState();});

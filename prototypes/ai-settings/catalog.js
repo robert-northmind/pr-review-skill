@@ -17,7 +17,7 @@ const AI_CATALOG = {
     label: 'Claude Code',
     models: [
       {id: 'claude-opus-5-5', label: 'Opus 5.5', defaultEffort: 'medium', efforts: ['low','medium','high','xhigh','max']},
-      {id: 'claude-sonnet-5', label: 'Sonnet 5', defaultEffort: 'high', efforts: ['low','medium','high','xhigh','max']},
+      {id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', defaultEffort: 'high', efforts: ['low','medium','high','xhigh','max']},
       {id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', defaultEffort: '', efforts: []},
     ],
   },
@@ -25,6 +25,6 @@ const AI_CATALOG = {
 const AI_FEATURES = {
   triage: {title: 'Triage', number: '01', description: 'Quick estimates of human review effort.', note: 'A lighter model keeps background estimates fast.', defaults: {codex: {model: 'gpt-5.6-luna', effort: ''}, claude: {model: 'claude-haiku-4-5-20251001', effort: ''}}},
   review: {title: 'AI review', number: '02', description: 'Full reviews, findings and validation.', note: 'Used by the lead reviewer. Subagents may use other models.', defaults: {codex: {model: 'gpt-6-astra', effort: 'high'}, claude: {model: 'claude-opus-5-5', effort: 'high'}}},
-  chat: {title: 'Chat', number: '03', description: 'Questions about code and selected changes.', note: 'New conversations use this choice. Existing conversations keep theirs.', defaults: {codex: {model: 'gpt-5.6-terra', effort: 'medium'}, claude: {model: 'claude-sonnet-5', effort: 'medium'}}},
+  chat: {title: 'Chat', number: '03', description: 'Questions about code and selected changes.', note: 'New conversations use this choice. Existing conversations keep theirs.', defaults: {codex: {model: 'gpt-5.6-terra', effort: 'medium'}, claude: {model: 'claude-sonnet-5-5', effort: 'medium'}}},
 };
 const EFFORT_LABELS = {low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra'};
