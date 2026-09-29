@@ -22,7 +22,7 @@ class Settings(Isolated):
         settings=a.load();settings['triage']['provider']='claude';settings['chat']['provider']='claude'
         a.save(settings,a.revision(a.load()))
         self.assertEqual(a.selected('triage')['model'],'claude-haiku-4-5-20251001')
-        self.assertEqual(a.selected('chat')['model'],'claude-sonnet-5')
+        self.assertEqual(a.selected('chat')['model'],'claude-sonnet-5-5')
         self.assertEqual(a.load()['review'],settings['review'])
         a.configure_triage({'provider':'codex'})
         a.configure_triage({'provider':'claude'})
