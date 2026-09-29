@@ -18,8 +18,11 @@ from datetime import datetime, timezone, timedelta
 import ai_settings
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
+import review_update
 
 VERSION = 2
+UPDATE_VERSION = 1
+UPDATE_STATUSES = ('likely-addressed', 'affected', 'untouched')
 INACTIVE_RESULT_DAYS, MAX_INACTIVE_RESULTS = 90, 500
 FEEDBACK_DAYS, MAX_FEEDBACK = 180, 1000
 DEFAULT_CONFIG = {'enabled': False, 'provider': 'codex', 'model': 'gpt-5.6-luna',
@@ -31,7 +34,7 @@ SHA = re.compile(r'^[0-9a-f]{40}$')
 
 def load():
     data = tracker.read_json(tracker.tracker_root()/'triage.json', required=False)
-    return {'config': ai_settings.triage_config(), 'prs': data.get('prs', {}),
+    return {'config': ai_settings.triage_config(), 'prs': data.get('prs', {}), 'updates': data.get('updates', {}),
             'budget': data.get('budget', {}), 'status': data.get('status', {}), 'feedback': data.get('feedback', {})}
 
 
@@ -48,6 +51,8 @@ def prune(data, active_urls, now=None):
     inactive.sort(key=lambda item: (stamp(item[1], 'finished_at'), item[0]), reverse=True)
     retained = {url for url, _ in inactive[:MAX_INACTIVE_RESULTS]} | set(active_urls)
     data['prs'] = {url: record for url, record in data['prs'].items() if url in retained}
+    # Update pre-checks only matter while their PR is active.
+    data['updates'] = {url: record for url, record in data.get('updates', {}).items() if url in active_urls}
     ratings = [(key, record) for key, record in data['feedback'].items()
                if stamp(record, 'at') >= now-timedelta(days=FEEDBACK_DAYS)]
     ratings.sort(key=lambda item: (stamp(item[1], 'at'), item[0]), reverse=True)
@@ -147,7 +152,10 @@ def triage_entries():
     return entries
 
 
-def snapshot(entries):
+def snapshot(entries, runs=None):
+    if runs is None:
+        runs, _ = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+    priors = review_update.prior_reviews(runs)
     with dashboard.state_lock():
         data = load()
         # Counts and eligibility use the same inbox + active personal queue as the worker.
@@ -159,10 +167,12 @@ def snapshot(entries):
     if status.get('state') == 'starting':
         if (datetime.now(timezone.utc)-tracker.parse_time(status['started_at'])).total_seconds() > 20 and not worker_running():
             status = {**status, 'state': 'idle', 'outcome': 'interrupted', 'message': 'The worker did not start. Try the batch again.'}
-    counts = {'eligible': 0, 'estimated': 0, 'uncertain': 0, 'waiting': 0, 'active': 0, 'retrying_later': 0, 'outdated': 0}
+    counts = {'eligible': 0, 'estimated': 0, 'uncertain': 0, 'waiting': 0, 'active': 0, 'retrying_later': 0, 'outdated': 0,
+              'updates_waiting': 0}
     for url, entry in discovery.items():
         if not eligible(entry):
             continue
+        counts['updates_waiting'] += due_update(entry, priors.get(url), data['updates'].get(url), data['config'])
         counts['eligible'] += 1
         record = data['prs'].get(url)
         current = view(entry, record, data['config'])
@@ -182,7 +192,9 @@ def snapshot(entries):
     return {'config': data['config'], 'status': status, 'counts': counts, 'budget': data['budget'],
             'feedback_count': len(data['feedback']),
             'prs': {url: {**view(discovery.get(url, entry), data['prs'].get(url), data['config']),
-                          'can_reestimate': eligible(discovery.get(url, {}), manual=True)} for url, entry in entries.items()}}
+                          'can_reestimate': eligible(discovery.get(url, {}), manual=True)} for url, entry in entries.items()},
+            'updates': {url: check for url, entry in entries.items()
+                        if (check := update_view(url, discovery.get(url, entry), priors.get(url), data))}}
 
 
 def eligible(entry, manual=False):
@@ -294,13 +306,13 @@ def python_executable():
     return str(path) if path.exists() else sys.executable
 
 
-def call_model(context, config):
+def call_model(context, config, kind='effort'):
     script = str(Path(__file__).with_name('triage_provider.py'))
     with tempfile.TemporaryDirectory(prefix='pr-effort-') as cwd:
         process = subprocess.Popen([python_executable(), script], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=cwd, start_new_session=True)
         try:
-            output, _ = process.communicate(json.dumps({'provider': config['provider'], 'model': config['model'],
+            output, _ = process.communicate(json.dumps({'provider': config['provider'], 'model': config['model'], 'kind': kind,
                                                         'reasoning': config.get('reasoning', ''), 'context': context}), timeout=120)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
@@ -314,6 +326,8 @@ def call_model(context, config):
         kind = result.get('error', '')
         suffix = ' Install requirements-triage.txt in .venv.' if kind == 'ModuleNotFoundError' else ' Check the selected model and provider authentication.'
         raise ValueError('The triage provider could not complete the estimate.' + suffix)
+    if kind == 'update':
+        return result['assessment'], result.get('usage', {})
     return validate_assessment(result['assessment']), result.get('usage', {})
 
 
@@ -355,7 +369,8 @@ def start(url=None, estimate_id=None):
         if data['status'].get('state') == 'starting':
             if (datetime.now(timezone.utc)-tracker.parse_time(data['status']['started_at'])).total_seconds() < 20:
                 return False
-        if url is None and not any(due(e, data['prs'].get(u), data['config']) for u, e in triage_entries().items()):
+        if url is None and not any(due(e, data['prs'].get(u), data['config']) for u, e in triage_entries().items()) \
+                and not update_candidates(data, triage_entries(), set()):
             return False
         if url is not None:
             url, *_ = tracker.canonical_pr_url(url)
@@ -380,6 +395,127 @@ def start(url=None, estimate_id=None):
             save(data)
             raise ValueError('Could not start the triage worker.') from None
     return True
+
+
+def update_key(entry, prior, config):
+    value = [prior['run_id'], prior['head'], entry.get('head_sha', ''), entry.get('base_sha', ''),
+             UPDATE_VERSION, config['provider'], config['model'], config.get('reasoning', '')]
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def due_update(entry, prior, record, config):
+    """A finished AI review exists and newer commits have no pre-check yet."""
+    if not eligible(entry) or not prior or prior['head'] == entry.get('head_sha'):
+        return False
+    if not record or record.get('key') != update_key(entry, prior, config):
+        return True
+    if record.get('status') in ('failed', 'running', 'stale'):
+        return tracker.parse_time(record['retry_after']) <= datetime.now(timezone.utc)
+    return False
+
+
+def update_candidates(data, entries, attempted, runs=None):
+    if runs is None:
+        runs, _ = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+    priors = review_update.prior_reviews(runs)
+    return [(u, entry, priors[u]) for u, entry in entries.items() if u not in attempted and u in priors
+            and due_update(entry, priors[u], data['updates'].get(u), data['config'])]
+
+
+def update_view(url, entry, prior, data=None):
+    """The finished pre-check for exactly this previous review and head, if any."""
+    record = (data or load())['updates'].get(url)
+    if not prior or not record or record.get('status') != 'completed':
+        return None
+    if (record.get('prior_run'), record.get('prior_head'), record.get('head_sha')) != (prior['run_id'], prior['head'], entry.get('head_sha')):
+        return None
+    return {k: record.get(k) for k in ('id', 'scope', 'reason', 'rules_reason', 'findings', 'sections', 'hotspots',
+                                       'decided_by', 'provider', 'model', 'finished_at', 'head_sha', 'prior_head', 'prior_run')}
+
+
+def validate_update(value, context):
+    if not isinstance(value, dict) or set(value) != {'scope', 'reason', 'findings', 'sections', 'hotspots'}:
+        raise ValueError('The model returned an invalid update recommendation.')
+    if value['scope'] not in ('update', 'full') or not isinstance(value['reason'], str) or not 1 <= len(value['reason']) <= 500:
+        raise ValueError('The model returned an invalid update scope or explanation.')
+    indexes = {f['index'] for f in context['previous_findings']}
+    findings = value['findings']
+    if not isinstance(findings, list) or any(not isinstance(f, dict) or f.get('index') not in indexes or f.get('status') not in UPDATE_STATUSES
+                                             for f in findings) or len({f['index'] for f in findings}) != len(findings):
+        raise ValueError('The model returned invalid finding hints.')
+    ids = {s['id'] for s in context['previous_sections']}
+    sections = value['sections']
+    if not isinstance(sections, list) or any(not isinstance(x, dict) or x.get('id') not in ids or not isinstance(x.get('affected'), bool)
+                                             for x in sections) or len({x['id'] for x in sections}) != len(sections):
+        raise ValueError('The model returned invalid section hints.')
+    hotspots = value['hotspots']
+    if not isinstance(hotspots, list) or len(hotspots) > 3 or any(not isinstance(h, str) or not 1 <= len(h) <= 240 for h in hotspots):
+        raise ValueError('The model returned invalid hotspots.')
+    return value
+
+
+def reserve_call(config):
+    with dashboard.state_lock():
+        data = load()
+        today = datetime.now(timezone.utc).date().isoformat()
+        budget = data['budget'] if data['budget'].get('date') == today else {'date': today, 'calls': 0}
+        if not data['config']['enabled'] or data['config'] != config:
+            raise ValueError('Triage settings changed; refresh to try again.')
+        if budget['calls'] >= config['daily_limit']:
+            raise ValueError('Daily triage limit reached. Try again tomorrow.')
+        budget['calls'] += 1
+        data['budget'] = budget
+        save(data)
+
+
+def process_update(url, entry, prior, config):
+    """Recommend an update or a full review. Fixed rules run first and a model can only widen."""
+    identity = uuid.uuid4().hex
+    key = update_key(entry, prior, config)
+    record = {'id': identity, 'key': key, 'prior_run': prior['run_id'], 'prior_head': prior['head'],
+              'head_sha': entry.get('head_sha', ''), 'base_sha': entry.get('base_sha', ''), 'status': 'running',
+              'provider': config['provider'], 'model': config['model'], 'version': UPDATE_VERSION,
+              'created_at': tracker.utc_now(), 'retry_after': (datetime.now(timezone.utc)+timedelta(hours=1)).isoformat()}
+    with dashboard.state_lock():
+        data = load()
+        data['updates'][url] = record
+        save(data)
+    began = time.monotonic()
+    try:
+        set_phase(url, 'comparing')
+        check = review_update.gate(url, prior, record['head_sha'], record['base_sha'], gh=gh_json)
+        if check.get('unavailable'):
+            raise ValueError(check['reason'])
+        result, usage = {'findings': [], 'sections': [], 'hotspots': []}, {}
+        if not check['eligible']:
+            result.update(scope='full', reason=check['reason'], decided_by='rules')
+        else:
+            context = review_update.precheck_context(prior, check, entry.get('title', ''))
+            if not context['complete']:
+                result.update(scope='update', decided_by='rules',
+                              reason=check['reason'] + ' The new patches are too large to summarize; the review decides what to re-check.')
+            else:
+                reserve_call(config)
+                set_phase(url, 'estimating-update')
+                result, usage = call_model(context, config, kind='update')
+                result = {**validate_update(result, context), 'decided_by': 'model'}
+        set_phase(url, 'checking')
+        latest = gh_json([endpoint(url)])
+        if latest.get('state') != 'open' or latest['head']['sha'] != record['head_sha']:
+            raise ValueError('The PR changed during the update check. Refresh GitHub to check the latest version.')
+        record.update(status='completed', rules_reason=check['reason'], usage=usage, **result)
+    except Exception as error:
+        record.update(status='failed', reason=str(error) if isinstance(error, (ValueError, review_update.UpdateError)) else 'The update check was interrupted. Refresh again later.')
+    record.update(finished_at=tracker.utc_now(), duration_seconds=round(time.monotonic()-began, 1))
+    with dashboard.state_lock():
+        data = load()
+        if data['updates'].get(url, {}).get('id') == identity:
+            current = triage_entries().get(url)
+            if record['status'] == 'completed' and (not current or current.get('head_sha') != record['head_sha']):
+                record.update(status='stale', reason='The PR changed. Refresh GitHub to check the latest version.')
+            data['updates'][url] = record
+            save(data)
+    return record
 
 
 def set_phase(url, phase):
@@ -468,7 +604,7 @@ def worker(url=None):
             save(data)
         processed, estimated, uncertain = 0, 0, 0
         outcome, message = 'caught_up', ''
-        attempted = set()
+        attempted, attempted_updates = set(), set()
         try:
             while not url or not processed:
                 with dashboard.state_lock():
@@ -480,6 +616,9 @@ def worker(url=None):
                     candidates = ([(url, entries[url])] if eligible(entries.get(url, {}), manual=True) else []) if url else [
                         (u, entry) for u, entry in entries.items() if u not in attempted and due(entry, data['prs'].get(u), config)]
                     candidates.sort(key=lambda pair: ('review-requested' not in pair[1].get('reasons', []), pair[1].get('pr_created_at', ''), pair[0]))
+                    # Update pre-checks follow effort estimates and share the daily limit; manual re-estimates skip them.
+                    updates = [] if url else update_candidates(data, entries, attempted_updates)
+                    candidates += [(u, entry, prior) for u, entry, prior in updates]
                     if not candidates:
                         outcome = 'caught_up'
                         break
@@ -489,6 +628,18 @@ def worker(url=None):
                     if budget.get('date') == datetime.now(timezone.utc).date().isoformat() and budget.get('calls', 0) >= config['daily_limit']:
                         outcome = 'daily_limit'
                         break
+                if len(candidates[0]) == 3:
+                    attempted_updates.add(candidates[0][0])
+                    record = process_update(*candidates[0], config)
+                    processed += 1
+                    with dashboard.state_lock():
+                        data = load()
+                        data['status'].update(processed=processed, current_url='', phase='preparing', updated_at=tracker.utc_now())
+                        save(data)
+                    if record['status'] == 'failed':
+                        outcome, message = 'failed', record.get('reason', 'The update check failed.')
+                        break
+                    continue
                 attempted.add(candidates[0][0])
                 record = process_one(*candidates[0], config, manual=True) if url else process_one(*candidates[0], config)
                 processed += 1

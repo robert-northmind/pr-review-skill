@@ -125,6 +125,16 @@ assert.ok(resumable.includes('Continue in &lt;Claude&gt;'));
 const expired = reviewHTML({...finished, continuation: {agent: 'Codex', unavailable: 'Gone <now>'}}, pinned, esc);
 assert.ok(expired.includes('disabled title="Gone &lt;now&gt;"') && !expired.includes('data-continue'));
 assert.ok(!reviewHTML({run, continuation: {agent: 'Codex', command: 'c', prompt: 'p'}}, pinned, esc).includes('data-continue'));
+// Reports of an older commit offer an update unless the fixed rules require a full review.
+const older = {run: {...run, status: 'completed'}, artifact: {name: 'review-html', version: '1', head_sha: 'c'.repeat(40), status: 'completed'}};
+assert.ok(!reviewHTML(finished, pinned, esc).includes('generate-review-update'));
+assert.ok(reviewHTML(finished, pinned, esc).includes('Run full AI review'));
+assert.ok(reviewHTML(older, pinned, esc).includes('id="generate-review-update"'));
+assert.ok(!reviewHTML({...older, run}, pinned, esc).includes('generate-review-update'));
+const advised = reviewHTML({...older, update_check: {scope: 'update', decided_by: 'model', reason: 'Small <fix>.'}}, pinned, esc);
+assert.ok(advised.includes('Update suggested: Small &lt;fix&gt;.') && advised.includes('generate-review-update'));
+const ruled = reviewHTML({...older, update_check: {scope: 'full', decided_by: 'rules', reason: 'Rebased.'}}, pinned, esc);
+assert.ok(ruled.includes('Full review suggested: Rebased.') && !ruled.includes('generate-review-update'));
 const fallback = unavailableHTML(new Error('<offline>'), {artifact: {path: '/tmp/review & notes.html'}}, esc);
 assert.ok(fallback.includes('&lt;offline&gt;'));
 assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));

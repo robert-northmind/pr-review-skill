@@ -22,6 +22,7 @@ EVENT_TAIL_BYTES = 262144
 EVENT_LIMIT = 100
 STAGES = (
     ('checkout', 'Prepare checkout', 10),
+    ('previous-findings', 'Re-check previous findings', 10),
     ('explanation', 'Draft explanation', 10),
     ('correctness-review', 'Correctness', 15),
     ('contracts-review', 'Tests & contracts', 15),
@@ -33,6 +34,8 @@ STAGES = (
     ('report', 'Build report', 5),
 )
 
+# Registered only by runs that build on a previous review.
+OPTIONAL_STAGES = frozenset({'previous-findings'})
 
 
 def path(run_id, name='review-job.json'):
@@ -92,6 +95,8 @@ def progress(run, status):
     tasks = {t['task']: t for t in run['tasks']}
     stages, score = [], 0
     for name, label, weight in STAGES:
+        if name in OPTIONAL_STAGES and name not in tasks:
+            continue
         task = tasks.get(name, {})
         # Runs created before a stage existed never register it; do not show it as pending.
         state = task.get('status', 'skipped' if name not in tasks and status in FINAL else 'queued')
@@ -104,6 +109,8 @@ def progress(run, status):
             state = status
         stages.append({'name': name, 'label': label, 'status': state,
                        'message': task.get('message', '')[:1000], 'progress': counts})
+    total = sum(weight for name, _, weight in STAGES if name not in OPTIONAL_STAGES or name in tasks)
+    score = score * 100 / total
     return {'percent': 100 if status == 'completed' else min(99, int(score)),
             'finished': sum(s['status'] == 'completed' for s in stages),
             'skipped': sum(s['status'] == 'skipped' for s in stages),

@@ -47,19 +47,19 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   failNext=true;
   await page.reload();await card.waitFor();
   await card.locator('.pr-overflow > summary').click();
-  await card.getByRole('button',{name:'Run AI review again',exact:true}).click();
+  await card.getByRole('button',{name:'Run full AI review',exact:true}).click();
   await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Synthetic launch failure'));
-  assert.equal(await card.getByRole('button',{name:'Run AI review again',exact:true}).isDisabled(),false);
+  assert.equal(await card.getByRole('button',{name:'Run full AI review',exact:true}).isDisabled(),false);
   assert.equal(launches.length,2);
 
   for(const width of [1440,390]){
    await page.setViewportSize({width,height:1000});
    const menu=card.locator('.pr-overflow');
    if(!await menu.evaluate(element=>element.open))await menu.locator('summary').click();
-   assert.equal(await card.getByRole('button',{name:'Run AI review again',exact:true}).isVisible(),true);
+   assert.equal(await card.getByRole('button',{name:'Run full AI review',exact:true}).isVisible(),true);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`page overflow at ${width}`);
   }
-  await card.getByRole('button',{name:'Run AI review again',exact:true}).click();
+  await card.getByRole('button',{name:'Run full AI review',exact:true}).click();
   await card.getByRole('button',{name:'AI review in progress',exact:true}).waitFor({state:'attached'});
   assert.equal(launches.length,3);
   assert.equal(launches[2].guidance,undefined,'Plain reruns must not send guidance');
@@ -84,8 +84,35 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(launches.length,4);
   assert.equal(launches[3].guidance,'Docs only; skip tests.');
   assert.equal(await dialog.evaluate(element=>element.open),false);
+
+  // A finished report of an older commit offers an update, emphasised as the pre-check suggests.
+  pr.run.status='completed';
+  pr.artifacts={'review-html':{path:'/synthetic/review.html',freshness:'older',status:'completed',head_sha:'b'.repeat(40)}};
+  pr.update_check={scope:'update',decided_by:'model',reason:'A focused <fix> for the batch parser.',findings:[{index:1,status:'likely-addressed'},{index:2,status:'untouched'}],hotspots:['Callers of parse()']};
+  await page.reload();await card.waitFor();
+  const hint=card.locator('.update-hint');
+  assert.match(await hint.textContent(),/Update suggested: A focused <fix> for the batch parser\. 1 of 2 previous findings looks addressed; the update re-checks all of them\. Also check: Callers of parse\(\)/);
+  assert.equal(await hint.locator('button.primary').textContent(),'Update AI review');
+  for(const width of [1440,390]){
+   await page.setViewportSize({width,height:1000});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`update hint overflow at ${width}`);
+  }
+  await hint.getByRole('button',{name:'Update AI review',exact:true}).click();
+  await card.locator('[data-action="/regenerate-review"]:disabled',{hasText:'AI review in progress'}).waitFor({state:'attached'});
+  assert.equal(await card.locator('.update-hint').count(),0,'Active runs must not offer updates');
+  assert.equal(launches.length,5);
+  assert.equal(launches[4].mode,'update');
+  assert.equal(launches[3].mode,undefined,'Full launches must not send a mode');
+
+  // Fixed rules that require a full review hide the update and emphasise the full review.
+  pr.run.status='completed';
+  pr.update_check={scope:'full',decided_by:'rules',reason:'The PR was rebased or force-pushed since the last AI review.',findings:[],hotspots:[]};
+  await page.reload();await card.waitFor();
+  assert.match(await hint.textContent(),/Full review suggested: The PR was rebased/);
+  assert.equal(await card.getByRole('button',{name:'Update AI review'}).count(),0);
+  assert.equal(await hint.locator('button.primary').textContent(),'Run full AI review');
   assert.deepEqual(errors,[]);
-  console.log('Inbox review browser checks passed: first launch, active-run guard, rerun, failure recovery, guided rerun, desktop/mobile.');
+  console.log('Inbox review browser checks passed: first launch, active-run guard, rerun, failure recovery, guided rerun, update suggestions, desktop/mobile.');
  }finally{
   if(browser)await browser.close();
   const stopped=once(fixture,'exit');fixture.kill('SIGTERM');await stopped;

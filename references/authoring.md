@@ -61,6 +61,37 @@ block types that explain this particular change.
 }
 ```
 
+For a review that builds on a previous one (see
+[Updating a previous review](update-review.md)), add an `update` record and, in
+update mode, `verified_at` on each carried section:
+
+```json
+{
+  "update": {
+    "scope": "update",
+    "previous": {"run_id": "PREVIOUS_RUN_ID", "base": "FULL_COMPARISON_BASE_SHA", "head": "PREVIOUS_HEAD_SHA"},
+    "summary": "The two new commits move the catch inside the loop and add a mixed-batch test.",
+    "findings": [
+      {"title": "One bad item empties the whole batch", "status": "resolved", "note": "Reproduced again; the batch now keeps A and C."},
+      {"title": "Retries ignore the new timeout", "status": "new", "note": "Introduced by the retry change in abc1234."}
+    ]
+  },
+  "sections": [
+    {"id": "shape", "title": "How the decision is made", "verified_at": "PREVIOUS_HEAD_SHA", "blocks": []}
+  ]
+}
+```
+
+`scope` is `update` or `full`. An update keeps the previous comparison base and
+covers a newer head; the renderer rejects anything else. `summary` is short
+visible Markdown. Each finding status is `resolved`, `still-open`, `changed`,
+`new` or `withdrawn`. The record renders as **Since the last review** after the
+assessment and adds the previous head to the provenance. A section whose
+`verified_at` is not the reviewed head shows that it was carried from the older
+review; omit `verified_at` for sections re-derived at this head. Source excerpts
+always render from the reviewed head, so re-anchor carried ranges first
+(`scripts/review_update.py carry` does this).
+
 `repository` is the verified local Git repository, inspected read-only. `base`
 is the actual comparison base (usually the PR merge base), not a silently moving
 branch name. `head` is the exact head SHA, or `working-tree` for uncommitted work.

@@ -866,9 +866,10 @@ import { installChatResize } from "./chat-resize.mjs";
           : "Handoff prompt copied. Paste it into a new Claude Code or Codex session.");
       } catch { notify("Could not copy. Reload the AI review tab and try again."); }
     }
-    if (button.id === "generate-review") {
+    if (button.id === "generate-review" || button.id === "generate-review-update") {
       button.disabled = true;
-      if (!(await startReview({}))) button.disabled = false;
+      if (!(await startReview(button.id === "generate-review-update" ? { mode: "update" } : {})))
+        button.disabled = false;
     }
     if (button.id === "generate-review-guided") {
       $("guidance-text").value = "";
@@ -1000,7 +1001,11 @@ import { installChatResize } from "./chat-resize.mjs";
   async function startReview(body) {
     try {
       await api.request("/regenerate-review", body);
-      notify("AI review started. Follow its activity in the dashboard.");
+      notify(
+        body.mode === "update"
+          ? "AI review update started. Follow its activity in the dashboard."
+          : "AI review started. Follow its activity in the dashboard.",
+      );
       clearTimeout(reviewTimer);
       await updateReview();
       return true;

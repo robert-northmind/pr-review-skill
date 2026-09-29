@@ -18,8 +18,16 @@ def review(url, head):
     # Continue the session that wrote the shown report, not a newer failed run.
     source = next((r for r in runs if artifact and r['run_id'] == artifact['run_id']), None)
     return {'artifact': artifact, 'run': runtime.summarize_run(latest, head) if latest else None,
+            'update_check': update_check(url, head, runs),
             'continuation': review_continuation.continuation(
                 source, runtime.summarize_run(source)['status']) if source else None}
+
+
+def update_check(url, head, runs):
+    import dashboard_triage
+    import review_update
+    prior = review_update.prior_reviews(runs).get(url)
+    return dashboard_triage.update_view(url, {'head_sha': head}, prior)
 
 
 def load(url, rev=None):

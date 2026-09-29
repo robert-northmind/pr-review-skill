@@ -623,6 +623,32 @@ def full_review_prompt(pr_url: str) -> str:
     )
 
 
+def update_review_prompt(pr_url: str) -> str:
+    return (
+        f"Follow the installed pr-review skill to update the existing AI review of "
+        f"this pull request: {pr_url}\n\n"
+        f"{local_checkout_hint()}\n\n"
+        "New commits arrived after the last finished AI review. Read the skill's "
+        "references/update-review.md and this run's update-context.json first. "
+        "Re-check every previous finding at the new head, review the new commits "
+        "and the code they affect, and update only the explanation sections they "
+        "touch. Widen to a full review when the evidence calls for it, and say so. "
+        "Produce one self-contained review.html for the new head, including what "
+        "changed since the last review. Register it as review-html with the "
+        "pr-review-tracker for the dashboard. Do not automatically open the report "
+        "or launch an external browser. Do not publish to GitHub."
+    )
+
+
+def previous_review_note(context_path) -> str:
+    return (
+        f"\n\nA previous AI review of this PR exists; {context_path} points to it. "
+        "Run the full review as usual; its reviewers do not see the previous review. "
+        "Also follow 'Full review with a previous review' in references/update-review.md "
+        "to record what happened to each previous finding."
+    )
+
+
 DISPLAY_TZ = ZoneInfo("Europe/Berlin")
 
 

@@ -118,6 +118,17 @@ Use repository identity and SHAs from verified GitHub metadata. Sanitize
 repository-derived path components and let the temporary-directory mechanism
 create collision-resistant paths.
 
+## Build on a previous review
+
+When the run directory contains `update-context.json`, read
+[Updating a previous review](references/update-review.md) before assessing the
+change. In `update` mode the review covers the new commits and the code they
+affect, re-checks every previous finding, and re-derives only the explanation
+sections the new commits touch, never dropping below that reference's floor.
+In `full` mode the review runs unchanged, and a separate task records what
+happened to each previous finding. Reviewers never receive the previous report
+or the dashboard's pre-check.
+
 ## Assess the change, allocate reviewers, then cover the full diff
 
 Before launching reviewers, make a bounded initial assessment of the pinned
