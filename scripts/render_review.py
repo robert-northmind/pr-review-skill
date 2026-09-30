@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import html
+import itertools
 from html.parser import HTMLParser
 import json
 import math
@@ -14,8 +15,11 @@ from pr_dashboard import markdown_inline_to_html
 from review_markdown import render as render_markdown
 from review_diagram import sanitize as sanitize_diagram
 from validate_review_notes import validate
+import review_verdict
 import pr_review_tracker as tracker
 
+FINDING_OPEN = '<details class="review-finding">'
+VERDICT_SIDECAR = 'review-verdict.json'
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
 
@@ -72,7 +76,7 @@ def attachment_urls(data):
         result[str(p)] = p.as_uri()
     return result
 
-def review_markdown(text, data):
+def review_inline(data):
     attachments = attachment_urls(data)
     def inline(value):
         rendered = markdown_inline_to_html(value)
@@ -87,6 +91,10 @@ def review_markdown(text, data):
                 target = url(target)
             return f'<a href="{esc(target)}" target="_blank" rel="noopener noreferrer">{match[2]}</a>'
         return re.sub(r'<a href="([^"<>]*)"[^>]*>(.*?)</a>', link, rendered)
+    return inline
+
+def review_markdown(text, data):
+    inline = review_inline(data)
     def visual(key):
         value = data.get('review', {}).get('visuals', {}).get(key)
         if not isinstance(value, dict) or value.get('type') not in VISUAL_TYPES:
@@ -306,6 +314,17 @@ def update_record(data):
             raise ValueError('Update finding notes must be text')
     return update
 
+def previous_verdict(update):
+    """The previous run's verdict, re-derived from its saved input by the same rules."""
+    run_id = (update or {}).get('previous', {}).get('run_id')
+    if not run_id: return None
+    try:
+        previous = json.loads((tracker.run_dir(run_id) / 'input.json').read_text())
+        result = review_verdict.derive(previous['review'])
+    except (tracker.TrackerError, OSError, ValueError, KeyError, TypeError):
+        return None
+    return {'tone': result['tone'], 'headline': result['headline'], 'head': update['previous']['head']}
+
 def update_section(update, data):
     scope = 'Updated review' if update['scope'] == 'update' else 'Full re-review'
     previous = update['previous']
@@ -351,20 +370,28 @@ def render(data):
                       'aria-labelledby="assessment-title"><h2 id="assessment-title">Current assessment</h2>'
                       + assessment_html
                       + '<a class="findings-link" href="#review-findings">Jump to findings and checks</a></div>')
-    sections=[]; nav=[]; seen=set()
     update=update_record(data)
+    if 'verdict' in review:
+        if 'assessment' not in review: raise ValueError('A verdict needs review.assessment')
+        resolved=[f['title'] for f in (update or {}).get('findings', []) if f['status']=='resolved']
+        assessment = review_verdict.render(review, assessment_html, review_inline(data), esc, data['head'],
+                                           previous_verdict(update), resolved)
+    sections=[]; nav=[]; seen=set()
     if update:
         sections.append(update_section(update,data));nav.append('<a href="#since-last-review">Since the last review</a>')
     for section in data.get('sections',[]):
         ident=section['id']
-        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification','review-assessment','assessment-title','since-last-review'}: raise ValueError('Use unique section IDs')
+        if not re.fullmatch(r'[a-z][a-z0-9-]*',ident) or re.fullmatch(r'finding-\d+',ident) or ident in seen or ident in {'self-check','references','provenance','theme','review-findings','verification','review-assessment','assessment-title','since-last-review'}: raise ValueError('Use unique section IDs')
         seen.add(ident);nav.append(f'<a href="#{ident}">{esc(section["title"])}</a>')
         verified=section.get('verified_at',data['head'])
         if verified!=data['head'] and (not isinstance(verified,str) or not SHA.fullmatch(verified) or not update):
             raise ValueError('A section verified at an older head needs a full SHA and an update record')
         carried=f'<p class="carried-note">Carried from the review of <code>{esc(verified[:12])}</code>, not re-derived in this update. Source excerpts show this head.</p>' if verified!=data['head'] else ''
         sections.append(f'<section id="{ident}" data-section="{esc(section["title"])}"><h2>{esc(section["title"])}</h2>{carried}{blocks(section["blocks"],data)}</section>')
-    sections.append('<section id="review-findings" data-section="Review findings"><h2>Review findings</h2>' + review_markdown(review['markdown'], data) + '</section>')
+    # Number findings in render order so the verdict's links can open them.
+    numbers=itertools.count(1)
+    findings_html=re.sub(re.escape(FINDING_OPEN), lambda _: f'<details class="review-finding" id="finding-{next(numbers)}">', review_markdown(review['markdown'], data))
+    sections.append('<section id="review-findings" data-section="Review findings"><h2>Review findings</h2>' + findings_html + '</section>')
     nav.append('<a href="#review-findings">Review findings</a>')
     quiz=[]; questions=data.get('questions',[])
     if len(questions) > (5 if mode=='Deep' else 3): raise ValueError('Too many self-check questions')
@@ -392,6 +419,12 @@ def render(data):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('input',type=Path);parser.add_argument('output',type=Path);args=parser.parse_args()
-    data=json.loads(args.input.read_text());output=render(data);args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(output);print(args.output.resolve())
+    data=json.loads(args.input.read_text());output=render(data);args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(output)
+    # The dashboard card reads this sidecar; it never re-derives from the model's input.
+    sidecar=args.output.with_name(VERDICT_SIDECAR)
+    if 'verdict' in data['review']:
+        sidecar.write_text(json.dumps(review_verdict.summary(review_verdict.derive(data['review']))|{'head':data['head']}))
+    elif sidecar.exists(): sidecar.unlink()
+    print(args.output.resolve())
 
 if __name__=='__main__':main()

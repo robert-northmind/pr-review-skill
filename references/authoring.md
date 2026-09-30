@@ -49,6 +49,13 @@ block types that explain this particular change.
     "base": "FULL_COMPARISON_BASE_SHA",
     "head": "FULL_REVIEWED_HEAD_SHA",
     "assessment": "No actionable defects found. Source reviewed; runtime was not exercised.",
+    "verdict": {
+      "complete": true, "traced": true, "tests": "pass", "runtime": "not-run",
+      "runtime_note": "The retry timer was not exercised against a real receiver.",
+      "unreviewed": [],
+      "why": ["One function and its tests change; every exit path was traced."],
+      "checked": ["Traced send → retry → drop at the pinned head", "Ran the transport tests: 142 passed"]
+    },
     "markdown": "## Validation\n\nThe changed call path and test assertions were inspected at the pinned head."
   },
   "verification": "## Coverage and checks\n\nRecord the actual inspected files, checks, outcomes and gaps.",
@@ -113,6 +120,36 @@ in the findings section. The renderer embeds findings after the narrative
 sections and adds Copy comment controls. It preserves the original Markdown
 payload; when clipboard access is unavailable, it shows a selected manual-copy
 field. No iframe, second HTML, or runtime Markdown fetch is used.
+
+Add `review.verdict` to every new report. The renderer turns it and the finding
+summaries into the advisory verdict card that replaces the plain assessment box:
+the icon, colour, headline and confidence come only from fixed rules, never from
+your wording. Any P0/P1 is red, a P2 or Needs confirmation is orange, only P3 or
+Optional items are green "Approvable", and no findings is green "Ready to
+approve". Confidence reflects coverage: one or two gaps make it medium, three or
+more or failing tests make it low, and a green verdict with low confidence
+turns orange. Record coverage honestly; it is the only input you control.
+
+- `complete`: false when a material part of the diff was not reviewed (for
+  example a wrapped-up run); the card turns grey "Not fully reviewed".
+- `traced`: whether every changed path was traced end to end, not only read.
+- `tests`: `pass`, `fail` or `not-run` for the tests covering the change at the
+  reviewed head. Reading a test is not running it.
+- `runtime`: `validated` when the changed behavior was exercised, `not-needed`
+  when no runtime behavior changes, otherwise `not-run`. Optional
+  `runtime_note` names what was not exercised.
+- `unreviewed`: areas left out, in a few words each.
+- `why`: two or three short inline-Markdown reasons for the verdict.
+- `checked`: what was actually checked, one short item each.
+
+Finding summaries must start with P0–P3, Optional or Needs confirmation; the
+card links each one as something to consider and lists the coverage gaps. The
+card starts collapsed to one row: icon, headline, confidence, reviewed commit and
+how many things there are to consider. Opening it shows `review.assessment`
+(required with a verdict), the reasons, the things to consider and what was
+checked. For updates, the card also shows the previous run's verdict,
+re-derived from its saved input, and the findings resolved since. Beside `review.html` the renderer writes
+`review-verdict.json`, which the dashboard card shows; do not edit it.
 
 Wrap each finding in the fixed `<details class="review-finding">` form from
 [Review notes](review-notes.md); arbitrary attributes remain unsupported. Findings

@@ -43,3 +43,10 @@ for(const scenario of document.querySelectorAll('.scenario')){
  controls.hidden=false;scenario.dataset.enhanced='true';select(0);
  buttons.forEach((button,index)=>button.addEventListener('click',()=>select(index)));
 }
+
+// Verdict links open the finding they point at; findings otherwise start collapsed.
+document.addEventListener('click',event=>{
+ const link=event.target.closest('[data-open-finding]');
+ const target=link&&document.getElementById(link.getAttribute('href').slice(1));
+ if(target)target.open=true;
+});

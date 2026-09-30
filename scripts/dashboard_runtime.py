@@ -12,6 +12,7 @@ import dashboard_queue as queue
 import dashboard_reviews as reviews
 import ai_settings
 import review_update
+import review_verdict
 from agent_options import CATALOG
 
 ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
@@ -51,6 +52,20 @@ def mark_artifact_opened(run_id, name, version):
     return {'opened': True}
 
 
+def report_verdict(path, head):
+    """The renderer's verdict sidecar for a report, if it matches that report's head."""
+    try:
+        value = json.loads(Path(path).with_name('review-verdict.json').read_text())
+    except (OSError, ValueError):
+        return None
+    if (not isinstance(value, dict) or (head and value.get('head') != head)
+            or value.get('kind') not in review_verdict.KINDS or value.get('tone') not in review_verdict.TONES
+            or value.get('confidence') not in ('high', 'medium', 'low', None)):
+        return None
+    return {'short': review_verdict.SHORT[value['kind']], 'tone': value['tone'],
+            'headline': str(value.get('headline', '')), 'confidence': value['confidence']}
+
+
 def collect_artifacts(runs, checked_sha=''):
     """Prefer completed artifacts, even while other tasks are still running."""
     candidates = []
@@ -70,7 +85,8 @@ def collect_artifacts(runs, checked_sha=''):
                 'version': version, 'unread': views.get(name) != version,
                 'freshness': 'unknown' if not head or not checked_sha else ('current' if head == checked_sha else 'older'),
                 'created_at': artifact.get('updated_at') or run.get('created_at', ''), 'head_sha': head,
-                'status': 'completed' if ready else run.get('status'), 'tool': run.get('tool', '')}))
+                'status': 'completed' if ready else run.get('status'), 'tool': run.get('tool', ''),
+                **({'verdict': report_verdict(path, head)} if name == 'review-html' and ready else {})}))
     chosen = {}
     # Partial results only fill missing artifact types. A new unfinished
     # explainer must not hide the previous finished explanation.
