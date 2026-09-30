@@ -79,6 +79,15 @@ async function fixture(name, action) {
     await page.locator('.report-bar').first().waitFor();
     await page.getByRole('button', {name: /11 reviewed, 8 yours merged/}).click();
     await capture(page, 'reporting-dark');
+    // A fresh light page: switching the theme in place leaves transitions that never settle.
+    const cost = await page.context().newPage();
+    await cost.goto(url);
+    await cost.click('#reporting-tab');
+    await cost.locator('.cost-day').first().waitFor();
+    await cost.locator('.cost-section').evaluate(el => el.scrollIntoView());
+    await cost.locator('.cost-day').nth(26).hover();
+    await cost.locator('.cost-tooltip:not([hidden])').waitFor();
+    await capture(cost, 'reporting-cost-light');
   });
   await fixture('my_reviews_browser_fixture', async (page, url) => {
     await page.goto(url); await page.click('#my-reviews-tab');
@@ -113,7 +122,7 @@ async function fixture(name, action) {
   await page.locator('.review-finding > summary').nth(0).click();
   await page.locator('#review-findings').evaluate(el => el.scrollIntoView());
   await capture(page, 'review-findings-light');
-  console.log('Captured nine README images from production assets and synthetic fixtures.');
+  console.log('Captured ten README images from production assets and synthetic fixtures.');
 })().catch(error => {console.error(error); process.exitCode = 1;}).finally(async () => {
   if (browser) await browser.close();
   fs.rmSync(temporary, {recursive: true, force: true});
