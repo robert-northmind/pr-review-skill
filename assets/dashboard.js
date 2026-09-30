@@ -166,7 +166,16 @@ function workspaceStatusBadge(pr){
  const ready=!!artifact;
  const running=active(pr.run);
  const label=running?'AI review running':ready?(artifact?.freshness==='older'?'AI review · older commit':'AI review ready'):'No AI review yet';
- return `<span class="chip ${running?'run-live':ready&&artifact?.freshness!=='older'?'good':artifact?.freshness==='older'?'warn':''} workspace-status">${label}</span>`;
+ return `<span class="chip ${running?'run-live':ready&&artifact?.freshness!=='older'?'good':artifact?.freshness==='older'?'warn':''} workspace-status">${label}</span>${verdictBadge(artifact)}`;
+}
+// The report's advisory verdict, derived by the renderer from its findings and checks.
+function verdictBadge(artifact){
+ const v=artifact?.verdict;
+ if(!v)return '';
+ const mark={good:'✓',warn:'!',bad:'✕',muted:'–'}[v.tone]||'';
+ const tone=v.tone==='muted'?'':v.tone;
+ const older=artifact.freshness==='older'?' (older commit)':'';
+ return `<span class="chip ${esc(tone)} verdict-badge" title="${esc('AI review verdict: '+v.headline+(v.confidence?' · '+v.confidence+' confidence':'')+older)}"><span aria-hidden="true">${mark}</span>${esc(v.short)}${v.confidence?' · '+esc(v.confidence):''}</span>`;
 }
 function card(pr){
  const run=pr.run, isActive=active(run), arts=pr.artifacts, hasNotes=!!notesArtifact(arts), hidden=!!pr.hidden;

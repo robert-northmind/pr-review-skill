@@ -114,7 +114,9 @@ fresh input:
   and withdrawn findings leave `review.md` and appear only in the update table.
   Still-open and changed findings keep their drafts, rewritten where needed
   with new-head links. New findings follow the normal contract.
-- The assessment covers the whole PR, not only the new commits.
+- The assessment covers the whole PR, not only the new commits. So does
+  `review.verdict`: record coverage at the new head, labelling carried checks
+  as not re-run. The renderer adds the previous verdict and resolved findings.
 - `update` records the change since the previous review; see
   [Authoring](authoring.md). The summary says in two or three sentences what
   the new commits did and what that means for the review. List every previous

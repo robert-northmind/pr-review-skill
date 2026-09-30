@@ -17,6 +17,9 @@ base/head SHAs and review date in the report's existing metadata/provenance;
 distinguish historical SHAs from current PR state. Start `review.md` with findings
 or validation, without repeating the overview assessment or metadata.
 Keep this to a short paragraph or a few bullets that make the next action clear.
+Also record `review.verdict` (see [Authoring](authoring.md)); the renderer
+shows the assessment inside a collapsed advisory verdict card. Keep the
+assessment consistent with that verdict.
 Mention only applicable categories; let finding titles carry individual concerns
 instead of repeating every finding in the assessment.
 

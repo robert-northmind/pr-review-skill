@@ -399,6 +399,12 @@ launch copies the pre-check into `update-context.json` for the review lead only.
 It is advice: the review re-checks every previous finding either way, and its
 reviewers never see it.
 
+Cards with a finished report that recorded a verdict show it as a compact chip
+(for example **✓ Approvable · high**), read from the report's
+`review-verdict.json`. It is advisory, derived by the renderer from the report's
+findings and coverage, and is hidden when the sidecar is missing, malformed or
+for a different head.
+
 ## Initial review effort
 
 Effort estimates are separate from full AI review runs, GitHub participation,
