@@ -206,8 +206,11 @@ The server listens only on your machine's loopback interface. Treat generated
 reports and screenshots as potentially containing private code and review data.
 
 Dashboard GitHub operations are read-only: they do not post comments, approve,
-or merge PRs. The skill uses isolated checkouts and requires sandboxed execution
-for PR code. Runtime history and generated review artifacts are not included
+or merge PRs. The skill uses isolated checkouts and runs PR code in a sandbox.
+Checks the sandbox blocks run on your Mac only for repositories you list under
+Settings, Repositories, **Run blocked checks outside the sandbox**; they use a
+throwaway copy and a clean environment but can read your files and use the
+network, and reports label them. Runtime history and generated review artifacts are not included
 in this repository. Keep those out of commits and screenshots.
 
 ## In-app AI reviews

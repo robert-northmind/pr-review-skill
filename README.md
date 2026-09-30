@@ -28,7 +28,7 @@ the dashboard does not post comments, approve or merge PRs.
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
 | **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions, plus estimated AI review cost for the last 30 days. |
-| **Settings** | Choose providers, models and reasoning independently for Triage, AI review and Chat. Configure watched repositories and light, dark or system appearance. |
+| **Settings** | Choose providers, models and reasoning independently for Triage, AI review and Chat. Configure watched repositories, repositories trusted to run blocked checks outside the sandbox, and light, dark or system appearance. |
 
 AI reviews cover the full diff through correctness, contracts and security lenses,
 verify candidate findings, and record what was actually checked. The result is

@@ -87,7 +87,8 @@ On macOS, prefer the bundled `scripts/verification_sandbox.py` for local CLI
 checks. It builds the execution profile, provides a clean HOME/cache, denies
 external networking, and terminates the command's process group on timeout or
 exit. Give it a disposable workspace and only the runtime/dependency directories
-needed by the selected check. It never falls back to unsandboxed execution.
+needed by the selected check. It never falls back to unsandboxed execution on
+its own.
 For example (replace the paths with the actual review workspace and installed SDK):
 
 ```sh
@@ -103,6 +104,58 @@ for installed dependency caches, and enable `--loopback` only for selected check
 that need local test services. Evidence includes the profile, output and result
 JSON. A nonzero exit is evidence to inspect, not automatically a product defect.
 Use an equivalent execution boundary on other platforms; this helper is macOS-only.
+
+When a sandboxed check fails, the helper saves the profile's denials to
+`denials.txt` and counts them in `result.json`. Read them before retrying: they
+name the exact blocked path or connection, while tools often report a
+misleading error (xcrun blames the Xcode license, Yarn reports a YAML parse
+error, Gradle a bare `SocketException`). Retry once with the fix they point to;
+do not repeat an unchanged command.
+
+Toolchain presets add the host access a toolchain needs and nothing else:
+
+- `--preset swift`: the selected Xcode (or Command Line Tools) read-only, its
+  license plist, and the per-user temp and developer-tools cache folders that
+  xcrun, Foundation and Swift Build write to regardless of `TMPDIR`. Pass
+  `--disable-sandbox` to SwiftPM, because macOS does not nest sandboxes.
+- `--preset gradle`: the default JDK read-only, `GRADLE_USER_HOME` inside the
+  workspace, and the local sockets Gradle's daemon and file locks use.
+  Outbound connections stay local, so run it `--offline` after a fetch step.
+- `--preset yarn`: Yarn reads `.yarnrc.yml` in every parent folder, including
+  the real home folder, which may hold registry tokens. The preset copies the
+  workspace's rc files to `.yarnrc.review.yml` and points Yarn at that name.
+
+For dependencies missing from local caches, run a separate fetch step with
+`--network` (for example `swift package resolve`, `gradle testClasses`,
+`yarn install --mode=skip-build`, `go mod download`), then run the tests
+without it. The fetch step keeps the file boundary and clean environment but
+can reach the internet, and dependency manifests or build scripts run during
+it. Prefer offline resolution when the caches already hold the pinned versions.
+
+```sh
+python3 scripts/verification_sandbox.py --workspace "$RUNTIME" --cwd "$RUNTIME/head" \
+  --preset swift --network --output "$EVIDENCE/resolve" -- /usr/bin/swift package resolve --disable-sandbox
+python3 scripts/verification_sandbox.py --workspace "$RUNTIME" --cwd "$RUNTIME/head" \
+  --preset swift --timeout 900 --output "$EVIDENCE/tests" -- /usr/bin/swift test --disable-sandbox
+```
+
+### Trusted host execution
+
+If a check is still blocked after reading its denials and trying the relevant
+preset and fetch step, check whether the user trusts the PR's repository for
+host execution (dashboard Settings, Repositories; stored as
+`host_execution_repos` in `dashboard_config.json`, with `owner/*` entries).
+For a trusted repository, rerun the same command with
+`--host --repository owner/repo`. It still uses the disposable workspace,
+clean environment, timeout and process-group cleanup, but it can read the
+user's files and use the network. The helper refuses untrusted repositories; do
+not run the command on the host another way. Otherwise report the check as
+blocked with its denials.
+
+Every `result.json` records `boundary` (`sandbox` or `host`), `network` and
+`presets`. In verification.md and the report's validation summary, name every
+check that ran with `--network` or on the host, and never list them as
+sandboxed.
 
 The profile includes two narrowly scoped macOS runtime requirements: an exact
 `(literal "/")` directory read for dyld/libignition's `openat` root, and
@@ -121,6 +174,7 @@ resolved `test` package's `bin/test.dart` with
 `dart --packages=.dart_tool/package_config.json <resolved-test-entrypoint>`.
 Record this harness adaptation and the resolved dependency versions; keep
 external networking denied rather than widening it merely for the wrapper.
+Dart coverage and OTLP/HTTP tests need `--loopback` for their local sockets.
 
 Record command, working directory, revision, relevant tool versions and
 nonsensitive configuration, duration, exit status and meaningful output. Use

@@ -31,7 +31,7 @@ import workspace_report
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/ai-config','/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
-             '/add-repo','/remove-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/review-message','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
+             '/add-repo','/remove-repo','/add-host-repo','/remove-host-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/review-message','/workspace-save','/workspace-chat','/workspace-chat-cancel'}
 
 
 class Server(ThreadingHTTPServer):
@@ -290,6 +290,10 @@ class Handler(BaseHTTPRequestHandler):
                 dashboard.add_watched_repo(str(data.get('repo','')))
             elif path == '/remove-repo':
                 dashboard.remove_watched_repo(str(data.get('repo','')))
+            elif path == '/add-host-repo':
+                dashboard.add_host_execution_repo(str(data.get('repo','')))
+            elif path == '/remove-host-repo':
+                dashboard.remove_host_execution_repo(str(data.get('repo','')))
             else:
                 dashboard.set_flag(str(data.get('url','')), 'hidden',path == '/hide')
             self._send(200,{'ok':True})

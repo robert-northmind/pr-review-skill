@@ -1,4 +1,5 @@
 """Exercise the real macOS execution boundary with synthetic, non-PR commands."""
+import json
 import os
 from pathlib import Path
 import sys
@@ -28,6 +29,36 @@ class Configuration(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sandbox.clean_environment(root, '/bin/sh')
             self.assertEqual(list(Path(outside).iterdir()), [])
+
+    def test_host_execution_matches_trusted_repositories_only(self):
+        trusted = ['grafana/*', 'Open-Telemetry/opentelemetry-swift']
+        self.assertTrue(sandbox.host_execution_allowed('grafana/faro-web-sdk', trusted))
+        self.assertTrue(sandbox.host_execution_allowed('open-telemetry/OpenTelemetry-Swift', trusted))
+        self.assertFalse(sandbox.host_execution_allowed('open-telemetry/opentelemetry-go', trusted))
+        self.assertFalse(sandbox.host_execution_allowed('grafanalabs/other', trusted))
+        self.assertFalse(sandbox.host_execution_allowed('', trusted))
+        self.assertFalse(sandbox.host_execution_allowed('grafana', trusted))
+
+    def test_host_execution_refuses_untrusted_repository(self):
+        with tempfile.TemporaryDirectory() as tracker, tempfile.TemporaryDirectory() as workspace:
+            Path(tracker, 'dashboard_config.json').write_text(json.dumps({'host_execution_repos': ['grafana/*']}))
+            with patch.dict(os.environ, {'PR_REVIEW_TRACKER_HOME': tracker}):
+                with self.assertRaisesRegex(ValueError, 'not in the trusted host-execution list'):
+                    sandbox.run_check(workspace, ['/usr/bin/true'], host=True, repository='someone/fork')
+                with self.assertRaisesRegex(ValueError, 'not in the trusted host-execution list'):
+                    sandbox.run_check(workspace, ['/usr/bin/true'], host=True)
+
+    def test_yarn_preset_keeps_rc_lookup_inside_workspace(self):
+        with tempfile.TemporaryDirectory() as root:
+            workspace = Path(root).resolve()
+            package = workspace / 'packages' / 'app'
+            package.mkdir(parents=True)
+            (workspace / '.yarnrc.yml').write_text('nodeLinker: node-modules\n')
+            sandbox.copy_yarn_rc(workspace, package)
+            self.assertEqual((workspace / sandbox.YARN_RC).read_text(), 'nodeLinker: node-modules\n')
+            _, _, env = sandbox.preset_access(['yarn'], workspace)
+            self.assertEqual(env['YARN_RC_FILENAME'], sandbox.YARN_RC)
+            self.assertTrue(env['YARN_CACHE_FOLDER'].startswith(str(workspace)))
 
 
 @unittest.skipUnless(sys.platform == 'darwin', 'macOS sandbox integration')
@@ -111,6 +142,35 @@ echo confinement-ok
             finally:
                 server.shutdown()
                 thread.join()
+
+    def test_loopback_does_not_reach_external_addresses(self):
+        # A local-address outbound filter once let --loopback reach external IPs.
+        probe = '/usr/bin/nc -z -G 3 1.1.1.1 443'
+        if self.run_shell(probe, network=True)['exit_code'] != 0:
+            self.skipTest('No external network')
+        self.assertNotEqual(self.run_shell(probe, loopback=True)['exit_code'], 0)
+        self.assertNotEqual(self.run_shell(probe)['exit_code'], 0)
+
+    def test_failed_check_records_its_sandbox_denials(self):
+        result = self.run_shell(f'/bin/cat {self.outside}')
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['boundary'], 'sandbox')
+        denials = (self.output / 'denials.txt').read_text()
+        self.assertIn(f'deny(1) file-read-data {self.outside}', denials)
+        self.assertGreaterEqual(result['denials'], 1)
+
+    def test_trusted_host_execution_runs_outside_the_sandbox(self):
+        tracker = self.root / 'tracker'
+        tracker.mkdir()
+        (tracker / 'dashboard_config.json').write_text(json.dumps({'host_execution_repos': ['grafana/*']}))
+        with patch.dict(os.environ, {'PR_REVIEW_TRACKER_HOME': str(tracker), 'SYNTHETIC_REVIEW_SECRET': 'x'}):
+            result = self.run_shell(f'test -z "${{SYNTHETIC_REVIEW_SECRET:-}}" && /bin/cat {self.outside}',
+                                    host=True, repository='grafana/faro-web-sdk')
+        self.assertEqual(result['exit_code'], 0)
+        self.assertEqual((result['boundary'], result['network']), ('host', 'full'))
+        self.assertFalse((self.output / 'sandbox.sb').exists())
+        self.assertIn('synthetic-private-value', (self.output / 'output.log').read_text())
+
 
 
 if __name__ == '__main__':

@@ -215,7 +215,8 @@ this section when there are no material open questions.
 
 End with a short validation summary: checks actually run and their outcomes,
 local versus remote CI, app journeys reached and exercised, and material
-skips or blockers with reasons. Link representative screenshot evidence when
+skips or blockers with reasons. Say which checks ran outside the sandbox or
+with network access; never group them under a "sandboxed" label. Link representative screenshot evidence when
 captured, with detailed verification embedded at the end of the report. Successful checks are evidence,
 not additional findings. Keep commands and full journey logs in verification.md.
 For a reproduced defect, include concise actions and expected/observed behavior

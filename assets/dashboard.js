@@ -300,6 +300,7 @@ function renderState(){
  renderTriageSettings();
  renderPickers();
  $('watched-repos').innerHTML=config.watched_repos.map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-repo="${esc(repo)}" aria-label="Stop watching ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No watched repositories yet.</li>';
+ $('host-repos').innerHTML=(config.host_execution_repos||[]).map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-host-repo="${esc(repo)}" aria-label="Stop trusting ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No trusted repositories. Blocked checks are reported as blocked.</li>';
  renderList();
  if(typeof renderQueue==='function')renderQueue();
  restoreOverviewScroll();
@@ -316,6 +317,7 @@ document.addEventListener('click',async event=>{
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}
  const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Sync GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
+ const untrust=event.target.closest('[data-remove-host-repo]');if(untrust){try{await post('/remove-host-repo',{repo:untrust.dataset.removeHostRepo});notify('Repository removed. Its blocked checks stay blocked.');await loadState();}catch(error){notify(error.message);}return;}
  const guided=event.target.closest('[data-review-guidance]');if(guided){guided.closest('.action-disclosure')?.removeAttribute('open');openGuidance(guided.dataset.url);return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
  const {action,url,retry,days,mode}=button.dataset;const launching=action.startsWith('/regenerate-');
@@ -356,6 +358,7 @@ for(const [id,key] of [['search','search'],['drafts','drafts'],['sort','sort'],[
 // Keep a legible avatar fallback if a profile image is missing or unavailable.
 document.addEventListener('error',event=>{if(event.target.matches?.('.author-avatar'))event.target.hidden=true;},true);
 $('repo-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/add-repo',{repo:$('add-repo').value});$('add-repo').value='';notify('Repository added. Sync GitHub to load its PRs.');await loadState();}catch(error){notify(error.message);}});
+$('host-repo-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/add-host-repo',{repo:$('add-host-repo').value});$('add-host-repo').value='';notify('Repository trusted. New AI reviews may run its blocked checks outside the sandbox.');await loadState();}catch(error){notify(error.message);}});
 $('refresh').addEventListener('click',syncGitHub);
 syncFilterControls();
 document.addEventListener('DOMContentLoaded',()=>{(async function poll(){await Promise.allSettled([loadState(),loadReporting()]);setTimeout(poll,5000);})();});
