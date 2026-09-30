@@ -20,4 +20,8 @@ const events=publicEvents({type:'assistant',message:{content:[{type:'thinking',t
 assert.ok(events.some(e=>e.type==='update'&&e.text==='Public update'));assert.ok(!JSON.stringify(events).includes('secret'));
 assert.deepEqual(publicEvents({type:'stream_event',parent_tool_use_id:'subagent',event:{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'not parent answer'}}}),[]);
 assert.equal(publicEvents({type:'result',subtype:'error_max_turns',is_error:true,errors:['private'],result:''})[0].completed,false);
-console.log('Claude protocol: settings isolation, session resume, permissions, event redaction and subagent filtering passed.');
+const [result]=publicEvents({type:'result',subtype:'success',is_error:false,result:'done',total_cost_usd:8.5,
+  modelUsage:{'claude-opus-5-5':{inputTokens:1,outputTokens:2,cacheReadInputTokens:3,cacheCreationInputTokens:4,costUSD:8.5,costBasis:'list',canonicalModel:'secret'}}});
+assert.deepEqual(result.cost,{total_cost_usd:8.5,modelUsage:{'claude-opus-5-5':{inputTokens:1,outputTokens:2,cacheReadInputTokens:3,cacheCreationInputTokens:4,costUSD:8.5,costBasis:'list'}}});
+assert.equal(publicEvents({type:'result',subtype:'success',is_error:false,result:''})[0].cost,null);
+console.log('Claude protocol: settings isolation, session resume, permissions, event redaction, subagent filtering and cost totals passed.');

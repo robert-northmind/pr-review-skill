@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 from ai_runtime import ProviderError, sources
+import ai_cost
 
 class Session:
     def __init__(self):
@@ -48,7 +49,7 @@ class Session:
         if self.process.wait() or not result:
             raise ProviderError('Claude Code stopped before completing its response. Check its login and retry.')
         answer = result.get('answer', '')
-        return {**result, 'sources': sources(answer)}
+        return {**result, 'cost': ai_cost.claude_cost(result.get('cost') or {}), 'sources': sources(answer)}
 
     def classify(self, binary, request):
         # Same tool-disabled CLI path as T3's ClaudeTextGeneration adapter.

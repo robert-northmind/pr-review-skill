@@ -93,7 +93,7 @@ async function copyPrompt(button){
   }
  }catch(error){notify(error.message);}finally{button.disabled=false;}
 }
-function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':run.mode==='update'?'Review update':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='in-app'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
+function renderHistory(pr){return pr.history.map(run=>`<div class="history-entry"><div><p>${esc(when(run.created_at))} · ${esc(run.tool)} · ${esc(statusLabels[run.status]||run.status)}${run.cost?` · <span title="Estimated API cost">${esc(costMoney(run.cost.usd))}</span>`:''}</p><p class="muted">${esc(run.kind==='explainer'?'Legacy explanation':run.mode==='update'?'Review update':'Review')} · Commit <code>${esc(run.head_sha?.slice(0,12)||'not recorded')}</code></p></div><div class="history-links">${run.transport==='in-app'?`<button class="button" data-review-open="${esc(run.run_id)}">View activity</button>`:''}${Object.entries(run.artifacts).map(([name,a])=>artifactLink(a,artifactLabel(name),pr)).join('')}</div></div>`).join('');}
 function authorBadge(pr){
  const login=pr.author_login||'';
  if(!login)return '<span class="pr-author unknown-author">Unknown author</span>';

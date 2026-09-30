@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import json
 import subprocess
 import threading
+import ai_cost
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 
@@ -19,11 +20,24 @@ def bounds(now=None):
     return today, monday - timedelta(weeks=4)
 
 
+COST_DAYS = 30
+
+
+def ai_costs():
+    """The last two cost windows, so the view can compare against the previous one."""
+    zone = ZoneInfo(TIMEZONE)
+    return [{key: entry.get(key) for key in ('run_id', 'pr_url', 'repository', 'number', 'provider', 'model',
+                                            'mode', 'status', 'usd', 'pricing', 'models', 'finished_at')}
+            | {'date': str(tracker.parse_time(entry['finished_at']).astimezone(zone).date())}
+            for entry in ai_cost.entries(COST_DAYS * 2 + 1)]
+
+
 def snapshot():
     data = tracker.read_json(tracker.tracker_root() / 'reporting.json', required=False)
     today, start = bounds()
     return {**data, 'today': str(today), 'timezone': TIMEZONE,
-            'desired_start': str(start), 'refresh': dict(_status)}
+            'desired_start': str(start), 'refresh': dict(_status),
+            'ai_costs': ai_costs(), 'ai_cost_days': COST_DAYS}
 
 
 def graphql(query, variables):
@@ -131,6 +145,9 @@ def start_refresh():
         except Exception as error:
             _status.clear(); _status.update(status='failed', message=str(error) if isinstance(error,dashboard.DashboardError) else 'Activity refresh failed. Previous report kept; retry.')
         finally:
-            _guard.release()
+            try:
+                ai_cost.backfill()  # Runs finished since the last sync, and Codex usage priced late.
+            finally:
+                _guard.release()
     threading.Thread(target=worker, daemon=True).start()
     return True

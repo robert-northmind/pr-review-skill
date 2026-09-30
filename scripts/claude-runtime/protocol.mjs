@@ -29,6 +29,15 @@ export function buildOptions(request) {
     }),
   };
 }
+// Running totals for the whole query, subagents included; numbers only.
+const COST_FIELDS=['inputTokens','outputTokens','cacheReadInputTokens','cacheCreationInputTokens','costUSD'];
+function costOf(message) {
+  const models=Object.entries(message.modelUsage||{}).map(([name,usage])=>[name,{
+    ...Object.fromEntries(COST_FIELDS.map(key=>[key,Number(usage?.[key])||0])),
+    ...(['list','managed','unknown'].includes(usage?.costBasis)?{costBasis:usage.costBasis}:{}),
+  }]);
+  return typeof message.total_cost_usd==='number'?{total_cost_usd:message.total_cost_usd,modelUsage:Object.fromEntries(models)}:null;
+}
 export function publicEvents(message,drafts=new Map()) {
   const events=[];
   if(message.type==='system'&&message.subtype==='init') events.push({type:'session',id:message.session_id});
@@ -51,7 +60,7 @@ export function publicEvents(message,drafts=new Map()) {
       }
     }
   }
-  if(message.type==='result') events.push({type:'result',completed:!message.is_error&&message.subtype==='success',answer:message.result||'',usage:message.usage||{}});
+  if(message.type==='result') events.push({type:'result',completed:!message.is_error&&message.subtype==='success',answer:message.result||'',usage:message.usage||{},cost:costOf(message)});
   // Never forward thinking blocks, tool arguments/results, error text or raw JSON.
   return events;
 }

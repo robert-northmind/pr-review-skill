@@ -14,6 +14,7 @@ from pathlib import Path
 import threading
 import time
 
+import ai_cost
 import pr_review_tracker as tracker
 
 FINAL = frozenset({'completed', 'completed-with-gaps', 'failed', 'cancelled', 'blocked'})
@@ -149,7 +150,8 @@ def snapshot(run_id):
             'progress': progress(run, job['status']), 'events': saved_events,
             'wrap_up_requested': bool(job.get('wrap_up_requested_at')),
             'accepts_messages': job.get('provider', 'codex') in ('claude', 'codex') and job['status'] not in FINAL,
-            'agent_activity_at': saved_events[-1]['at'] if saved_events else ''}
+            'agent_activity_at': saved_events[-1]['at'] if saved_events else '',
+            'cost': ai_cost.for_run(run_id)}
 
 
 class Activity:

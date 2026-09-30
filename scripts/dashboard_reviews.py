@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 
+import ai_cost
 import ai_runtime
 import pr_discussion
 import storage_cleanup
@@ -100,6 +101,7 @@ class ReviewWorker:
         self.client = None
         self.thread_id = None
         self.turn_id = None
+        self.cost = None
         self.stopped = threading.Event()
         self.cancel_requested = threading.Event()
         self.needs_input = threading.Event()
@@ -215,8 +217,21 @@ class ReviewWorker:
             prompt=review_prompt(self.run_id, job['prompt']),
             model=job.get('model', ''), effort=job.get('effort', ''),
         ), ai_runtime.Callbacks(emit=self.event, session=session))
+        self.cost = result.get('cost')
         if not self.cancel_requested.is_set():
             self.finish_turn({'turn': {'status': 'completed' if result.get('completed') else 'failed'}})
+
+    def record_cost(self):
+        """Price the finished run; failed or stopped Claude runs still leave a transcript total."""
+        job = self.activity.job
+        try:
+            cost = self.cost
+            if not cost and job.get('provider') == 'claude':
+                cost = ai_cost.claude_transcript_cost(job.get('thread_id', ''))
+            if cost:
+                ai_cost.record(self.run_id, job, cost, 'live')
+        except Exception:
+            pass  # Cost is informational; the dashboard backfill retries missing runs.
 
     def save_discussion(self):
         """Give every reviewer the same PR discussion; the skill falls back to gh if this fails."""
@@ -255,6 +270,7 @@ class ReviewWorker:
                 job = self.activity.job
                 finish_unfinished_tasks(self.run_id, job['status'], job.get('message', ''))
                 self.activity.emit('status', job.get('message', 'Review ended.'))
+                self.record_cost()
                 try:
                     # The report is final; build caches and check screenshots are no longer needed.
                     storage_cleanup.prune_run(tracker.run_dir(self.run_id))

@@ -29,13 +29,47 @@ function reviewSummary(run) {
   return `<div class="review-summary">
     <div class="review-summary-main">
       <span class="review-eyebrow">AI REVIEW</span>
-      <strong>${esc(label)}${finished ? '' : ` <span class="muted">· ${percent}%</span>`}</strong>
+      <strong>${esc(label)}${finished ? reviewCostChip(run.cost) : ` <span class="muted">· ${percent}%</span>`}</strong>
       ${progress}
     </div>
     <button class="button" data-review-open="${esc(run.run_id)}">
       ${finished ? 'View activity' : 'View live review'} <span aria-hidden="true">↗</span>
     </button>
   </div>`;
+}
+
+function reviewCostChip(cost) {
+  return cost ? ` <span class="muted" title="Estimated API cost">· ${esc(costMoney(cost.usd))}</span>` : '';
+}
+
+function compactTokens(count) {
+  if (count >= 1e6) return (count / 1e6).toFixed(count >= 1e7 ? 0 : 1) + 'M';
+  if (count >= 1e3) return Math.round(count / 1e3) + 'k';
+  return String(count || 0);
+}
+
+function reviewCostNote(cost, provider) {
+  const scope = provider === 'codex'
+    ? `Estimated by Codex across the lead thread${cost.threads > 1 ? ` and ${cost.threads - 1} sub-agent thread${cost.threads === 2 ? '' : 's'}` : ''}.`
+    : {managed: 'Estimated by Claude Code at your organization\'s configured prices, including subagents.',
+       unknown: 'Estimated by Claude Code, including subagents. Some models had no known price, so the total may be off.'}[cost.pricing]
+      || 'Estimated by Claude Code at API list prices, including subagents.';
+  return scope + ' What you actually pay depends on your plan.';
+}
+
+function reviewCostBreakdown(cost, provider) {
+  // Codex input includes cached tokens; Claude reports cache reads and writes separately.
+  const fresh = model => provider === 'codex'
+    ? (model.input_tokens || 0) - (model.cached_input_tokens || 0)
+    : (model.input_tokens || 0) + (model.cache_write_tokens || 0);
+  const rows = (cost.models || []).map(model => `<tr>
+    <th scope="row">${esc(costModelLabel(model.model))}${model.effort ? ` <span class="muted">${esc(model.effort)}</span>` : ''}</th>
+    <td>${compactTokens(fresh(model))}</td>
+    <td>${compactTokens(model.cached_input_tokens)}</td><td>${compactTokens(model.output_tokens)}</td>
+    <td>${esc(costMoney(model.usd))}</td></tr>`).join('');
+  return `<details><summary>Cost breakdown</summary>
+    <table class="review-cost-table"><thead><tr><th scope="col">Model</th><th scope="col">Input</th><th scope="col">Cached input</th><th scope="col">Output</th><th scope="col">Cost</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted">${esc(reviewCostNote(cost, provider))}</p></details>`;
 }
 
 function reviewStage(stage) {
@@ -103,10 +137,18 @@ class ReviewPanel {
     $('review-status').textContent = this.finished
       ? reviewOutcome(data) : statusLabels[data.status] || data.status;
     $('review-message').textContent = data.message;
-    $('review-percent').textContent = data.progress.percent + '%';
+    // A finished review trades its progress figure for what it cost.
+    const cost = this.finished ? data.cost : null;
+    $('review-percent').textContent = cost ? costMoney(cost.usd) : data.progress.percent + '%';
     $('review-progress').value = data.progress.percent;
-    for (const id of ['review-percent', 'review-progress', 'review-estimate']) {
-      $(id).hidden = this.finished;
+    for (const id of ['review-progress', 'review-estimate']) $(id).hidden = this.finished;
+    $('review-percent').hidden = this.finished && !cost;
+    $('review-figure-label').hidden = !cost;
+    $('review-cost').hidden = !cost;
+    const breakdown = cost ? reviewCostBreakdown(cost, data.provider) : '';
+    if ($('review-cost').dataset.signature !== breakdown) {
+      $('review-cost').innerHTML = breakdown;
+      $('review-cost').dataset.signature = breakdown;
     }
     const progress = data.progress;
     $('review-counts').textContent = `${progress.finished} of ${progress.total} stages completed`
@@ -184,6 +226,10 @@ class ReviewPanel {
     $('review-percent').textContent = '…';
     $('review-progress').value = 0;
     for (const id of ['review-percent', 'review-progress', 'review-estimate']) $(id).hidden = false;
+    $('review-figure-label').hidden = true;
+    $('review-cost').hidden = true;
+    $('review-cost').innerHTML = '';
+    $('review-cost').dataset.signature = '';
     $('review-status').textContent = 'Loading review…';
     $('review-message').textContent = '';
     $('review-counts').textContent = '';

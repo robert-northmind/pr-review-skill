@@ -10,6 +10,7 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_queue as queue
 import dashboard_reviews as reviews
+import ai_cost
 import ai_settings
 import review_update
 import review_verdict
@@ -127,7 +128,7 @@ def summarize_run(run, checked_sha=''):
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
         'kind': launch.get('kind', 'review'), 'mode': launch.get('mode', 'full'), 'guidance': launch.get('guidance', ''), 'transport': 'in-app' if job or launch.get('transport') in ('codex-sdk', 'in-app') else 'legacy',
-        'progress': reviews.progress(run, status) if job else None,
+        'progress': reviews.progress(run, status) if job else None, 'cost': ai_cost.for_run(run['run_id']) if job else None,
         'message': job.get('message', '') or launch.get('message', '') or run.get('control', {}).get('message', ''),
         'tasks': [{'name': t['task'], 'status': t['status'], 'message': t.get('message', '')} for t in run.get('tasks', [])],
         'artifacts': collect_artifacts([run], checked_sha)}
