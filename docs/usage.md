@@ -126,6 +126,7 @@ Running work and cleanup failures defer deletion and show an error.
 Reporting keeps its separate activity window.
 
 Saved PRs and participation history are checked every five minutes while the dashboard is visible.
+A newly added or restored PR is checked on its own right away, and Sync GitHub stays available during background checks.
 There are no checks or notifications while the page is closed.
 
 ## See your activity

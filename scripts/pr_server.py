@@ -256,8 +256,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/refresh-reporting':
                 self._send(202,{'started':reporting.start_refresh()}); return
             if path == '/refresh':
-                queue.start_refresh(force=True, triage_after=True)
+                queue.start_refresh(force=True, triage_after=True, manual=True)
                 self._send(202,{'started':runtime.start_refresh()}); return
+            if path == '/refresh-queue' and 'urls' in data:
+                urls = data['urls']
+                if not isinstance(urls, list) or not 0 < len(urls) <= 50 or any(not isinstance(u, str) for u in urls):
+                    raise ValueError('Choose up to 50 saved PRs to check.')
+                self._send(202, {'started':queue.start_fetch([tracker.canonical_pr_url(u)[0] for u in urls])}); return
             if path in ('/refresh-queue', '/recover-reviews'):
                 self._send(202, {'started':queue.start_refresh(force=data.get('force') is True or path == '/recover-reviews',
                                                              recovery=path == '/recover-reviews')}); return
@@ -265,7 +270,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = queue.mutate(str(data.get('url', '')), str(data.get('action', '')), data)
                 self._send(200, result)
                 if data.get('action') in ('enqueue', 'restore'):
-                    queue.start_refresh(force=True)
+                    # Check just this PR so adding one does not hold up a full Sync.
+                    queue.start_fetch([tracker.canonical_pr_url(str(data.get('url', '')))[0]])
                 return
             if path in ('/regenerate-review','/regenerate-explainer'):
                 result=runtime.start_launch(str(data.get('url','')),

@@ -214,10 +214,16 @@ class Queue(unittest.TestCase):
     'title':str(number),'state':'OPEN','createdAt':T0,'updatedAt':T3,'isDraft':False,
     'headRefOid':A,'baseRefOid':B,'author':None}],
     'pageInfo':{'hasNextPage':more,'endCursor':'next' if more else None}}}
-  with patch.object(reporting,'graphql',side_effect=[result(2,True),result(3),result(2),result(3),result(2)]) as search:
+  # Searches run in parallel, so page by cursor rather than call order.
+  def page(_query,variables):
+   if 'reviewed-by' in variables['query'] and 'is:open' in variables['query']:
+    return result(3) if variables['cursor']=='next' else result(2,True)
+   return result(2)
+  with patch.object(reporting,'graphql',side_effect=page) as search:
    q.discover_history('me',T3)
   self.assertEqual(len(q.load()['prs']),3)
-  self.assertEqual(search.call_args_list[1].args[1]['cursor'],'next')
+  self.assertEqual(search.call_count,5)
+  self.assertEqual(sum(call.args[1]['cursor']=='next' for call in search.call_args_list),1)
  def test_expired_search_hit_is_not_reintroduced(self):
   import dashboard_reporting as reporting
   from datetime import datetime,timedelta,timezone
@@ -242,6 +248,72 @@ class Queue(unittest.TestCase):
   self.assertEqual(self.view()['bucket'],'attention')
  def test_older_fetch_cannot_replace_newer_snapshot(self):
   self.fetch(B,T3);self.fetch(A,T2);self.assertEqual(self.record()['metadata']['head_sha'],B)
+ def versions(self,updated=T1,head=A,state='OPEN'):return {URL:{'updatedAt':updated,'headRefOid':head,'state':state}}
+ def fetched(self,updated=T1,head=A,at=T1):
+  data=q.load();data['prs'][URL].update(fetched={'updated_at':updated,'head_sha':head},checked_at=at,error='');q.save(data)
+ def run_refresh(self,versions,full=False):
+  import dashboard_retention,storage_cleanup
+  payload={'metadata':{'head_sha':A,'pr_updated_at':T1,'pr_state':'open'},'events':[],'latest_review':{}}
+  with patch.object(tracker,'utc_now',return_value='2026-09-01T11:30:00+00:00'),patch.object(q,'api',return_value={'login':'me'}),\
+       patch.object(q,'discover_history',return_value=set()),patch.object(q,'remote_versions',return_value=versions) as remote,\
+       patch.object(q,'fetch_pr',return_value=payload) as fetch,patch.object(dashboard_retention,'cleanup',return_value=[]),\
+       patch.object(storage_cleanup,'maintain'):
+   q.refresh(full=full)
+  return remote,fetch
+ def test_unchanged_open_pr_skips_detailed_fetch_until_hourly_check(self):
+  self.fetched();now=q.epoch(T1)+60
+  self.assertTrue(q.unchanged(self.record(),self.versions()[URL],now))
+  for remote in (self.versions(updated=T2)[URL],self.versions(head=B)[URL],self.versions(state='MERGED')[URL],None):
+   self.assertFalse(q.unchanged(self.record(),remote,now))
+  self.assertFalse(q.unchanged(self.record(),self.versions()[URL],q.epoch(T1)+q.FULL_CHECK_SECONDS))
+  data=q.load();data['prs'][URL]['error']='GitHub could not be checked.';q.save(data)
+  self.assertFalse(q.unchanged(self.record(),self.versions()[URL],now))
+ def test_detailed_fetch_records_what_it_saw(self):
+  q.apply_fetch(URL,{'metadata':{'head_sha':B,'pr_updated_at':T2},'events':[],'latest_review':{}},T2)
+  self.assertEqual(self.record()['fetched'],{'updated_at':T2,'head_sha':B})
+ def test_refresh_fetches_only_changed_prs_unless_full(self):
+  self.fetched()
+  _,fetch=self.run_refresh(self.versions());fetch.assert_not_called();self.assertEqual(self.record()['checked_at'],T1)
+  _,fetch=self.run_refresh(self.versions(updated=T2));fetch.assert_called_once()
+  self.fetched()
+  remote,fetch=self.run_refresh(self.versions(),full=True);remote.assert_not_called();fetch.assert_called_once()
+ def test_remote_versions_batches_and_omits_unreadable_prs(self):
+  import dashboard_reporting as reporting
+  urls=[f'https://github.com/example/repo/pull/{n}' for n in range(1,q.BATCH_SIZE+3)]
+  def graphql(query,variables):
+   if variables['n0']!=1:raise dashboard.DashboardError('Unavailable')
+   return {f'p{i}':{'pullRequest':None if i==1 else {'updatedAt':T1,'headRefOid':A,'state':'OPEN'}} for i in range(q.BATCH_SIZE)}
+  with patch.object(reporting,'graphql',side_effect=graphql) as call:versions=q.remote_versions(urls)
+  self.assertEqual(call.call_count,2)
+  self.assertEqual(set(versions),set(urls[:q.BATCH_SIZE])-{urls[1]})
+ def wait_until(self,condition):
+  import time
+  deadline=time.time()+2
+  while not condition():
+   self.assertLess(time.time(),deadline);time.sleep(0.01)
+ def test_single_pr_check_skips_untracked_prs_and_sync_status(self):
+  data=q.load();data['login']='me';q.save(data);before=q.status();seen=[]
+  def fetch(url,login):
+   seen.append((url,login));return {'metadata':{'head_sha':B},'events':[],'latest_review':{}}
+  with patch.object(q,'fetch_pr',side_effect=fetch),patch.object(q,'api',side_effect=AssertionError('reuse the saved login')):
+   self.assertTrue(q.start_fetch([URL,URL,'https://github.com/other/repo/pull/9']))
+   self.assertFalse(q.start_fetch(['https://github.com/other/repo/pull/9']))
+   self.wait_until(lambda:not q._fetching)
+  self.assertEqual(seen,[(URL,'me')]);self.assertEqual(self.record()['metadata']['head_sha'],B)
+  self.assertEqual(q.status(),before)
+ def test_sync_during_background_refresh_runs_one_more_pass(self):
+  import threading
+  entered,release,calls=threading.Event(),threading.Event(),[]
+  def refresh(full=False):
+   calls.append(full)
+   if len(calls)==1:entered.set();release.wait(2)
+  with patch.object(q,'refresh',side_effect=refresh):
+   self.assertTrue(q.start_refresh(force=True));self.assertTrue(entered.wait(2))
+   self.assertFalse(q.status()['manual'])
+   self.assertFalse(q.start_refresh(force=True,manual=True));self.assertFalse(q.start_refresh(force=True,manual=True))
+   self.assertTrue(q.status()['manual']);release.set()
+   self.wait_until(lambda:not q._running)
+  self.assertEqual(len(calls),2);self.assertEqual(q.status()['status'],'completed');self.assertFalse(q.status()['manual'])
  def test_wrong_account_preserves_queue(self):
   data=q.load();data['login']='original';q.save(data)
   with patch.object(q,'api',return_value={'login':'other'}),patch.object(q,'fetch_pr') as fetch:
@@ -274,13 +346,27 @@ class Classification(unittest.TestCase):
 
 class QueueHTTP(existing.HTTP):
  def test_queue_actions_require_auth_and_survive_reload(self):
-  with patch.object(q,'start_refresh'):
+  with patch.object(q,'start_fetch'):
    self.assertEqual(self.request('/queue','POST',{'url':URL,'action':'enqueue'})[0],403)
    self.assertEqual(self.request('/queue','POST',{'url':URL,'action':'enqueue'},self.auth())[0],200)
   pr=json.loads(self.request('/api/state')[2])['prs'][0]
   self.assertEqual(pr['workflow']['stage'],'up_next')
   self.assertEqual(self.request('/queue','POST',{'url':URL,'action':'note','revision':pr['workflow']['revision'],'note':'private'},self.auth())[0],200)
   self.assertEqual(q.load()['prs'][URL]['note'],'private')
+ def test_saving_a_pr_checks_only_that_pr(self):
+  with patch.object(q,'start_fetch') as fetch,patch.object(q,'start_refresh') as refresh:
+   self.assertEqual(self.request('/queue','POST',{'url':URL,'action':'enqueue'},self.auth())[0],200)
+  fetch.assert_called_once_with([URL]);refresh.assert_not_called()
+ def test_targeted_queue_check_validates_urls(self):
+  with patch.object(q,'start_fetch',return_value=True) as fetch:
+   self.assertEqual(self.request('/refresh-queue','POST',{'urls':[URL]},self.auth())[0],202)
+   for urls in ([],'x',[1],['https://evil.example/pull/1'],[URL]*51):
+    self.assertEqual(self.request('/refresh-queue','POST',{'urls':urls},self.auth())[0],400)
+  fetch.assert_called_once_with([URL])
+ def test_sync_marks_queue_refresh_manual(self):
+  with patch.object(q,'start_refresh') as refresh,patch.object(runtime,'start_refresh',return_value=True):
+   self.assertEqual(self.request('/refresh','POST',{},self.auth())[0],202)
+  refresh.assert_called_once_with(force=True,triage_after=True,manual=True)
  def test_refresh_and_recovery_cannot_be_triggered_cross_origin(self):
   with patch.object(q,'start_refresh') as refresh:
    for endpoint in ('/refresh-queue','/recover-reviews'):

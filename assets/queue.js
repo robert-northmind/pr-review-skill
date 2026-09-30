@@ -1,5 +1,5 @@
 'use strict';
-let queueActive=false, queueSignature='', noteContext=null, queueAutoAt=0, queueQuery='', queueSeen=null;
+let queueActive=false, queueSignature='', noteContext=null, queueAutoAt=0, queueCheckAt=0, queueQuery='', queueSeen=null;
 const queueLabels={reviewing:'In progress',attention:'Back to you',up_next:'Up next',waiting:'Waiting for author',history:'Merged or closed',removed:'Stopped tracking'};
 const queueHints={reviewing:'What you are working on',attention:'Waiting PRs with new commits, replies, review requests or a due reminder',up_next:'In your order',waiting:'Comes back to you on new commits or replies, or when a reminder is due',history:'Kept 20 days after closing',removed:'Kept until the PR closes. Track again at any time.'};
 const queueEmpty={reviewing:'Nothing in progress. Start the top PR in Up next.',attention:'Nothing came back. Updates on waiting PRs land here.',up_next:'Add a PR here, or use Add to Up next in the Inbox.',waiting:'Nothing is waiting for an author.',history:'Tracked PRs appear here when GitHub confirms they are merged or closed.',removed:'PRs you stop tracking stay here so you can bring them back.'};
@@ -239,11 +239,16 @@ $('queue-note-form').addEventListener('submit',async event=>{
 async function refreshQueue(force=false,recovery=false){
  try{await post(recovery?'/recover-reviews':'/refresh-queue',{force});queueAutoAt=Date.now();await loadState();}catch(error){notify(error.message);}
 }
+async function checkQueued(urls){
+ queueCheckAt=Date.now();try{await post('/refresh-queue',{urls});await loadState();}catch(error){notify(error.message);}
+}
 function queueAutoRefresh(){
  if(document.hidden||!state)return;
  const tracked=state.prs.filter(pr=>pr.workflow&&pr.workflow.stage!=='removed'&&!pr.workflow.closed);
- const unchecked=tracked.some(pr=>!pr.workflow.checked_at&&!pr.workflow.attempted_at);
- if(Date.now()-queueAutoAt>=(unchecked?30000:300000))refreshQueue(unchecked);
+ // Newly saved PRs are checked on their own; everything else waits for the periodic refresh.
+ const unchecked=tracked.filter(pr=>!pr.workflow.checked_at&&!pr.workflow.attempted_at).map(pr=>pr.url);
+ if(unchecked.length&&Date.now()-queueCheckAt>=30000)checkQueued(unchecked.slice(0,50));
+ else if(Date.now()-queueAutoAt>=300000)refreshQueue();
 }
 document.addEventListener('visibilitychange',queueAutoRefresh);
 window.addEventListener('focus',queueAutoRefresh);

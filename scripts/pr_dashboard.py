@@ -47,6 +47,7 @@ SEARCH_JSON_FIELDS = "url,title,repository,number,isDraft,createdAt,updatedAt,au
 # way, so this doesn't lose anything.
 PR_LIST_JSON_FIELDS = "url,title,number,isDraft,createdAt,updatedAt,author"
 STALE_RUN_HOURS = 6.0
+DETAILS_REUSE_SECONDS = 3600
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8765
 
@@ -355,7 +356,17 @@ def _refresh_sources() -> None:
         return {"repo:" + entry.get("owner", "") + "/" + entry.get("repository", "")
                 if r == "watched-repo" else r for r in entry.get("reasons", [])}
 
-    detail_urls = {u for u in observed if not snapshot["prs"].get(u, {}).get("hidden")}
+    def details_current(url):
+        # Search results carry updatedAt; unchanged PRs reuse details for up to an hour.
+        entry, updated = snapshot["prs"].get(url, {}), observed[url]["item"].get("updatedAt")
+        try:
+            return bool(updated and entry.get("pr_updated_at") and entry.get("head_sha")
+                        and tracker.parse_time(entry["pr_updated_at"]) == tracker.parse_time(updated)
+                        and tracker.parse_time(now) - tracker.parse_time(entry["details_checked_at"])
+                        < timedelta(seconds=DETAILS_REUSE_SECONDS))
+        except (KeyError, tracker.TrackerError):
+            return False
+    detail_urls = {u for u in observed if not snapshot["prs"].get(u, {}).get("hidden") and not details_current(u)}
     my_login = current_login()
     details = {}
     def detail(url):
