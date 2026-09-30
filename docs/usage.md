@@ -137,6 +137,14 @@ Switch between **Daily** and **Weekly**, select a chart bar, or click
 **Yesterday** to see the associated PRs. Reporting has its own repository
 filter; hiding an inbox PR does not remove it from your activity.
 
+**AI review cost** at the bottom of Reporting covers the last 30 days of in-app
+reviews: the total, the number of reviews, the average per review, daily cost by
+provider, cost by model and the most expensive reviews. Select a day to list its
+reviews. Amounts are API-price estimates reported by Claude Code and Codex,
+including sub-agents; what you actually pay depends on your plan. Reviews that
+finished before cost tracking existed are filled in from the last 45 days when the
+server starts.
+
 Daily bars include separate review and merge trend lines. **Activity trend**
 uses the last 10 complete workdays by default; select 5 for a faster-moving
 average. Weekends and dates marked under **Time off** are excluded, while
@@ -212,7 +220,9 @@ While a review runs, the activity panel accepts questions and steering, such as
 updates. Wrap up now asks the lead to stop new checks, mark unfinished stages
 blocked, and build the report from the evidence gathered so far; the result is
 labeled Finished with gaps. Stop review cancels the worker and preserves its saved
-activity. Finished review sessions do not accept follow-ups; the code workspace
+activity. When a review finishes, the panel, the PR card and the run history show
+its estimated cost, and **Cost breakdown** lists tokens and cost per model.
+Finished review sessions do not accept follow-ups; the code workspace
 has a separate persistent chat for code questions.
 
 Install `requirements-triage.txt` into the server's Python environment for Codex

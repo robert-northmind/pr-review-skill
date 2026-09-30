@@ -3,7 +3,8 @@
 Captured September 24, 2026 from the production dashboard assets and bundled
 report renderer at commit `a924abf`. The three `review-*` report images were
 refreshed September 25, 2026 with the renderer in the commit that added
-`review-explainer-light.jpg`. Headless Chrome, light/dark system themes,
+`review-explainer-light.jpg`. `reporting-cost-light.jpg` was added September 30,
+2026 with the commit that added AI review cost. Headless Chrome, light/dark system themes,
 1440 × 1050 CSS-pixel viewports (1250 high for live review), JPEG quality 88.
 
 | Image | What it shows | Synthetic source |
@@ -14,12 +15,13 @@ refreshed September 25, 2026 with the renderer in the commit that added
 | `live-review-light.jpg` | Stage progress, a question and simulated reply, wrap-up and stop controls | `codex_browser_fixture.py` |
 | `ai-settings-light.jpg` | Independent Triage, AI review and Chat profiles | `workspace_browser_fixture.py` |
 | `reporting-dark.jpg` | Daily activity, workday trend lines and a selected day's PRs | `workspace_browser_fixture.py` |
+| `reporting-cost-light.jpg` | 30-day AI review cost, a day's provider split, cost by model and the costliest reviews | `workspace_browser_fixture.py` |
 | `review-overview-light.jpg` | Outcome, current assessment and plain-words summary | `readme_report_fixture.py` |
 | `review-explainer-light.jpg` | Diagram with finding badges and a before/after situation grid | `readme_report_fixture.py` |
 | `review-findings-light.jpg` | One finding expanded with its walkthrough, fix sketch and copyable draft | `readme_report_fixture.py` |
 
 All fixtures live in `tests/fixtures/`. Every displayed PR, repository, person,
-activity event and private note is fictional. The browser blocks external requests;
+activity event, AI cost and private note is fictional. The browser blocks external requests;
 avatars use the UI's initials fallback. Fixtures use temporary tracker homes and
 mock GitHub/AI boundaries. No live inbox, credentials, model calls or GitHub data
 are used. Settings show the repository's presets, not verified account entitlements.
@@ -37,7 +39,7 @@ then run from the repository root:
 node scripts/capture_readme.cjs
 ```
 
-The command replaces the nine images here. To preview in another directory:
+The command replaces the ten images here. To preview in another directory:
 
 ```sh
 node scripts/capture_readme.cjs /tmp/pr-review-readme-preview

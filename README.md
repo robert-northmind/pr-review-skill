@@ -27,7 +27,7 @@ the dashboard does not post comments, approve or merge PRs.
 | **Review reports** | Read the outcome and assessment, a plain-words summary, a diagram of the change, a grid of situations before and after, exact source excerpts, step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits in one HTML report. |
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
-| **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions. |
+| **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions, plus estimated AI review cost for the last 30 days. |
 | **Settings** | Choose providers, models and reasoning independently for Triage, AI review and Chat. Configure watched repositories and light, dark or system appearance. |
 
 AI reviews cover the full diff through correctness, contracts and security lenses,
@@ -45,7 +45,7 @@ review assistance; you decide which comments to send and whether to approve.
 ![Code workspace with a fictional batch transport diff, inline thread and Comments rail](docs/screenshots/code-workspace-light.jpg)
 
 <details>
-<summary>More screenshots: reports, review queue, live AI reviews, settings and reporting</summary>
+<summary>More screenshots: reports, review queue, live AI reviews, settings, reporting and AI cost</summary>
 
 **Review report:** the outcome and current assessment lead into a plain-words summary.
 
@@ -75,9 +75,13 @@ review assistance; you decide which comments to send and whether to approve.
 
 ![Reporting in dark mode with fictional daily activity and workday trends](docs/screenshots/reporting-dark.jpg)
 
+**AI review cost:** estimated cost over the last 30 days, by day, provider and model, with the most expensive reviews.
+
+![Fictional AI review cost for 30 days with daily bars by provider, cost by model and the costliest reviews](docs/screenshots/reporting-cost-light.jpg)
+
 </details>
 
-All screenshots use synthetic data, captured September 24, 2026 from the actual
+All screenshots use synthetic data, captured September 24–30, 2026 from the actual
 UI. See [screenshot provenance and refresh instructions](docs/screenshots/README.md).
 
 ## Install and run

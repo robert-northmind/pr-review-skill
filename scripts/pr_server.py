@@ -17,6 +17,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import dashboard_runtime as runtime
+import ai_cost
 import dashboard_reporting as reporting
 import dashboard_queue as queue
 import dashboard_triage as triage
@@ -304,6 +305,7 @@ def main():
     if tracker.read_json(status,required=False).get('status') == 'running':
         tracker.atomic_write(status,{'status':'failed','message':'The server restarted during refresh. Retry the GitHub refresh.'})
     server=Server((dashboard.SERVER_HOST,args.port))
+    ai_cost.start_backfill()
     print(f'PR dashboard ready at http://127.0.0.1:{args.port}/',flush=True)
     try:
         server.serve_forever()

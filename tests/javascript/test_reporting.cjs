@@ -46,4 +46,20 @@ assert.equal(c.reportValidDate('2028-02-29'),true);
 const normalized=c.reportNormalizePreferences({window:7,timeOff:[null,{start:'bad',end:'bad'},{start:'2026-09-20',end:'2026-09-10'},{start:'2026-09-14',end:'2026-09-18'},{start:'2026-09-10',end:'2026-09-15'}]});
 assert.equal(normalized.window,10);
 assert.equal(JSON.stringify(normalized.timeOff),JSON.stringify([{start:'2026-09-10',end:'2026-09-18'}]));
-console.log('Reporting aggregation and trend checks passed: windows, zero days, weekends, time off, incomplete history, duplicate reviews, date validation and DST.');
+
+// AI review cost: a 30-day window, provider split, model totals and a fair comparison.
+const costs=[
+ {run_id:'a',date:'2026-09-29',provider:'claude',mode:'full',usd:8,models:[{model:'claude-opus-5-5',usd:7.5},{model:'claude-sonnet-5-5',usd:.5}]},
+ {run_id:'b',date:'2026-09-29',provider:'codex',mode:'update',usd:4,models:[{model:'gpt-6-astra',effort:'high',usd:4}]},
+ {run_id:'c',date:'2026-09-01',provider:'claude',mode:'full',usd:2,models:[{model:'claude-opus-5-5',usd:2}]},
+ {run_id:'old',date:'2026-08-02',provider:'claude',mode:'full',usd:100,models:[{model:'claude-opus-5-5',usd:100}]}];
+const cost=c.costSummary(costs,'2026-09-30',30);
+assert.equal(cost.start,'2026-09-01');assert.equal(cost.daily.length,30);
+assert.equal(cost.usd,14);assert.equal(cost.count,3);assert.equal(cost.updates,1);assert.equal(cost.previous,100,'full previous window is covered');
+const day=cost.daily.find(item=>item.day==='2026-09-29');assert.equal(day.claude,8);assert.equal(day.codex,4);assert.equal(day.runs.length,2);
+assert.equal(JSON.stringify(cost.models.map(row=>[row.model,row.usd,row.runs])),JSON.stringify([['claude-opus-5-5',9.5,2],['gpt-6-astra',4,1],['claude-sonnet-5-5',.5,1]]));
+assert.equal(cost.top.map(entry=>entry.run_id).join(),'a,b,c');
+assert.equal(c.costSummary(costs.slice(0,3),'2026-09-30',30).previous,null,'no comparison before tracking covers the previous window');
+assert.equal(c.costModelLabel('claude-haiku-4-5-20251001'),'Haiku 4.5');assert.equal(c.costModelLabel('gpt-5.6-sol'),'GPT-5.6 Sol');
+assert.equal(c.costAxisMaximum(142.68),200);assert.equal(c.costMoney(1234.5),'$1,235');assert.equal(c.costMoney(3.456),'$3.46');
+console.log('Reporting aggregation and trend checks passed: windows, zero days, weekends, time off, incomplete history, duplicate reviews, date validation, DST and AI review cost.');

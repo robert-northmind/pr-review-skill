@@ -33,7 +33,8 @@ class Reporting(unittest.TestCase):
  def test_duplicate_launch_is_rejected(self):
   entered,release=threading.Event(),threading.Event()
   def refresh():entered.set();release.wait(2)
-  with patch.object(r,'refresh',side_effect=refresh):
+  with patch.object(r,'refresh',side_effect=refresh),patch.object(r.ai_cost,'backfill') as backfill:
    self.assertTrue(r.start_refresh());self.assertTrue(entered.wait(1));self.assertFalse(r.start_refresh());release.set()
    self.assertTrue(r._guard.acquire(timeout=2));r._guard.release()
+   backfill.assert_called_once()
 if __name__=='__main__':unittest.main()

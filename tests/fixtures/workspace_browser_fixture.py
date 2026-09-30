@@ -38,6 +38,28 @@ def main():
                     'url': f'https://github.com/example/repo/pull/{number}',
                     'repository': 'example/repo', 'title': f'Example {kind} PR {number}'})
 
+    # Fictional AI review costs: (days ago, provider, lead model, effort, mode, lead $, helper $).
+    costs = [(1, 'claude', 'claude-opus-5-5', 'high', 'full', 8.12, .41), (1, 'claude', 'claude-opus-5-5', 'high', 'update', 3.64, .12),
+             (2, 'codex', 'gpt-6-astra', 'high', 'full', 6.10, 2.35), (3, 'claude', 'claude-opus-5-5', 'high', 'full', 9.48, .66),
+             (3, 'claude', 'claude-opus-5-5', 'high', 'full', 7.02, .38), (4, 'codex', 'gpt-6-astra', 'medium', 'full', 4.91, 1.62),
+             (6, 'claude', 'claude-opus-5-5', 'high', 'full', 11.37, .84), (7, 'claude', 'claude-opus-5-5', 'high', 'update', 2.95, .09),
+             (8, 'codex', 'gpt-6-astra', 'high', 'full', 7.44, 3.18), (9, 'claude', 'claude-opus-5-5', 'high', 'full', 6.58, .27),
+             (10, 'claude', 'claude-opus-5-5', 'high', 'full', 8.83, .52), (13, 'codex', 'gpt-6-astra', 'high', 'full', 5.26, 1.97),
+             (14, 'claude', 'claude-opus-5-5', 'high', 'full', 7.71, .44), (15, 'claude', 'claude-opus-5-5', 'high', 'update', 4.02, .15),
+             (17, 'codex', 'gpt-6-astra', 'medium', 'full', 3.88, 1.21), (20, 'claude', 'claude-opus-5-5', 'high', 'full', 10.26, .71),
+             (22, 'claude', 'claude-opus-5-5', 'high', 'full', 6.94, .33), (24, 'codex', 'gpt-6-astra', 'high', 'full', 8.05, 2.66),
+             (27, 'claude', 'claude-opus-5-5', 'high', 'full', 7.39, .48)]
+    reviewed = [event for event in report['events'] if event['kind'] == 'review']
+    report['ai_cost_days'] = 30
+    report['ai_costs'] = [{
+        'run_id': f'fixture-cost-{index}', 'pr_url': reviewed[index % len(reviewed)]['url'],
+        'repository': 'example/repo', 'number': int(reviewed[index % len(reviewed)]['url'].rsplit('/', 1)[1]), 'provider': provider, 'model': model, 'mode': mode,
+        'status': 'completed', 'usd': round(lead + helper, 2), 'pricing': 'list', 'date': str(today - timedelta(days=ago)),
+        'finished_at': tracker.utc_now(),
+        'models': [{'model': model, 'effort': effort if provider == 'codex' else '', 'usd': lead},
+                   {'model': 'claude-sonnet-5-5' if provider == 'claude' else 'gpt-6-sol', 'effort': 'high' if provider == 'codex' else '', 'usd': helper}]}
+        for index, (ago, provider, model, effort, mode, lead, helper) in enumerate(costs)]
+
     def sync_inbox():
         marker = tracker.tracker_root() / 'dashboard-refresh.json'
         tracker.atomic_write(marker, {'status': 'running'})

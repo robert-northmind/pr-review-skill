@@ -2,6 +2,7 @@
 import json
 from types import SimpleNamespace
 from ai_runtime import sources
+import ai_cost
 import github_read
 
 # Chat commands run sandboxed without network, and nothing may escalate (see
@@ -93,7 +94,13 @@ class Session:
             payload = notification.payload.model_dump(mode='json', by_alias=True)
             codex_review.record_notification(SimpleNamespace(emit=callbacks.emit), notification.method, payload)
             if notification.method == 'turn/completed':
-                return {'completed': payload.get('turn', {}).get('status') == 'completed'}
+                return {'completed': payload.get('turn', {}).get('status') == 'completed', 'cost': self.cost()}
+
+    def cost(self):
+        try:
+            return ai_cost.codex_cost(self.client, self.thread_id)
+        except Exception:
+            return None  # Usage may not be priced yet; the dashboard backfill retries.
 
     def steer(self, text, wrap_up=False):
         # Codex folds steering input into the active review turn.
