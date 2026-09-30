@@ -22,9 +22,15 @@ MOVES = {'start', 'stop', 'wait', 'acknowledge', 'remove', 'restore'}
 UNDO_KEYS = ('stage', 'done_at', 'review_observation', 'ack_head', 'ack_at', 'ack_event_ids',
              'position', 'moved', 'remind_at')
 REMIND_DAYS = {1, 3, 7}
-_guard = threading.Lock()
+# Unchanged open PRs skip the detailed fetch, but each still gets one full check per hour.
+FULL_CHECK_SECONDS = 3600
+BATCH_SIZE = 25
+_state = threading.Lock()
+_running = False
+_rerun = False
 _status = {'status': 'idle'}
 _triage_after_refresh = False
+_fetching = set()
 
 
 def load():
@@ -351,6 +357,9 @@ def apply_fetch(url, payload, started, error=None):
             if epoch(started) < epoch(record.get('checked_at')):
                 return
             record['metadata'] = {**record.get('metadata', {}), **payload['metadata']}
+            # Search results also update metadata, so keep what the detailed fetch saw separately.
+            record['fetched'] = {'updated_at': payload['metadata'].get('pr_updated_at', ''),
+                                 'head_sha': payload['metadata'].get('head_sha', '')}
             record.update(events=payload['events'], checked_at=started, error='')
             latest = payload.get('latest_review') or {}
             if record.pop('recover_baseline', False) and latest.get('commit_id'):
@@ -393,31 +402,35 @@ def discover_history(login, started):
           url title state closedAt mergedAt createdAt updatedAt isDraft
           headRefOid baseRefOid author{login avatarUrl}
         }}}}"""
+    def search(search_query):
+        found, cursor = {}, None
+        while True:
+            result = reporting.graphql(query, {'query': search_query, 'cursor': cursor})['search']
+            if result['issueCount'] > 1000:
+                raise dashboard.DashboardError('Participation history exceeds GitHub’s search limit. Previous history kept; search needs a narrower range.')
+            for item in result['nodes']:
+                if not item or not item.get('url'):
+                    continue
+                url, metadata = identity(item['url'])
+                metadata.update(title=item['title'], author_login=(item.get('author') or {}).get('login', ''),
+                    author_avatar_url=(item.get('author') or {}).get('avatarUrl', ''),
+                    pr_state=item['state'].lower(), closed_at=item.get('closedAt') or '',
+                    merged_at=item.get('mergedAt') or '', pr_updated_at=item['updatedAt'],
+                    pr_created_at=item['createdAt'], is_draft=item['isDraft'],
+                    head_sha=item['headRefOid'], base_sha=item['baseRefOid'], history_participated=True)
+                found[url] = metadata
+            page = result['pageInfo']
+            if not page['hasNextPage']:
+                return found
+            if not page['endCursor'] or page['endCursor'] == cursor:
+                raise dashboard.DashboardError('Incomplete participation history. Previous history kept; retry sync.')
+            cursor = page['endCursor']
+    searches = [f'is:pr {scope} {qualifier}:{login} -author:{login}'
+                for qualifier in ('reviewed-by', 'commenter') for scope in ('is:open', 'is:closed closed:>=' + since)]
     found = {}
-    for qualifier in ('reviewed-by', 'commenter'):
-        for scope in ('is:open', 'is:closed closed:>=' + since):
-            cursor = None
-            while True:
-                result = reporting.graphql(query, {'query': f'is:pr {scope} {qualifier}:{login} -author:{login}', 'cursor': cursor})['search']
-                if result['issueCount'] > 1000:
-                    raise dashboard.DashboardError('Participation history exceeds GitHub’s search limit. Previous history kept; search needs a narrower range.')
-                for item in result['nodes']:
-                    if not item or not item.get('url'):
-                        continue
-                    url, metadata = identity(item['url'])
-                    metadata.update(title=item['title'], author_login=(item.get('author') or {}).get('login', ''),
-                        author_avatar_url=(item.get('author') or {}).get('avatarUrl', ''),
-                        pr_state=item['state'].lower(), closed_at=item.get('closedAt') or '',
-                        merged_at=item.get('mergedAt') or '', pr_updated_at=item['updatedAt'],
-                        pr_created_at=item['createdAt'], is_draft=item['isDraft'],
-                        head_sha=item['headRefOid'], base_sha=item['baseRefOid'], history_participated=True)
-                    found[url] = metadata
-                page = result['pageInfo']
-                if not page['hasNextPage']:
-                    break
-                if not page['endCursor'] or page['endCursor'] == cursor:
-                    raise dashboard.DashboardError('Incomplete participation history. Previous history kept; retry sync.')
-                cursor = page['endCursor']
+    with ThreadPoolExecutor(max_workers=len(searches)) as pool:
+        for result in pool.map(search, searches):
+            found.update(result)
     # Commit only after every search/page succeeds, merging concurrent local choices.
     with dashboard.state_lock():
         data = load()
@@ -442,7 +455,49 @@ def discover_history(login, started):
     return set(found)
 
 
-def refresh(include_closed=False):
+def remote_versions(urls):
+    """Read updatedAt and head for many PRs in a few GraphQL calls; unreadable batches are omitted."""
+    import dashboard_reporting as reporting
+    def batch(part):
+        declarations, fields, variables = [], [], {}
+        for i, url in enumerate(part):
+            _, owner, repo, number = tracker.canonical_pr_url(url)
+            declarations.append(f'$o{i}:String!,$r{i}:String!,$n{i}:Int!')
+            fields.append(f'p{i}:repository(owner:$o{i},name:$r{i}){{pullRequest(number:$n{i}){{updatedAt headRefOid state}}}}')
+            variables.update({f'o{i}': owner, f'r{i}': repo, f'n{i}': number})
+        try:
+            data = reporting.graphql('query(' + ','.join(declarations) + '){' + ' '.join(fields) + '}', variables)
+        except dashboard.DashboardError:
+            return {}  # Those PRs get the detailed fetch instead.
+        return {url: pr for i, url in enumerate(part)
+                if isinstance(pr := ((data.get(f'p{i}') or {}).get('pullRequest')), dict)}
+    parts = [urls[i:i + BATCH_SIZE] for i in range(0, len(urls), BATCH_SIZE)]
+    versions = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for result in pool.map(batch, parts):
+            versions.update(result)
+    return versions
+
+
+def unchanged(record, remote, now):
+    """An open PR whose updatedAt and head match the last detailed fetch within the hour."""
+    fetched = record.get('fetched') or {}
+    return bool(remote and remote.get('state') == 'OPEN' and not record.get('error')
+                and fetched.get('updated_at') and epoch(fetched['updated_at']) == epoch(remote.get('updatedAt'))
+                and fetched.get('head_sha') == remote.get('headRefOid')
+                and now - epoch(record.get('checked_at')) < FULL_CHECK_SECONDS)
+
+
+def fetch_one(url, login, started):
+    try:
+        apply_fetch(url, fetch_pr(url, login), started)
+        return None
+    except dashboard.DashboardError as error:
+        apply_fetch(url, None, started, error)
+        return str(error)
+
+
+def refresh(full=False):
     started = tracker.utc_now()
     login = api('user').get('login')
     if not login:
@@ -465,15 +520,13 @@ def refresh(include_closed=False):
     # removed/manual items still expire, and search-index lag cannot imply closure.
     urls = [u for u, r in data['prs'].items() if u not in discovered or
             (r['stage'] != 'removed' and r.get('metadata', {}).get('pr_state') not in ('closed', 'merged'))]
-    def fetch(url):
-        try:
-            apply_fetch(url, fetch_pr(url, login), started)
-            return None
-        except dashboard.DashboardError as error:
-            apply_fetch(url, None, started, error)
-            return str(error)
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        failures.extend(error for error in pool.map(fetch, urls) if error)
+    if not full:
+        # Closed PRs are always fetched so retention sees this refresh's observation.
+        versions = remote_versions([u for u in urls if data['prs'][u].get('metadata', {}).get('pr_state') == 'open'])
+        now = epoch(started)
+        urls = [u for u in urls if not unchanged(data['prs'][u], versions.get(u), now)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        failures.extend(error for error in pool.map(lambda url: fetch_one(url, login, started), urls) if error)
     import dashboard_retention
     failures.extend(dashboard_retention.cleanup(started))
     import storage_cleanup
@@ -488,37 +541,76 @@ def refresh(include_closed=False):
 
 def recover():
     # Compatibility for old tabs: participation now populates History automatically.
-    refresh(include_closed=True)
+    refresh(full=True)
 
 
-def start_refresh(force=False, recovery=False, triage_after=False):
-    global _status, _triage_after_refresh
-    if triage_after:
-        _triage_after_refresh = True
-    if not _guard.acquire(blocking=False):
-        return False
-    last = epoch(_status.get('started_at'))
-    if not force and datetime.now(timezone.utc).timestamp() - last < 300:
-        _guard.release()
-        return False
-    _status = {'status': 'running', 'started_at': tracker.utc_now()}
+def start_refresh(force=False, recovery=False, triage_after=False, manual=False):
+    """Start the full queue refresh. A manual Sync during a running refresh queues one more pass."""
+    global _status, _triage_after_refresh, _running, _rerun
+    with _state:
+        if triage_after:
+            _triage_after_refresh = True
+        if _running:
+            if manual:
+                # The running pass may predate the click, so observe GitHub once more afterwards.
+                _rerun = True
+                _status = {**_status, 'manual': True}
+            return False
+        last = epoch(_status.get('started_at'))
+        if not force and datetime.now(timezone.utc).timestamp() - last < 300:
+            return False
+        _running = True
+        _status = {'status': 'running', 'started_at': tracker.utc_now(), 'manual': manual}
     def worker():
-        global _status, _triage_after_refresh
+        global _status, _triage_after_refresh, _running, _rerun
+        while True:
+            try:
+                refresh(full=recovery)
+                result = {'status': 'completed', 'finished_at': tracker.utc_now()}
+            except Exception as error:
+                result = {'status': 'failed', 'message': str(error)}
+            with _state:
+                if _rerun:
+                    _rerun = False
+                    _status = {**_status, 'started_at': tracker.utc_now()}
+                    continue
+                _status = {**_status, **result, 'manual': False}
+                follow_up = _triage_after_refresh
+                _triage_after_refresh = False
+                _running = False
+            break
+        if follow_up:
+            import dashboard_triage
+            try:
+                dashboard_triage.start()
+            except ValueError:
+                pass  # Triage start records its own visible failure state.
+    threading.Thread(target=worker, daemon=True).start()
+    return True
+
+
+def start_fetch(urls):
+    """Check only these tracked PRs, outside the full refresh and its Sync status."""
+    tracked = load()['prs']
+    with _state:
+        pending = [u for u in dict.fromkeys(urls) if u in tracked and u not in _fetching]
+        _fetching.update(pending)
+    if not pending:
+        return False
+    def worker():
+        started = tracker.utc_now()
         try:
-            refresh(include_closed=force)
-            _status = {**_status, 'status': 'completed', 'finished_at': tracker.utc_now()}
-        except Exception as error:
-            _status = {**_status, 'status': 'failed', 'message': str(error)}
+            login = load().get('login') or api('user').get('login')
+            if not login:
+                raise dashboard.DashboardError('Could not identify your GitHub account.')
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(lambda url: fetch_one(url, login, started), pending))
+        except dashboard.DashboardError as error:
+            for url in pending:
+                apply_fetch(url, None, started, error)
         finally:
-            follow_up = _triage_after_refresh
-            _triage_after_refresh = False
-            _guard.release()
-            if follow_up:
-                import dashboard_triage
-                try:
-                    dashboard_triage.start()
-                except ValueError:
-                    pass  # Triage start records its own visible failure state.
+            with _state:
+                _fetching.difference_update(pending)
     threading.Thread(target=worker, daemon=True).start()
     return True
 

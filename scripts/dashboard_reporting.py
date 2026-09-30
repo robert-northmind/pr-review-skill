@@ -1,4 +1,5 @@
 """Small, read-only GitHub activity cache for the Reporting view."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import json
@@ -107,8 +108,10 @@ def refresh():
     login = graphql('query{viewer{login}}', {})['viewer']['login']
     # Pad discovery by a day for local midnight; then filter exact local dates.
     since = str(start - timedelta(days=1))
-    reviewed = search(f'is:pr reviewed-by:{login} updated:>={since}', login, True)
-    merged = search(f'is:pr is:merged author:{login} merged:>={since}', login, False)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reviewed = pool.submit(search, f'is:pr reviewed-by:{login} updated:>={since}', login, True)
+        merged = pool.submit(search, f'is:pr is:merged author:{login} merged:>={since}', login, False)
+        reviewed, merged = reviewed.result(), merged.result()
     events = events_from(reviewed, merged, login, start, today)
     data = {'login':login,'range_start':str(start),'range_end':str(today),
             'updated_at':tracker.utc_now(),'events':events}

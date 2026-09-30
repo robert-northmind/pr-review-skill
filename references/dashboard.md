@@ -55,7 +55,9 @@ and Appearance sections. AI activity contains running reviews and estimate progr
 
 **Sync GitHub** updates inbox discovery, saved reviews and reporting history.
 Open the adjacent sync status for each source's last successful update and errors.
-Sources can fail independently; cached data remains available. Sync does not rerun
+Sources can fail independently; cached data remains available. Background checks of
+saved reviews do not disable Sync; clicking Sync during one runs one more pass after it.
+Sync does not rerun
 completed AI reviews or estimates. Enabled initial estimates can start after discovery.
 The page polls cached state and reporting every five seconds; polling does not fetch
 GitHub history or run models. Existing automatic saved-review checks still apply.
@@ -99,7 +101,8 @@ its report task completes. Legacy explanation/Markdown artifacts retain their
 previous explainer/drafts readiness rules. Until a replacement is ready, previous completed results remain available.
 
 Refresh GitHub fetches sources and PR details with bounded concurrency. It
-runs in the background when started from the page. Incomplete or failed
+runs in the background when started from the page. PR details are reused for up
+to an hour while the search result's `updatedAt` matches the last detail fetch. Incomplete or failed
 sources preserve their existing entries and leave visible warnings. Local
 rerenders do not advance GitHub freshness. Searches currently cap at 100
 results per source; hitting that cap is visible and prevents absence-based
@@ -212,7 +215,11 @@ GitHub refresh merges observations into current personal preferences. Personal
 records remain if discovery drops the PR or GitHub becomes inaccessible.
 
 Follow-up refresh uses read-only, paginated GitHub CLI REST requests, with at
-most four PRs fetched concurrently. It ignores your own replies, bot comments,
+most eight PRs fetched concurrently. A batched GraphQL query first reads each open
+PR's `updatedAt` and head commit; PRs unchanged since their last detailed fetch
+are skipped, and each still gets a detailed fetch at least hourly. Closed PRs and
+PRs with a failed check are always fetched. Adding or restoring a PR checks only
+that PR, without starting a full refresh. It ignores your own replies, bot comments,
 and unrelated thread/CI activity. A newly submitted GitHub review while Reviewing
 moves the PR to Waiting at that review's commit, retaining later updates. Ordinary
 comments do not automatically finish the review; use Hand back to author.
@@ -226,7 +233,8 @@ The personal queue is bound to the first GitHub login that refreshes it; changin
 accounts yields an explicit error instead of interpreting another user's activity.
 
 New authenticated JSON POST actions: `/queue` (enqueue/start/wait/acknowledge/
-done/remove/restore/undo/note/move_up), `/refresh-queue`, and `/recover-reviews`.
+done/remove/restore/undo/note/move_up), `/refresh-queue` (optionally `urls` to
+check up to 50 saved PRs only), and `/recover-reviews`.
 The page and `/api/state` include `assets/queue.js`, workflow observations,
 participation history, and queue refresh status. Do not edit the JSON by hand.
 

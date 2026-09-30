@@ -434,7 +434,8 @@ function renderSyncStatus(){
  ];
  const problems=[];
  for(const source of sources){const err=syncRequestErrors[source.key]||(source.status?.status==='failed'?source.status.message||'Sync failed.':'')||source.error;if(err)problems.push(source.label+': '+err);source.error=err;}
- const running=syncStarting||sources.some(s=>s.status?.status==='running');
+ // Background checks of saved reviews keep Sync available; a Sync click queues one more pass.
+ const running=syncStarting||sources.some(s=>s.status?.status==='running'&&(s.key!=='queue'||s.status.manual));
  $('refresh').disabled=running;$('refresh').querySelector('span').textContent=running?'Syncing…':'Sync GitHub';
  const stamps=sources.map(s=>s.at).filter(Boolean).sort();
  $('freshness').textContent=running?'Syncing GitHub…':problems.length?'Sync needs attention':stamps.length===3?'Synced '+since(stamps[0]):'Sync status';

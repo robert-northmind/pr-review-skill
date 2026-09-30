@@ -42,8 +42,9 @@ class Isolated(unittest.TestCase):
   t.command_add_artifact(NS(run_id=run,name=name,kind='markdown',path=str(path),managed=True))
   return path
  def refresh(self,search,details=None):
-  with patch.object(d,'run_gh_search',side_effect=search),patch.object(d,'run_gh_pr_list',return_value=[]),patch.object(d,'current_login',return_value='me'),patch.object(d,'fetch_pr_details',return_value=details or {'reviews':[],'comments':[]}),patch.object(d,'rerender_from_dashboard'),patch('sys.stdout',new=io.StringIO()):
+  with patch.object(d,'run_gh_search',side_effect=search),patch.object(d,'run_gh_pr_list',return_value=[]),patch.object(d,'current_login',return_value='me'),patch.object(d,'fetch_pr_details',return_value=details or {'reviews':[],'comments':[]}) as fetch,patch.object(d,'rerender_from_dashboard'),patch('sys.stdout',new=io.StringIO()):
    d.command_refresh(NS())
+  return fetch
 
 class Refresh(Isolated):
  def test_failed_source_keeps_starred_open_entry_and_warning(self):
@@ -68,6 +69,20 @@ class Refresh(Isolated):
   self.assertNotEqual(pr['pr_created_at'],pr['first_seen_at'])
   self.refresh(lambda reason:[ITEM] if reason=='review-requested' else [])
   self.assertEqual(r.snapshot()['prs'][0]['pr_created_at'],opened)
+
+ def test_unchanged_pr_reuses_recent_details_for_an_hour(self):
+  updated,later='2026-01-03T00:00:00Z','2026-01-03T06:00:00Z'
+  def refresh(at,stamp=updated):
+   item={**ITEM,'updatedAt':stamp}
+   with patch.object(t,'utc_now',return_value=at):
+    return self.refresh(lambda reason:[item] if reason=='review-requested' else [],
+                        {'reviews':[],'comments':[],'updatedAt':stamp,'headRefOid':'b'*40}).call_count
+  self.assertEqual(refresh('2026-01-04T00:00:00+00:00'),1)
+  self.assertEqual(refresh('2026-01-04T00:30:00+00:00'),0)
+  self.assertEqual(d.load_dashboard()['prs'][URL]['details_checked_at'],'2026-01-04T00:00:00+00:00')
+  self.assertEqual(refresh('2026-01-04T01:00:00+00:00'),1)
+  self.assertEqual(refresh('2026-01-04T01:10:00+00:00',later),1)
+  self.assertEqual(d.load_dashboard()['prs'][URL]['pr_updated_at'],later)
 
  def test_search_supplies_opening_date_when_details_omit_it(self):
   opened='2025-12-01T00:00:00Z'
