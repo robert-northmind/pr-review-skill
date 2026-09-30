@@ -123,6 +123,9 @@
   </section>
   <section id="repository-settings" data-settings-section hidden>      <section class="watch-settings"><h2>Watched repositories</h2><p class="muted">Follow their open PRs in Watching. They stay separate from requests sent to you.</p><ul id="watched-repos"></ul>
         <form id="repo-form"><label>Add repository<input id="add-repo" name="repo" placeholder="owner/repository" required></label><button class="button" type="submit">Watch</button></form>
+      </section>
+      <section class="watch-settings host-settings"><h2>Run blocked checks outside the sandbox</h2><p class="muted">When a check can't run in the review sandbox, AI reviews may run it directly on this Mac for these repositories. It uses a throwaway copy and a clean environment, but can read your files and use the network. Reports label these checks. Use owner/* for every repository of an owner.</p><ul id="host-repos"></ul>
+        <form id="host-repo-form"><label>Add repository<input id="add-host-repo" name="repo" placeholder="owner/repository or owner/*" required></label><button class="button" type="submit">Trust</button></form>
       </section></section>
   <section id="appearance-settings" data-settings-section hidden><h2>Appearance</h2><label class="theme-control">Theme<select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></section>
 </dialog>

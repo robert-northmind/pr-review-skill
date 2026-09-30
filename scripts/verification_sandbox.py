@@ -2,22 +2,35 @@
 """Run a bounded verification command in a disposable macOS workspace.
 
 Requires an existing disposable copy, explicit read-only runtime/dependency
-paths, and an absolute executable. Never falls back to unsandboxed execution.
+paths, and an absolute executable. Toolchain presets add the narrow host access
+Xcode/SwiftPM, Gradle and Yarn need; --network permits a dependency-fetch step.
+Never falls back to unsandboxed execution on its own: --host runs outside the
+sandbox only for repositories listed in the dashboard's trusted host-execution
+setting, and every result records the boundary it ran in.
 """
 from __future__ import annotations
 import argparse
+from collections import Counter
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 SYSTEM_READ_PATHS = ('/usr', '/bin', '/sbin', '/System', '/Library/Apple', '/private/etc',
                      '/private/var/db', '/private/preboot')
 DEVICE_PATHS = ('/dev/null', '/dev/zero', '/dev/random', '/dev/urandom')
+PRESETS = ('swift', 'gradle', 'yarn')
+# Routine probes most processes make; they rarely explain a failure.
+ROUTINE_DENIALS = re.compile(r'/dev/dtracehelper|/dev/tty|/dev/autofs_nowait|user-preference-read|'
+                             r'ipc-posix-shm-read-data|sysctl-read|\.CFUserTextEncoding')
+YARN_RC = '.yarnrc.review.yml'
 
 
 def sandbox_string(value):
@@ -37,7 +50,86 @@ def narrow_directory(value):
     return directory
 
 
-def profile(workspace, read_only=(), loopback=False):
+def host_output(command):
+    try:
+        return subprocess.run(command, capture_output=True, text=True, check=True, timeout=15).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError(f'Could not run {command[0]}: {error}') from error
+
+
+def darwin_directory(name):
+    """Per-user temp/cache folder that Apple and Java tools use regardless of TMPDIR."""
+    return Path(host_output(['/usr/bin/getconf', name])).resolve(strict=True)
+
+
+def developer_directory():
+    developer = Path(host_output(['/usr/bin/xcode-select', '-p'])).resolve(strict=True)
+    bundle = next((path for path in (developer, *developer.parents) if path.suffix == '.app'), None)
+    return developer, bundle or developer
+
+
+def java_bundle():
+    home = Path(os.environ.get('JAVA_HOME') or host_output(['/usr/libexec/java_home'])).resolve(strict=True)
+    # Grant the whole .jdk bundle so the launcher can read its Info.plist and libraries.
+    bundle = next((path for path in (home, *home.parents) if path.suffix == '.jdk'), home)
+    return home, bundle
+
+
+def preset_access(names, workspace):
+    """Read paths, extra profile rules and environment for the requested toolchains."""
+    reads, rules, env = [], [], {}
+    verification = Path(workspace) / '.verification'
+    if 'swift' in names:
+        developer, bundle = developer_directory()
+        temp = darwin_directory('DARWIN_USER_TEMP_DIR')
+        cache = darwin_directory('DARWIN_USER_CACHE_DIR')
+        reads.append(bundle)
+        if Path('/Library/Developer').is_dir():
+            reads.append(Path('/Library/Developer'))
+        rules += [
+            # xcodebuild's license check; without it xcrun reports an unaccepted license.
+            '(allow file-read* (literal "/Library/Preferences/com.apple.dt.Xcode.plist"))',
+            # xcrun_db, Foundation atomic writes and swbuild temp files ignore TMPDIR.
+            f'(allow file-read* file-write* (subpath {sandbox_string(temp)}) '
+            f'(subpath {sandbox_string(cache / "com.apple.DeveloperTools")}))',
+            '(allow system-fsctl)',
+        ]
+        env.update(DEVELOPER_DIR=str(developer),
+                   CLANG_MODULE_CACHE_PATH=str(verification / 'cache' / 'clang'))
+    if 'gradle' in names:
+        java_home, bundle = java_bundle()
+        reads.append(bundle)
+        rules += [
+            f'(allow file-read* file-write* (subpath {sandbox_string(darwin_directory("DARWIN_USER_TEMP_DIR"))}))',
+            # Gradle's daemon and file-lock sockets use the wildcard address;
+            # outbound connections stay local, so dependencies must already be fetched.
+            '(allow system-socket)',
+            '(allow network-bind network-inbound (local ip "*:*"))',
+            '(allow network-outbound (remote ip "localhost:*") (remote unix-socket))',
+            # Java's process launcher lists its own descriptors.
+            '(allow file-read* (subpath "/dev/fd"))',
+        ]
+        # IPv4-mapped loopback peers do not match the profile's localhost filter.
+        env.update(JAVA_HOME=str(java_home), GRADLE_USER_HOME=str(verification / 'gradle'),
+                   JAVA_TOOL_OPTIONS='-Djava.net.preferIPv4Stack=true')
+    if 'yarn' in names:
+        # Yarn reads .yarnrc.yml in every parent folder, including the real home's,
+        # which may hold registry tokens. A renamed copy keeps the lookup inside the workspace.
+        env.update(YARN_RC_FILENAME=YARN_RC, YARN_ENABLE_TELEMETRY='0',
+                   YARN_ENABLE_GLOBAL_CACHE='false', YARN_CACHE_FOLDER=str(verification / 'cache' / 'yarn'),
+                   YARN_GLOBAL_FOLDER=str(verification / 'yarn-global'))
+    return reads, rules, env
+
+
+def copy_yarn_rc(workspace, cwd):
+    for folder in (cwd, *cwd.parents):
+        if not folder.is_relative_to(workspace):
+            break
+        if (folder / '.yarnrc.yml').is_file():
+            shutil.copyfile(folder / '.yarnrc.yml', folder / YARN_RC)
+
+
+def profile(workspace, read_only=(), loopback=False, *, network=False, extra_rules=(), tag=None):
     """The exact root open and child signals are required by macOS dyld/Dart."""
     workspace = narrow_directory(workspace)
     reads = [Path(path) for path in SYSTEM_READ_PATHS]
@@ -45,9 +137,10 @@ def profile(workspace, read_only=(), loopback=False):
     reads.append(workspace)
     read_rules = ' '.join(f'(subpath {sandbox_string(path)})' for path in reads)
     devices = ' '.join(f'(literal {sandbox_string(path)})' for path in DEVICE_PATHS)
+    deny = f'(deny default (with message {sandbox_string(tag)}))' if tag else '(deny default)'
     rules = [
         '(version 1)',
-        '(deny default)',
+        deny,
         '(allow process*)',
         '(allow signal (target children))',
         '(allow sysctl-read)',
@@ -60,12 +153,17 @@ def profile(workspace, read_only=(), loopback=False):
         f'(allow file-write* (subpath {sandbox_string(workspace)}))',
     ]
     if loopback:
-        rules.append('(allow network-inbound network-outbound '
-                     '(local ip "localhost:*") (remote ip "localhost:*"))')
+        # Filter outbound traffic by remote address only: a local-address filter
+        # also matches connections to external IPs.
+        rules += ['(allow network-bind network-inbound (local ip "localhost:*"))',
+                  '(allow network-outbound (remote ip "localhost:*"))']
+    if network:
+        rules += ['(allow system-socket)', '(allow network*)']
+    rules.extend(extra_rules)
     return '\n'.join(rules) + '\n'
 
 
-def clean_environment(workspace, executable):
+def clean_environment(workspace, executable, extra=None):
     private = Path(workspace) / '.verification'
     folders = {name: private / name for name in ('home', 'tmp', 'cache', 'pub-cache')}
     for folder in folders.values():
@@ -77,7 +175,65 @@ def clean_environment(workspace, executable):
         'XDG_CACHE_HOME': str(folders['cache']), 'PUB_CACHE': str(folders['pub-cache']),
         'PATH': str(Path(executable).parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
         'DART_SUPPRESS_ANALYTICS': 'true', 'CI': 'true', 'TERM': 'dumb',
+        **(extra or {}),
     }
+
+
+def trusted_host_repositories():
+    root = Path(os.environ.get('PR_REVIEW_TRACKER_HOME') or Path.home() / '.local/share/pr-review-tracker')
+    try:
+        config = json.loads((root.expanduser() / 'dashboard_config.json').read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [str(value) for value in config.get('host_execution_repos', [])]
+
+
+def host_execution_allowed(repository, patterns):
+    """Match owner/repo exactly or an owner/* entry, case-insensitively."""
+    owner, _, name = str(repository or '').strip().lower().partition('/')
+    if not owner or not name:
+        return False
+    for pattern in patterns:
+        pattern_owner, _, pattern_name = pattern.strip().lower().partition('/')
+        if pattern_owner == owner and pattern_name in ('*', name):
+            return True
+    return False
+
+
+def sandbox_denials(tag, since):
+    """Collect this run's tagged denials from the unified log, most frequent first."""
+    time.sleep(1)  # the kernel log is written asynchronously
+    try:
+        shown = subprocess.run(
+            ['/usr/bin/log', 'show', '--style', 'compact', '--start',
+             time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(since - 1)),
+             '--predicate', f'eventMessage CONTAINS "{tag}" AND eventMessage CONTAINS "deny("'],
+            capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if shown.returncode != 0:
+        # For example inside another sandbox; an empty result would read as "no denials".
+        return None
+    counts, routine = Counter(), 0
+    for line in shown.stdout.splitlines():
+        match = re.search(r'Sandbox: (\S+?)\(\d+\) (deny\(\d+\) .*)', line)
+        if not match:
+            continue
+        entry = f'{match.group(1)} {match.group(2).strip()}'
+        if ROUTINE_DENIALS.search(entry):
+            routine += 1
+        else:
+            counts[entry] += 1
+    return counts, routine
+
+
+def write_denials(path, found):
+    counts, routine = found
+    lines = [f'{count:5d}  {entry}' for entry, count in counts.most_common(200)]
+    if routine:
+        lines.append(f'({routine} routine denials omitted: dtrace, tty, preferences, shared memory, sysctl)')
+    path.write_text('\n'.join(lines or ['No sandbox denials were logged for this command.']) + '\n')
+    return sum(counts.values())
 
 
 def kill_group(process):
@@ -88,11 +244,18 @@ def kill_group(process):
 
 
 def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
-              loopback=False, output=None):
+              loopback=False, output=None, presets=(), network=False, host=False,
+              repository=None):
     if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').exists():
         raise ValueError('This helper requires macOS sandbox-exec; use an equivalent sandbox on other hosts.')
     if timeout <= 0:
         raise ValueError('Timeout must be positive.')
+    unknown = sorted(set(presets) - set(PRESETS))
+    if unknown:
+        raise ValueError(f'Unknown preset: {", ".join(unknown)}')
+    if host and not host_execution_allowed(repository, trusted_host_repositories()):
+        raise ValueError(f'{repository or "This repository"} is not in the trusted host-execution list '
+                         '(dashboard Settings > Repositories). Report the check as blocked instead.')
     workspace = narrow_directory(workspace)
     cwd = Path(cwd or workspace).resolve(strict=True)
     if not cwd.is_dir() or not cwd.is_relative_to(workspace):
@@ -102,25 +265,34 @@ def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
     executable = Path(command[0]).resolve(strict=True)
     if not executable.is_file():
         raise ValueError('The executable must be a file.')
-    # Grant only explicit paths, never infer broad SDK/cache access from a command.
-    sandbox = profile(workspace, read_only, loopback)
-    environment = clean_environment(workspace, executable)
+    # Grant only explicit paths and preset toolchains, never infer broad access from a command.
+    preset_reads, preset_rules, preset_env = preset_access(presets, workspace)
+    tag = f'review-check-{uuid.uuid4().hex[:12]}'
+    sandbox = None if host else profile(workspace, [*read_only, *preset_reads], loopback,
+                                        network=network, extra_rules=preset_rules, tag=tag)
+    environment = clean_environment(workspace, executable, preset_env)
+    if 'yarn' in presets:
+        copy_yarn_rc(workspace, cwd)
     destination = Path(output).resolve() if output else None
     if destination:
         destination.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='review-check-') as temp:
         directory = destination or Path(temp)
-        profile_path = directory / 'sandbox.sb'
-        profile_path.write_text(sandbox)
+        if sandbox:
+            profile_path = directory / 'sandbox.sb'
+            profile_path.write_text(sandbox)
+            launch = ['/usr/bin/sandbox-exec', '-f', str(profile_path), *command]
+        else:
+            launch = list(command)
         log_path = directory / 'output.log'
+        started_at = time.time()
         started = time.monotonic()
         timed_out = False
         process = None
         try:
             with log_path.open('wb') as log:
                 process = subprocess.Popen(
-                    ['/usr/bin/sandbox-exec', '-f', str(profile_path), *command],
-                    cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
+                    launch, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                 )
                 try:
@@ -141,7 +313,23 @@ def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
             'command': command, 'cwd': str(cwd), 'exit_code': exit_code,
             'status': 'timed-out' if timed_out else 'passed' if exit_code == 0 else 'failed',
             'seconds': round(time.monotonic() - started, 3),
+            'boundary': 'host' if host else 'sandbox',
+            'network': 'full' if host or network else 'loopback' if loopback or 'gradle' in presets else 'none',
+            'presets': sorted(presets),
         }
+        if host:
+            result['repository'] = repository
+        if sandbox and exit_code != 0:
+            found = sandbox_denials(tag, started_at)
+            if found is None:
+                result['denials'] = 'unavailable'
+            elif destination:
+                result['denials'] = write_denials(directory / 'denials.txt', found)
+                result['denials_file'] = str(directory / 'denials.txt')
+            else:
+                result['denials'] = sum(found[0].values())
+                for entry, count in found[0].most_common(20):
+                    sys.stderr.write(f'sandbox denial x{count}: {entry}\n')
         if destination:
             result['output'] = str(log_path)
             (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -166,13 +354,22 @@ def main():
     parser.add_argument('--cwd', help='Working directory inside workspace (default: workspace)')
     parser.add_argument('--timeout', type=float, default=120)
     parser.add_argument('--loopback', action='store_true', help='Permit local test-service connections only')
-    parser.add_argument('--output', help='Save sandbox.sb, output.log and result.json to this directory')
+    parser.add_argument('--preset', action='append', default=[], choices=PRESETS,
+                        help='Add the host access a toolchain needs; repeat as needed')
+    parser.add_argument('--network', action='store_true',
+                        help='Permit external networking, for a dependency-fetch step only')
+    parser.add_argument('--host', action='store_true',
+                        help='Run outside the sandbox; only for trusted repositories')
+    parser.add_argument('--repository', help='owner/repo of the reviewed PR; required with --host')
+    parser.add_argument('--output', help='Save sandbox.sb, output.log, result.json and denials.txt to this directory')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
     try:
         result = run_check(args.workspace, command, read_only=args.read_only, cwd=args.cwd,
-                           timeout=args.timeout, loopback=args.loopback, output=args.output)
+                           timeout=args.timeout, loopback=args.loopback, output=args.output,
+                           presets=args.preset, network=args.network, host=args.host,
+                           repository=args.repository)
     except (OSError, ValueError) as error:
         parser.exit(2, f'{error}\n')
     print(json.dumps(result))

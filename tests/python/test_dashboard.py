@@ -125,6 +125,15 @@ class ArtifactsAndConfig(Isolated):
   t.atomic_write(d.config_path(),{'agent':'claude','model':'claude-example','effort':'high','watched_repos':['example/repo']})
   d.save_agent_config('codex','gpt-example','low');cfg=d.load_config();self.assertEqual(cfg['agent_profiles']['claude']['model'],'claude-example')
   d.save_agent_config('claude',**cfg['agent_profiles']['claude']);self.assertEqual(d.load_config()['agent_profiles']['codex']['model'],'gpt-example');self.assertEqual(d.load_config()['watched_repos'],['example/repo'])
+ def test_host_execution_repos_are_normalized_and_kept(self):
+  t.atomic_write(d.config_path(),{'watched_repos':['example/repo']})
+  self.assertEqual(d.add_host_execution_repo('https://github.com/Grafana/*'),'Grafana/*')
+  d.add_host_execution_repo('grafana/*');d.add_host_execution_repo('open-telemetry/opentelemetry-swift.git')
+  self.assertEqual(d.load_config()['host_execution_repos'],['Grafana/*','open-telemetry/opentelemetry-swift'])
+  for bad in ('*','grafana','*/repo','grafana/**'):
+   with self.assertRaises(d.DashboardError):d.add_host_execution_repo(bad)
+  d.save_agent_config('codex','gpt-example','low');d.remove_host_execution_repo('grafana/*')
+  self.assertEqual(d.load_config()['host_execution_repos'],['open-telemetry/opentelemetry-swift']);self.assertEqual(d.load_config()['watched_repos'],['example/repo'])
  def test_wrong_agent_model_rejected(self):
   with self.assertRaises(d.DashboardError):d.save_agent_config('codex','claude-example','')
 

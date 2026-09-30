@@ -99,7 +99,7 @@ def save_dashboard(data: dict[str, Any]) -> None:
 
 
 AGENTS = ("claude", "codex")
-DEFAULT_CONFIG = {"agent": "claude", "model": "", "effort": "", "watched_repos": []}
+DEFAULT_CONFIG = {"agent": "claude", "model": "", "effort": "", "watched_repos": [], "host_execution_repos": []}
 REPO_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$")
 
 
@@ -111,6 +111,7 @@ def load_config() -> dict[str, Any]:
     stored = tracker.read_json(config_path(), required=False)
     merged = {**DEFAULT_CONFIG, **stored}
     merged["watched_repos"] = list(stored.get("watched_repos", []))
+    merged["host_execution_repos"] = list(stored.get("host_execution_repos", []))
     profiles = {agent: {"model": "", "effort": ""} for agent in AGENTS}
     for agent, profile in stored.get("agent_profiles", {}).items():
         if agent in profiles:
@@ -169,6 +170,37 @@ def remove_watched_repo(repo: str) -> str:
     config = load_config()
     if canonical in config["watched_repos"]:
         config["watched_repos"].remove(canonical)
+        tracker.atomic_write(config_path(), config)
+    return canonical
+
+
+def normalize_host_pattern(value: str) -> str:
+    """owner/repo, or owner/* for every repository of that owner."""
+    value = value.strip().strip("/")
+    if value.endswith("/*"):
+        owner = normalize_repo(value[:-2] + "/x").split("/")[0]
+        return owner + "/*"
+    return normalize_repo(value)
+
+
+@serialized
+def add_host_execution_repo(repo: str) -> str:
+    """Trust a repository's PR checks to run outside the verification sandbox."""
+    canonical = normalize_host_pattern(repo)
+    config = load_config()
+    if canonical.lower() not in {item.lower() for item in config["host_execution_repos"]}:
+        config["host_execution_repos"].append(canonical)
+        tracker.atomic_write(config_path(), config)
+    return canonical
+
+
+@serialized
+def remove_host_execution_repo(repo: str) -> str:
+    canonical = normalize_host_pattern(repo)
+    config = load_config()
+    remaining = [item for item in config["host_execution_repos"] if item.lower() != canonical.lower()]
+    if remaining != config["host_execution_repos"]:
+        config["host_execution_repos"] = remaining
         tracker.atomic_write(config_path(), config)
     return canonical
 

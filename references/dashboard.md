@@ -350,6 +350,10 @@ python3 ~/.agents/skills/pr-review/scripts/pr_dashboard.py hide 'https://github.
 Use `unhide` to restore a hidden PR.
 Adding/removing a watched repository updates settings immediately; refresh
 GitHub to update its PR membership.
+Repositories under **Run blocked checks outside the sandbox** are stored as
+`host_execution_repos` (`owner/repo` or `owner/*`). `verification_sandbox.py
+--host` reads this list itself and refuses any other repository; see
+[trusted host execution](validation.md#trusted-host-execution).
 
 When changing server Python modules, restart the launchd job after validation.
 Asset-only changes are picked up on page reload. Validate with the
