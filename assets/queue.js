@@ -34,8 +34,8 @@ function queueReasons(reasons,lead=''){
  if(!reasons.length)return '';
  return `<div class="queue-reasons">${lead?`<span class="queue-reasons-lead">${esc(lead)}</span>`:''}${reasons.map(reason=>`<a target="_blank" rel="noopener" href="${esc(safeUrl(reason.url))}"><span aria-hidden="true">${queueReasonIcons[reason.kind]||'•'}</span> ${esc(reason.label)} ↗</a>`).join('')}</div>`;
 }
-function queueMenu(pr){
- const w=pr.workflow, organize=[];
+function queueMenu(pr,organize=[]){
+ const w=pr.workflow;
  if(w.bucket==='up_next')organize.push(queueButton(pr,'wait','Mark as waiting for author'));
  organize.push(queueButton(pr,'note',w.note?'Edit note':'Add note'));
  const tracking=w.bucket==='removed'||w.closed?'':'<p class="detail-heading">Tracking</p>'+queueButton(pr,'remove','Stop tracking');
@@ -58,55 +58,60 @@ function queueDetails(pr,withRun){
  </details>`;
 }
 function queueTitle(pr){return `<a class="pr-title" target="_blank" rel="noopener" href="${esc(safeUrl(pr.url))}">${esc(pr.title)}</a>`;}
-// In progress and Back to you get full cards: they are the PRs that need you now.
-function queueCard(pr){
- const w=pr.workflow, back=w.bucket==='attention', reasons=w.reasons||[];
- const actions=back?queueButton(pr,'acknowledge','Keep waiting')+codeWorkspaceLink(pr)+queueButton(pr,'start','Continue review',true)
-  :(reasons.length?queueButton(pr,'acknowledge','Mark updates seen'):'')+queueButton(pr,'stop','Pause')+codeWorkspaceLink(pr)+queueButton(pr,'wait','Hand back to author',true);
- return `<article class="pr-card queue-card queue-${back?'back':'now'}" data-queue-pr="${esc(pr.url)}" data-queue-history="false">
-  ${back?queueReasons(reasons):''}
-  <div class="pr-main"><div>${prIdentity(pr)}${queueTitle(pr)}<div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div><div class="pr-actions">${actions}${queueMenu(pr)}</div></div>
-  ${back?'':queueReasons(reasons,'New since you started')}
+// Each section is a table like the Inbox; a row opens the side panel with the details.
+function queueActions(pr,index,key){
+ const w=pr.workflow,open=codeWorkspaceLink(pr);
+ if(key==='reviewing')return open+queueButton(pr,'wait','Hand back to author',true)+queueMenu(pr,[...((w.reasons||[]).length?[queueButton(pr,'acknowledge','Mark updates seen')]:[]),queueButton(pr,'stop','Pause')]);
+ if(key==='attention')return open+queueButton(pr,'start','Continue review',true)+queueMenu(pr,[queueButton(pr,'acknowledge','Keep waiting')]);
+ if(key==='up_next')return (index>0?queueButton(pr,'move_up','↑',false,`title="Move up" aria-label="Move PR ${esc(pr.number)} up"`):'')+open+queueButton(pr,'start','Start review',index===0)+queueMenu(pr);
+ if(key==='waiting')return queueRemind(pr)+open+queueButton(pr,'start','Review now')+queueMenu(pr);
+ if(key==='removed')return queueButton(pr,'restore','Track again')+open+queueMenu(pr);
+ if(key==='search')return queueButton(pr,'show','Show')+open;
+ return open+queueMenu(pr);
+}
+function queueStatus(pr,key){
+ const w=pr.workflow;
+ const reasons=(w.reasons||[]).map(reason=>`<a target="_blank" rel="noopener" href="${esc(safeUrl(reason.url))}"><span aria-hidden="true">${queueReasonIcons[reason.kind]||'•'}</span> ${esc(reason.label)}</a>`).join('');
+ const section=key==='search'?`<span class="queue-section-pill">${queueLabels[queueSectionOf(pr)]}</span>`:'';
+ return `${section}<span>${esc(queueWhy(pr))}</span>${key==='waiting'&&w.remind_at?`<span>⏰ ${esc(when(w.remind_at))}</span>`:''}${reasons?`<div class="queue-status-reasons">${reasons}</div>`:''}${w.error?`<span class="queue-sync-error">${esc(w.error)}</span>`:''}`;
+}
+function queueRow(pr,index,key){
+ const w=pr.workflow;
+ const rank=key==='up_next'?String(index+1):{attention:'●',waiting:'⏸',history:pr.pr_state==='merged'?'✓':'×',removed:'–'}[key]||'';
+ return `<tr class="pr-row queue-item" data-queue-pr="${esc(pr.url)}" data-queue-history="${key==='history'}" data-row-open="queue" tabindex="0" aria-label="Show details for ${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}">
+  <td class="queue-rank queue-rank-${key}${key==='up_next'&&index===0?' queue-rank-first':''}" aria-hidden="true">${rank}</td>
+  <td class="row-pr">${rowIdentity(pr)}${w.note?`<p class="queue-item-note">📝 ${esc(w.note)}</p>`:''}</td>
+  <td>${prSize(pr)}</td>
+  <td>${triageBadge(pr,true)}</td>
+  <td>${aiCell(pr)}</td>
+  <td class="queue-status">${queueStatus(pr,key)}</td>
+  <td class="row-actions"><div class="pr-actions">${queueActions(pr,index,key)}</div></td></tr>`;
+}
+function queueTable(items,key){
+ return `<div class="pr-table-wrap"><table class="pr-table queue-table"><thead><tr><th><span class="sr-only">Order</span></th><th>Pull request</th><th>Size</th><th>Review load</th><th>AI review</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${items.map((pr,index)=>queueRow(pr,index,key)).join('')}</tbody></table></div>`;
+}
+function queueDrawer(pr){
+ const w=pr.workflow,key=queueSectionOf(pr);
+ const index=queueSorted(state.prs.filter(p=>p.workflow))[key].findIndex(p=>p.url===pr.url);
+ return `<article class="pr-card queue-card" data-queue-pr="${esc(pr.url)}" data-queue-history="panel">
+  <div>${prIdentity(pr)}${queueTitle(pr)}<div class="pr-byline">${authorBadge(pr)}</div><div class="pr-meta">${prAge(pr)}${pr.is_draft?'<span class="chip">Draft</span>':''}${triageBadge(pr)}${workspaceStatusBadge(pr)}</div></div>
+  <div class="action-bar queue-panel-actions">${queueActions(pr,index,key)}</div>
+  ${queueReasons(w.reasons||[],key==='attention'?'':'New since you started')}
   ${w.note?`<p class="queue-note">${esc(w.note)}</p>`:''}
   ${queueWhyLine(pr)}
   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
   ${artifactWarning(pr)}${updateHint(pr)}${reviewSummary(pr.run)}
-  ${queueDetails(pr,false)}
- </article>`;
-}
-// Up next, waiting and finished PRs are compact rows; details stay one click away.
-function queueRow(pr,index,key){
- const w=pr.workflow, historyView=key==='history';
- const rank=key==='up_next'?String(index+1):{waiting:'⏸',history:pr.pr_state==='merged'?'✓':'×',removed:'–'}[key];
- let actions='';
- if(key==='up_next')actions=(index>0?queueButton(pr,'move_up','↑',false,`title="Move up" aria-label="Move PR ${esc(pr.number)} up"`):'')+queueButton(pr,'start','Start review',index===0);
- if(key==='waiting')actions=queueRemind(pr)+queueButton(pr,'start','Review now');
- if(key==='removed')actions=queueButton(pr,'restore','Track again');
- return `<article class="pr-card queue-card queue-row" data-queue-pr="${esc(pr.url)}" data-queue-history="${historyView}">
-  <span class="queue-rank${key==='up_next'&&index===0?' queue-rank-first':''}" aria-hidden="true">${rank}</span>
-  <div class="queue-row-main">${queueTitle(pr)}
-   <p class="queue-row-sub">${esc(pr.owner+'/'+pr.repository)} <a class="pr-number" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">#${esc(pr.number)}</a> · ${esc(pr.author_login?'@'+pr.author_login:'Unknown author')}${pr.is_draft?' · Draft':''}${key==='up_next'?' · '+triageBadge(pr):''}</p>
-   ${w.note?`<p class="queue-note queue-row-note">${esc(w.note)}</p>`:''}
-   ${key==='up_next'?queueReasons(w.reasons||[]):''}
-   ${queueWhyLine(pr)}
-   ${w.error?`<p class="queue-sync-error">${esc(w.error)}</p>`:''}
-   ${queueDetails(pr,true)}
-  </div>
-  <div class="pr-actions">${actions}${codeWorkspaceLink(pr)}${queueMenu(pr)}</div>
+  ${queueDetails(pr,false).replace('<details class="queue-tools">','<details class="queue-tools" open>')}
  </article>`;
 }
 function queueSection(key,items){
- const body=!items.length?`<p class="muted queue-empty">${queueEmpty[key]}</p>`
-  :['reviewing','attention'].includes(key)?items.map(queueCard).join('')
-  :`<div class="queue-rows">${items.map((pr,index)=>queueRow(pr,index,key)).join('')}</div>`;
+ const body=items.length?queueTable(items,key):`<p class="muted queue-empty">${queueEmpty[key]}</p>`;
  return `<details id="queue-${key}" data-queue-section="${key}" class="queue-section queue-collapsible queue-lane-${key}" ${queueSectionOpen[key]?'open':''}><summary><span class="queue-section-title">${queueLabels[key]}</span> <span class="count${key==='attention'&&items.length?' queue-count-hot':''}">${items.length}</span> <span class="queue-hint">${queueHints[key]}</span></summary>${body}</details>`;
 }
 function queueSearchResults(prs){
  const words=queueQuery.toLowerCase().split(/\s+/).filter(Boolean);
  const hits=prs.filter(pr=>{const text=`${pr.title} ${pr.owner}/${pr.repository} #${pr.number} ${pr.author_login||''} ${pr.workflow.note||''}`.toLowerCase();return words.every(word=>text.includes(word));});
- return `<p class="muted queue-search-count">${hits.length} of ${prs.length} tracked PRs match.</p><div class="queue-rows">${hits.map(pr=>`<article class="pr-card queue-card queue-row" data-queue-pr="${esc(pr.url)}" data-queue-history="search">
-  <span class="queue-rank" aria-hidden="true"></span><div class="queue-row-main">${queueTitle(pr)}<p class="queue-row-sub">${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)} · <span class="queue-section-pill">${queueLabels[queueSectionOf(pr)]}</span></p>${queueWhyLine(pr)}</div>
-  <div class="pr-actions">${queueButton(pr,'show','Show')}</div></article>`).join('')||'<p class="muted queue-empty">No tracked PR matches.</p>'}</div>`;
+ return `<p class="muted queue-search-count">${hits.length} of ${prs.length} tracked PRs match.</p>${hits.length?queueTable(hits,'search'):'<p class="muted queue-empty">No tracked PR matches.</p>'}`;
 }
 function queueSorted(prs){
  const compare=(a,b)=>a.workflow.position-b.workflow.position||a.url.localeCompare(b.url);
@@ -152,15 +157,16 @@ function renderQueue(force=false){
   queueRememberSection(section.dataset.queueSection,section.open);
   if(section.querySelector('summary')===document.activeElement)focusedSection=section.id;
  }
- const open=new Map([...$('queue-view').querySelectorAll('.queue-card')].map(el=>[el.dataset.queuePr+el.dataset.queueHistory,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
- const focused=document.activeElement;const focusUrl=focused?.dataset?.url, focusAction=focused?.dataset?.queueAction, focusHistory=focused?.closest('.queue-card')?.dataset.queueHistory;
+ const open=new Map([...$('queue-view').querySelectorAll('[data-queue-pr]')].map(el=>[el.dataset.queuePr+el.dataset.queueHistory,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
+ const focused=document.activeElement;const focusUrl=focused?.dataset?.url, focusAction=focused?.dataset?.queueAction, focusHistory=focused?.closest('[data-queue-pr]')?.dataset.queueHistory;
  $('queue-list').innerHTML=queueQuery.trim()?queueSearchResults(prs):
   [['Your turn',['reviewing','attention','up_next']],['Their turn',['waiting']],['Finished',['history','removed']]].map(([title,keys])=>
    `<section class="queue-turn" aria-label="${title}"><h3 class="queue-turn-title">${title}</h3>${keys.map(key=>queueSection(key,groups[key])).join('')}</section>`).join('');
- for(const el of $('queue-view').querySelectorAll('.queue-card'))for(const d of el.querySelectorAll('details'))if(open.get(el.dataset.queuePr+el.dataset.queueHistory)?.includes(d.className))d.open=true;
+ for(const el of $('queue-view').querySelectorAll('[data-queue-pr]'))for(const d of el.querySelectorAll('details'))if(open.get(el.dataset.queuePr+el.dataset.queueHistory)?.includes(d.className))d.open=true;
  restoreFocus();
  if(focusedSection)$(focusedSection)?.querySelector('summary').focus({preventScroll:true});
- if(focusUrl&&focusAction){const replacement=[...$('queue-view').querySelectorAll('[data-queue-action]')].find(b=>b.dataset.url===focusUrl&&b.dataset.queueAction===focusAction&&b.closest('.queue-card')?.dataset.queueHistory===focusHistory);replacement?.focus({preventScroll:true});}
+ renderDrawer();
+ if(focusUrl&&focusAction){const replacement=[...$('queue-view').querySelectorAll('[data-queue-action]')].find(b=>b.dataset.url===focusUrl&&b.dataset.queueAction===focusAction&&b.closest('[data-queue-pr]')?.dataset.queueHistory===focusHistory);replacement?.focus({preventScroll:true});}
 }
 function showQueue(value){
  queueActive=value;$('queue-view').hidden=!value;$('my-reviews-tab').setAttribute('aria-pressed',value);
@@ -172,6 +178,7 @@ function showQueue(value){
 function findQueuePr(url){return state?.prs.find(pr=>pr.url===url);}
 function queueShow(url){
  const pr=findQueuePr(url);if(!pr?.workflow)return;
+ if($('pr-drawer').open)$('pr-drawer').close();
  showQueue(true);
  if(queueQuery){queueQuery='';$('queue-search').value='';}
  const key=queueSectionOf(pr);

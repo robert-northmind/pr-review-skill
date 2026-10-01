@@ -196,6 +196,41 @@ Additional block shapes:
 - Background: `{"type":"details","title":"New to this component?","blocks":[...]}`
 - Authored code: `{"type":"example","language":"Dart","code":"...","caption":"Illustrative caller example."}`
 
+### Walk layout and its blocks
+
+Set `"layout": "walk"` at the top level, and `"stats": {"additions": N,
+"deletions": N, "files": N}` from the PR. Each section may add `tab` (rail label),
+`claim` (scene headline; defaults to `title`) and `lede`. Mermaid blocks need the
+report runtime once (`npm ci --prefix scripts/report-runtime`); they render with
+the installed Chrome, or `PR_REVIEW_CHROME_PATH`.
+
+- `mermaid`: `source` (a `sequenceDiagram`, `flowchart` or `stateDiagram-v2`,
+  under 6000 characters), optional `title`, `caption` and `notes` (participant
+  label → one sentence shown when the reader clicks it). It is pre-rendered to
+  static SVG at render time; a syntax error fails the render with Mermaid's
+  message, so fix the source and render again. Usable in `review.visuals`.
+- `compare`: `panes` (one to three), each `{label, tone, blocks}` with tone
+  `before`, `after`, `safe`, `risk` or `neutral`; optional `stacked: true` (one
+  pane per row, best for side-by-side sequence diagrams) and `caption`.
+- `callouts`: `items` of `{tone, title, text, finding}`; tone `good`, `warn`,
+  `bad` or `plain`; `finding` is an optional badge label such as "Finding 1".
+- `card`: `{name, role, kind, icon, tag, tone, finding}`. `icon` is one of type,
+  branch, lock, fn, db, event, check, pipe, flag, api, config, test, user,
+  server, file, thread, box. `tag`: new, changed, removed, existing. `tone`:
+  `hot` (a finding sits here) or `gate` (the merge condition).
+- `pair`: `change` (plain-words logical change), `blocks` (cards or paragraphs)
+  and `diff` (`source`, `example` or `paragraph` blocks), optional `label`.
+
+```json
+{"id": "how", "tab": "How it works", "title": "How it works",
+ "claim": "Creating a session asks the sampler once while other threads wait.",
+ "blocks": [{"type": "pair", "change": "One thread at a time creates a session.",
+   "blocks": [{"type": "card", "icon": "lock", "kind": "Coordination", "name": "Creation slot",
+               "role": "Other threads wait with no deadline.", "tag": "new", "tone": "hot", "finding": "Finding 1"}],
+   "diff": [{"type": "source", "path": "Sources/SessionManager.swift", "start": 315, "end": 323,
+             "caption": "Waiters block with no deadline (Finding 1)."}]}]}
+```
+
 ### Diagrams, cases grids and optional interaction
 
 Choose the representation using [Explanation](explanation.md); reuse a block

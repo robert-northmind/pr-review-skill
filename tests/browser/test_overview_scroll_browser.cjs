@@ -36,11 +36,11 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
    assert.ok(position>500);
    await link.click();await page.waitForURL('**/workspace?*');
    await page.locator('a[href="/"]').click();
-   await page.locator(list+' .pr-card').first().waitFor({state:'visible'});
+   await page.locator(list+' .pr-row').first().waitFor({state:'visible'});
    await page.waitForFunction(y=>Math.abs(scrollY-y)<3,position);
    await link.click();await page.waitForURL('**/workspace?*');
    await page.goBack();
-   await page.locator(list+' .pr-card').first().waitFor({state:'visible'});
+   await page.locator(list+' .pr-row').first().waitFor({state:'visible'});
    await page.waitForFunction(y=>Math.abs(scrollY-y)<3,position);
    // Polling must not jump back after the user scrolls elsewhere.
    await page.evaluate(async()=>{scrollTo(0,400);await loadState();});

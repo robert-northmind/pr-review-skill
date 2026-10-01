@@ -71,7 +71,7 @@ async function acknowledgeArtifact(event){
  try{
   const result=await post('/artifact-opened',{run_id,name,version});
   if(!result.opened)return;
-  const restoreFocus=document.activeElement===link, scope=link.closest('.queue-card')?'queue-view':'pr-list';
+  const restoreFocus=document.activeElement===link, scope=link.closest('#queue-view')?'queue-view':'pr-list';
   for(const pr of state?.prs||[])for(const artifacts of [pr.artifacts,...pr.history.map(run=>run.artifacts)]){
    const a=artifacts[name];if(a?.run_id===run_id&&a.version===version)a.unread=false;
   }
@@ -258,9 +258,9 @@ function matchesStatus(pr,status){
  }
 }
 function matchesSelection(only,excluded,matches){return (!only.length||only.some(matches))&&!excluded.some(matches);}
-function visiblePrs(){
+function visiblePrs(view=filters.view){
  const text=filters.search.toLowerCase().trim().replace(/^#/,'');
- return state.prs.filter(pr=>inView(pr,filters.view)).filter(pr=>{
+ return state.prs.filter(pr=>inView(pr,view)).filter(pr=>{
   if(text&&!`${pr.title} ${pr.owner}/${pr.repository} ${pr.number} ${pr.author_login} ${pr.author_name||''}`.toLowerCase().includes(text))return false;
   if(!matchesSelection(filters.repositoriesOnly,filters.repositoriesExcluded,value=>value===pr.owner+'/'+pr.repository))return false;
   if(!matchesSelection(filters.authorsOnly,filters.authorsExcluded,value=>value===pr.author_login))return false;
@@ -279,17 +279,98 @@ function renderList(force=false){if(!state)return;const prs=visiblePrs();const s
  renderWorkspaceNavigation();renderFilterSummary();
  $('result-count').textContent=`${prs.length} ${prs.length===1?'PR':'PRs'}`;
  $('view-heading').textContent=labels[filters.view];$('view-description').textContent=['snoozed','hidden'].includes(filters.view)?descriptions[filters.view]:'';
- document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);button.querySelector('.count').textContent=state.prs.filter(pr=>inView(pr,view)).length;});
+ document.querySelectorAll('[data-view]').forEach(button=>{const view=button.dataset.view;button.setAttribute('aria-pressed',!reportingActive&&(typeof queueActive==='undefined'||!queueActive)&&view===filters.view);const total=state.prs.filter(pr=>inView(pr,view)).length,shown=visiblePrs(view).length;button.querySelector('.count').textContent=shown===total?total:`${shown} of ${total}`;button.title=shown===total?'':`${shown} match your filters, ${total} in total`;});
  if(!force&&signature===listSignature)return;listSignature=signature;
  const restoreFocus=rememberCardFocus($('pr-list'));
- const expanded=new Map([...$('pr-list').querySelectorAll('.pr-card')].map(el=>[el.dataset.pr,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
+ const expanded=new Map([...$('pr-list').querySelectorAll('[data-pr]')].map(el=>[el.dataset.pr,[...el.querySelectorAll('details[open]')].map(d=>d.className)]));
  const focused=document.activeElement,focusUrl=focused?.dataset?.url,focusAction=focused?.dataset?.action;
- $('pr-list').innerHTML=prs.map(card).join('')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.drafts!=='all'||filters.triageEffort!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or sync GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
- $('pr-list').querySelectorAll('.pr-card').forEach(el=>{for(const d of el.querySelectorAll('details'))if(expanded.get(el.dataset.pr)?.includes(d.className))d.open=true;});
- if(focusUrl&&focusAction){const replacement=[...document.querySelectorAll('[data-action]')].find(el=>el.dataset.url===focusUrl&&el.dataset.action===focusAction);replacement?.focus({preventScroll:true});}
+ $('pr-list').innerHTML=(prs.length?prTable(prs):'')||`<div class="empty"><h3>${filters.search||filters.repositoriesOnly.length||filters.repositoriesExcluded.length||filters.authorsOnly.length||filters.authorsExcluded.length||filters.statusesOnly.length||filters.statusesExcluded.length||filters.drafts!=='all'||filters.triageEffort!=='all'?'No PRs match these filters':'Nothing here right now'}</h3><p class="muted">${filters.view==='hidden'?'Hidden PRs can be restored here.':'Try another view, clear your filters, or sync GitHub.'}</p><button class="text-button" data-clear>Clear filters</button></div>`;
+ $('pr-list').querySelectorAll('[data-pr]').forEach(el=>{for(const d of el.querySelectorAll('details'))if(expanded.get(el.dataset.pr)?.includes(d.className))d.open=true;});
+ if(focusUrl&&focusAction&&$('pr-list').contains(focused)){const replacement=[...$('pr-list').querySelectorAll('[data-action]')].find(el=>el.dataset.url===focusUrl&&el.dataset.action===focusAction);replacement?.focus({preventScroll:true});}
  restoreFocus();
+ renderDrawer();
  for(const button of document.querySelectorAll('[data-action]'))if(busy.has(button.dataset.url))button.disabled=true;
 }
+// Inbox and Your PRs are one table row per PR; the full card opens in a side panel.
+function prSize(pr){
+ if(!Number.isInteger(pr.additions))return '<span class="muted" title="Sync GitHub to fetch the size">–</span>';
+ const files=pr.changed_files||0;
+ return `<span class="row-size"><span class="row-add">+${pr.additions.toLocaleString()}</span> <span class="row-del">−${(pr.deletions||0).toLocaleString()}</span><small>${files} ${files===1?'file':'files'}</small></span>`;
+}
+function rowAvatar(pr){
+ const login=pr.author_login||'';if(!login)return '';
+ let avatar=`https://github.com/${encodeURIComponent(login)}.png?size=40`;
+ try {const u=new URL(pr.author_avatar_url);if(u.protocol==='https:'&&u.hostname==='avatars.githubusercontent.com')avatar=u.href;}catch{}
+ return `<span class="avatar-wrap row-avatar"><span class="avatar-fallback" aria-hidden="true">${esc(login.slice(0,1).toUpperCase())}</span><img class="author-avatar" src="${esc(avatar)}" alt="" width="20" height="20" loading="lazy" referrerpolicy="no-referrer"></span>`;
+}
+function rowIdentity(pr,extra=''){
+ return `<div class="row-repo">${esc(pr.owner+'/'+pr.repository)} <a href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">#${esc(pr.number)}</a>${pr.is_draft?' <span class="chip">Draft</span>':''}${extra}</div><a class="row-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="row-author">${rowAvatar(pr)}${esc(pr.author_login?'@'+pr.author_login:'Unknown author')}</div>`;
+}
+// AI review column: live progress while a review runs, otherwise its result and cost.
+function aiCell(pr){
+ const run=pr.run;
+ if(run?.transport==='in-app'&&active(run)){
+  const percent=run.progress?.percent||0,now=(run.progress?.stages||[]).filter(stage=>stage.status==='running').map(stage=>stage.label).join(' · ');
+  return `<div class="queue-ai-run"><div class="queue-ai-top"><span class="chip run-live">${esc(statusLabels[run.status]||run.status)}</span><span class="queue-ai-percent">${percent}%</span><button type="button" class="text-button" data-review-open="${esc(run.run_id)}">Live ↗</button></div><progress max="100" value="${percent}" aria-label="AI review progress"></progress>${now?`<span class="queue-ai-now">${esc(now)}</span>`:''}</div>`;
+ }
+ if(run&&attention(run))return `<span class="chip warn">AI: ${esc(statusLabels[run.status]||run.status)}</span>`;
+ const cost=run?.cost?.usd!=null?`<span class="queue-ai-cost">${esc(costMoney(run.cost.usd))}</span>`:'';
+ // An older report shows the suggested next step right in the row; the side panel explains why.
+ const next=canUpdate(pr)&&pr.update_check?.scope!=='full'?updateButton(pr):'';
+ return `<div class="queue-ai-done">${workspaceStatusBadge(pr)}${cost}${next}</div>`;
+}
+function prRow(pr){
+ const organize=pr.hidden?'':`<p class="detail-heading">Organize</p>${snoozeControl(pr)}<button class="button hide-pr" data-action="/hide" data-url="${esc(pr.url)}">Hide from inbox</button>`;
+ const actions=pr.hidden?`<button class="button primary" data-action="/unhide" data-url="${esc(pr.url)}">Restore PR</button>`:
+  queueCaptureButton(pr)+codeWorkspaceLink(pr)+actionDisclosure(pr,'•••',`${organize}<p class="detail-heading">AI tools</p>${aiReviewActions(pr)}`);
+ const updated=pr.pr_updated_at||pr.first_seen_at;
+ return `<tr class="pr-row" data-pr="${esc(pr.url)}" data-row-open="inbox" tabindex="0" aria-label="Show details for ${esc(pr.owner+'/'+pr.repository)} #${esc(pr.number)}">
+  <td class="row-pr">${rowIdentity(pr,snoozeStatus(pr))}</td>
+  <td>${prSize(pr)}</td>
+  <td>${triageBadge(pr,true)}</td>
+  <td class="row-ai">${aiCell(pr)}</td>
+  <td class="row-updated" title="${esc(when(updated))}">${esc(since(updated))}</td>
+  <td class="row-actions"><div class="pr-actions">${actions}</div></td></tr>`;
+}
+function prTable(prs){
+ return `<div class="pr-table-wrap"><table class="pr-table"><thead><tr><th>Pull request</th><th>Size</th><th>Review load</th><th>AI review</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${prs.map(prRow).join('')}</tbody></table></div>`;
+}
+// The side panel re-renders with the list, keeping its open sections.
+let drawerUrl=null,drawerKind='inbox';
+function renderDrawer(){
+ const dialog=$('pr-drawer');if(!dialog.open||!drawerUrl)return;
+ const pr=state.prs.find(p=>p.url===drawerUrl);
+ if(!pr||(drawerKind==='queue'&&!pr.workflow)){dialog.close();return;}
+ const body=$('pr-drawer-body'),fresh=body.dataset.url!==drawerUrl,open=[...body.querySelectorAll('details[open]')].map(d=>d.className);
+ const focused=body.contains(document.activeElement)?document.activeElement:null;
+ const focusKey=focused&&[focused.tagName,JSON.stringify(focused.dataset),focused.textContent].join('|');
+ body.dataset.url=drawerUrl;
+ body.innerHTML=drawerKind==='queue'?queueDrawer(pr):card(pr);
+ if(!fresh)for(const d of body.querySelectorAll('details'))d.open=open.includes(d.className);
+ if(focusKey)[...body.querySelectorAll('button,a,summary')].find(n=>[n.tagName,JSON.stringify(n.dataset),n.textContent].join('|')===focusKey)?.focus({preventScroll:true});
+}
+function openDrawer(url,kind='inbox',section=''){
+ drawerUrl=url;drawerKind=kind;$('pr-drawer-body').dataset.url='';
+ if(!$('pr-drawer').open)$('pr-drawer').showModal();
+ renderDrawer();
+ const target=section&&$('pr-drawer-body').querySelector(section);
+ if(target){for(let d=target;d;d=d.parentElement?.closest('details'))d.open=true;target.scrollIntoView({block:'nearest'});}
+ $('pr-drawer-close').focus();
+}
+document.addEventListener('click',event=>{
+ const drawer=$('pr-drawer');
+ if(event.target.closest('#pr-drawer-close')){drawer.close();return;}
+ // The panel is full height, so a click on the dialog itself may still be inside it.
+ if(event.target===drawer){const box=drawer.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)drawer.close();return;}
+ const row=event.target.closest('[data-row-open]'),control=event.target.closest('a,button,summary,details,input,select,label');
+ // Sections are <details> too, so only controls inside the row count.
+ if(row&&!(control&&row.contains(control)))openDrawer(row.dataset.pr||row.dataset.queuePr,row.dataset.rowOpen);
+});
+document.addEventListener('keydown',event=>{
+ const row=event.target.closest?.('[data-row-open]');
+ if(row&&event.target===row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDrawer(row.dataset.pr||row.dataset.queuePr,row.dataset.rowOpen);}
+});
+$('pr-drawer').addEventListener('close',()=>{drawerUrl=null;});
 function queueCaptureButton(pr){const tracked=pr.workflow&&pr.workflow.bucket!=='removed';return `<button class="button ${tracked?'':'primary'}" data-queue-action="${tracked?'show':'enqueue'}" data-url="${esc(pr.url)}">${tracked?'My reviews':'Add to Up next'}</button>`;}
 function renderState(){
  const config=state.config;$('effective-agent').textContent=`${config.agent==='codex'?'Codex · in app':'Claude Code'} · ${config.model||'default model'}${config.effort?' · '+config.effort+' effort':''}`;
@@ -423,15 +504,16 @@ function renderFilterSummary(){
   const n=filters[prefix+'Only'].length+filters[prefix+'Excluded'].length;if(n)parts.push(label+': '+n+' selections');
  }
  if(filters.drafts!=='all')parts.push(filters.drafts==='ready'?'Ready for review':'Drafts only');
- if(filters.triageEffort!=='all')parts.push('Effort: '+(effortLabels[filters.triageEffort]||filters.triageEffort));
+ if(filters.triageEffort!=='all')parts.push('Review load: '+(effortLabels[filters.triageEffort]||filters.triageEffort));
  $('filter-count').textContent=parts.length?'('+parts.length+')':'';
  $('active-filters').hidden=!parts.length;$('active-filter-description').textContent=parts.join(' · ');
 }
 function rememberCardFocus(container){
- const el=document.activeElement,card=el?.closest('.pr-card');if(!card||!container.contains(card))return ()=>{};
+ const el=document.activeElement,card=el?.closest('.pr-card,.pr-row');if(!card||!container.contains(card))return ()=>{};
+ const self=el===card;
  const identity=card.dataset.pr||card.dataset.queuePr, queueHistory=card.dataset.queueHistory, tag=el.tagName, data=JSON.stringify(el.dataset), text=el.textContent;
- return ()=>{const next=[...container.querySelectorAll('.pr-card')].find(c=>(c.dataset.pr||c.dataset.queuePr)===identity&&c.dataset.queueHistory===queueHistory);
-  const replacement=next&&[...next.querySelectorAll('button,a,summary')].find(n=>n.tagName===tag&&JSON.stringify(n.dataset)===data&&n.textContent===text);
+ return ()=>{const next=[...container.querySelectorAll('.pr-card,.pr-row')].find(c=>(c.dataset.pr||c.dataset.queuePr)===identity&&c.dataset.queueHistory===queueHistory);
+  const replacement=next&&(self?next:[...next.querySelectorAll('button,a,summary')].find(n=>n.tagName===tag&&JSON.stringify(n.dataset)===data&&n.textContent===text));
   if(replacement)replacement.focus({preventScroll:true});
  };
 }
@@ -453,7 +535,7 @@ function renderSyncStatus(){
  $('freshness').textContent=running?'Syncing GitHub…':problems.length?'Sync needs attention':stamps.length===3?'Synced '+since(stamps[0]):'Sync status';
  $('freshness').classList.toggle('sync-warning',!!problems.length);
  $('sync-sources').innerHTML=sources.map(s=>`<div><dt>${s.label}</dt><dd>${s.status?.status==='running'?'Syncing…':s.at?'Last success '+esc(since(s.at)):'Not synced yet'}${s.error?`<p class="sync-error">${esc(s.error)}</p>`:''}</dd></div>`).join('');
- $('sync-estimates').textContent=state.triage?.config.enabled?'Automatic initial effort estimates run after sync. Completed estimates are kept.':'Automatic effort estimates are off.';
+ $('sync-estimates').textContent=state.triage?.config.enabled?'Automatic review load estimates run after sync. Completed estimates are kept.':'Automatic review load estimates are off.';
  $('warnings').hidden=!problems.length;$('warnings').innerHTML=problems.length?`<details><summary>${problems.length} sync ${problems.length===1?'issue':'issues'} · previous data kept</summary><ul>${problems.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></details>`:'';
 }
 async function syncGitHub(){

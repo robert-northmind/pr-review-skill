@@ -48,12 +48,15 @@ agent has deleted that transcript. By default, Claude Code deletes transcripts
 after 30 days (`cleanupPeriodDays`).
 
 The agent records progress and artifacts in the local tracker. When finished,
-click **Open review** on the card and select **AI review**. There is one report and one review skill:
+click **Open review** on the PR's row and select **AI review**. There is one report and one review skill:
 
-1. **Understand the change:** a plain-words summary, a diagram of the change
-   with badges where findings occur, a grid of situations before and after, and
-   exact source excerpts tied to the diagram's steps. A short self-check at the
-   end tests the key distinction.
+1. **Understand the change:** a walk of scenes shown one at a time (use the scene
+   list, Previous/Next, 1–9 or the arrow keys; **Show all scenes** for one long
+   page). What changed shows before and after, with Mermaid diagrams where call or
+   event order matters; why it matters walks through a concrete example and a grid
+   of situations; how it works pairs each logical change with its exact diff; the
+   blast radius separates what is affected from what is not. Finding badges mark
+   where each finding goes wrong. A short self-check tests the key distinction.
 2. **Read the assessment and findings:** each finding starts collapsed with its
    severity and a plain-words title visible. Open it for the problem in one
    sentence, why it matters, a numbered walkthrough, whether it is real (with the
@@ -193,7 +196,7 @@ The dashboard runs on your machine, but AI features send data off your machine:
 - **GitHub sync:** reads PR information using your GitHub login. Author avatars
   normally load from GitHub.
 - **AI features:** send PR descriptions, code/diffs, and your questions to the
-  selected AI provider as needed. Effort estimates also send descriptions and
+  selected AI provider as needed. Review load estimates also send descriptions and
   patches. Only enable these features for repositories you are allowed to share
   with that provider.
 - **Saved copies:** review reports, downloaded source, notes, and chat data can

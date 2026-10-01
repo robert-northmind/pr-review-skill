@@ -97,31 +97,41 @@ Compared both synthetic revisions of parser.py. Runtime tests were not run.
 </details>
 
 </details>''')
-        diagram = ('<div class="dg-stack"><div class="dg-node">Batch arrives <span class="dg-code">parse(["12", "bad", "0", "7"])</span></div><div class="dg-arrow"></div>'
-            '<div class="dg-branch"><div class="dg-lane"><div class="dg-label">Before: one value at a time</div>'
-            '<div class="dg-node dg-good">✓ Bad value skipped, the rest kept</div><div class="dg-node dg-good">✓ Zero kept</div></div>'
-            '<div class="dg-lane"><div class="dg-label">After: one comprehension</div>'
-            '<div class="dg-node dg-bad">✗ Zero filtered out first <span class="dg-badge">⚠ Finding 2: zero disappears</span></div>'
-            '<div class="dg-node dg-bad">✗ Bad value ends the whole batch <span class="dg-badge">⚠ Finding 1: batch emptied</span></div></div></div></div>')
-        data = {'title': 'A shorter parser changes how invalid items are handled',
+        before = 'flowchart LR\n  V[Next value] --> T{int value?}\n  T -->|ok| K[Keep the number]\n  T -->|ValueError| S[Skip it and go on]'
+        after = 'flowchart LR\n  V[Next value] --> Z{value is zero?}\n  Z -->|yes| D[Dropped]\n  Z -->|no| T{int value?}\n  T -->|ok| K[Keep the number]\n  T -->|ValueError| E[Return an empty list]'
+        data = {'title': 'A shorter parser changes how invalid items are handled', 'layout': 'walk',
             'outcome': 'This sample change replaces an item-by-item loop with a filtered list comprehension. One malformed value discards the batch, and valid zero values are skipped.',
-            'stack': 'Python · Synthetic review preview', 'repository': str(repo),
+            'stack': 'Python · Synthetic review preview', 'repository': str(repo), 'stats': {'additions': 3, 'deletions': 6, 'files': 1},
             'base': base, 'head': head, 'context': 'Fictional parser and review; no real GitHub PR.',
             'sections': [
-                {'id': 'plain-words', 'title': 'In plain words', 'blocks': [
-                    {'type': 'paragraph', 'text': 'The parser turns a list of text values into numbers and used to skip values it could not read. The shorter version reads everything in one step, so a single bad value now empties the result, and it also drops every zero.'}]},
-                {'id': 'shape', 'title': 'What happens to one batch', 'blocks': [
-                    {'type': 'diagram', 'title': 'The same batch before and after', 'html': diagram,
-                     'caption': 'Source-traced. The difference is where the error is caught and the new zero filter.'}]},
-                {'id': 'cases', 'title': 'What happens in each situation', 'blocks': [
+                {'id': 'what', 'tab': 'What changed', 'title': 'What changed', 'claim': 'Values used to be read one at a time. Now one bad value ends the whole batch.',
+                 'lede': 'The parser turns text values into numbers. It used to skip values it could not read; the shorter version reads everything in one step and also drops zeros.',
+                 'blocks': [{'type': 'compare', 'panes': [
+                    {'label': 'Before · one value at a time', 'tone': 'before', 'blocks': [{'type': 'mermaid', 'source': before}]},
+                    {'label': 'After · one comprehension', 'tone': 'after', 'blocks': [{'type': 'mermaid', 'source': after}]}],
+                    'caption': 'Source-traced from both revisions; not executed.'}]},
+                {'id': 'why', 'tab': 'Why it matters', 'title': 'Why it matters', 'claim': 'Mixed batches lose good values, and every zero disappears.',
+                 'lede': "Let's take an example: User imports the batch [\"12\", \"bad\", \"0\", \"7\"] and expects [12, 0, 7].",
+                 'blocks': [{'type': 'callouts', 'items': [
+                    {'tone': 'good', 'title': 'All values valid.', 'text': 'Same numbers as before.'},
+                    {'tone': 'bad', 'title': 'One bad value.', 'text': 'The catch wraps the whole comprehension, so the result is empty.', 'finding': 'Finding 1'},
+                    {'tone': 'bad', 'title': 'A zero in the batch.', 'text': 'The new filter removes it before conversion.', 'finding': 'Finding 2'}]},
                     {'type': 'cases', 'columns': ['Situation', 'Before', 'After'], 'caption': 'Source-traced from both revisions; not executed.',
                      'rows': [
                         {'situation': 'All values valid', 'cells': [{'status': 'works', 'text': 'all numbers'}, {'status': 'works', 'text': 'all numbers'}]},
                         {'situation': 'One bad value in the batch', 'finding': 'Finding 1', 'cells': [{'status': 'works', 'text': 'bad value skipped'}, {'status': 'breaks', 'text': 'empty result'}]},
                         {'situation': 'Batch contains zero', 'finding': 'Finding 2', 'cells': [{'status': 'works', 'text': 'zero kept'}, {'status': 'breaks', 'text': 'zero dropped'}]}]}]},
-                {'id': 'code', 'title': 'How it works', 'blocks': [
-                    {'type': 'source', 'path': 'parser.py', 'side': 'head', 'start': 1, 'end': 5,
-                     'caption': 'The catch covers the entire comprehension (Finding 1); the filter removes zero (Finding 2).'}]}],
+                {'id': 'how', 'tab': 'How it works', 'title': 'How it works', 'claim': 'One catch around the whole comprehension decides both outcomes.',
+                 'blocks': [{'type': 'pair', 'change': 'The loop with a per-item catch became one comprehension with an outer catch and a zero filter.',
+                    'blocks': [{'type': 'card', 'icon': 'fn', 'kind': 'Function', 'name': 'parse(values)', 'role': 'Turns text values into numbers.', 'tag': 'changed', 'tone': 'hot', 'finding': 'Findings 1 and 2'}],
+                    'diff': [{'type': 'source', 'path': 'parser.py', 'side': 'head', 'start': 1, 'end': 5,
+                              'caption': 'The catch covers the entire comprehension (Finding 1); the filter removes zero (Finding 2).'}]}]},
+                {'id': 'blast', 'tab': 'Blast radius', 'title': 'Blast radius', 'claim': 'Only callers that pass mixed or zero values see a change.',
+                 'blocks': [{'type': 'compare', 'panes': [
+                    {'label': 'Not in the blast', 'tone': 'safe', 'blocks': [{'type': 'card', 'icon': 'check', 'kind': 'Callers', 'name': 'Clean batches', 'role': 'All-valid, zero-free input parses as before.'}]},
+                    {'label': 'In the blast', 'tone': 'risk', 'blocks': [
+                        {'type': 'card', 'icon': 'file', 'kind': 'Imports', 'name': 'Mixed data', 'role': 'One bad value empties the batch.', 'tone': 'hot', 'finding': 'Finding 1'},
+                        {'type': 'card', 'icon': 'flag', 'kind': 'Merge gate', 'name': 'Do not merge until…', 'role': 'bad values are skipped per item and zeros are kept.', 'tone': 'gate'}]}]}]}],
             'questions': [{'question': 'What does the new parser return for ["3", "x"]?', 'options': ['[3]', '[]', 'It raises ValueError'], 'answer': 1,
                            'explanation': 'int("x") raises inside the comprehension; the outer catch returns an empty list.'}],
             'review': {'base': base, 'head': head,

@@ -29,10 +29,17 @@ const pr=number=>`https://github.com/demo/workbench/pull/${number}`;
   assert.deepEqual(await page.locator('[data-queue-section]').evaluateAll(els=>els.map(e=>[e.dataset.queueSection,e.open,e.querySelector('.count').textContent])),
    [['reviewing',true,'1'],['attention',true,'2'],['up_next',true,'3'],['waiting',false,'2'],['history',false,'1'],['removed',false,'1']]);
   assert.equal(await page.locator('#queue-summary').textContent(),'6 on your turn · 2 waiting for authors');
-  assert.match(await card(202).locator('.queue-reasons').textContent(),/Head changed since your last check.*Author commented/);
-  assert.match(await card(202).locator('.queue-why').textContent(),/You handed it back to the author 3d ago/);
-  assert.match(await card(201).locator('.queue-reasons').textContent(),/New since you started.*Reply in your review thread/);
-  assert.equal(await card(206).locator('.queue-why').textContent(),'↳ You paused it 2d ago');
+  // Each lane is a table; the Status column says why a PR is there and links what's new.
+  assert.match(await card(202).locator('.queue-status-reasons').textContent(),/Head changed since your last check.*Author commented/);
+  assert.match(await card(202).locator('.queue-status').textContent(),/You handed it back to the author 3d ago/);
+  assert.match(await card(201).locator('.queue-status-reasons').textContent(),/Reply in your review thread/);
+  assert.equal(await card(206).locator('.queue-status > span').first().textContent(),'You paused it 2d ago');
+  assert.equal(await page.locator('#queue-attention .queue-rank').first().textContent(),'●');
+  // The side panel keeps the full context, including the "New since you started" lead.
+  await card(201).locator('td.queue-status').click();
+  assert.match(await page.locator('#pr-drawer-body .queue-reasons').textContent(),/New since you started.*Reply in your review thread/);
+  assert.equal(await page.locator('#pr-drawer-body .queue-tools').getAttribute('open'),'');
+  await page.click('#pr-drawer-close');
 
   // Collapsed state persists across reloads.
   await page.locator('#queue-waiting > summary').click();
@@ -40,6 +47,8 @@ const pr=number=>`https://github.com/demo/workbench/pull/${number}`;
   assert.equal(await page.locator('#queue-waiting').evaluate(el=>el.open),true);
 
   // Keep waiting explains where the PR went, and Undo brings it back.
+  // Keep waiting and Pause live in the ••• menu.
+  await card(202).locator('.pr-overflow > summary').click();
   await card(202).getByRole('button',{name:'Keep waiting',exact:true}).click();
   await expectToast('#202 stays in Waiting for author');
   assert.equal(await sectionOf(202),'waiting');
@@ -54,9 +63,10 @@ const pr=number=>`https://github.com/demo/workbench/pull/${number}`;
   await page.waitForFunction(url=>document.querySelector(`[data-queue-pr="${url}"]`)?.classList.contains('queue-flash'),pr(204));
 
   // Pause returns to the top of Up next; hand back moves to waiting.
+  await card(201).locator('.pr-overflow > summary').click();
   await card(201).getByRole('button',{name:'Pause',exact:true}).click();await expectToast('#201 is paused at the top of Up next');
-  assert.equal(await page.locator('#queue-up_next .queue-row').first().getAttribute('data-queue-pr'),pr(201));
-  assert.equal(await page.locator('#queue-up_next .queue-row').first().getByRole('button',{name:'Start review'}).getAttribute('class'),'button primary');
+  assert.equal(await page.locator('#queue-up_next .queue-item').first().getAttribute('data-queue-pr'),pr(201));
+  assert.equal(await page.locator('#queue-up_next .queue-item').first().getByRole('button',{name:'Start review'}).getAttribute('class'),'button primary');
   await card(204).getByRole('button',{name:'Hand back to author',exact:true}).click();
   await expectToast('#204 is waiting for the author');assert.equal(await sectionOf(204),'waiting');
 
@@ -81,7 +91,7 @@ const pr=number=>`https://github.com/demo/workbench/pull/${number}`;
 
   // Search finds any tracked PR, including finished ones, and shows where it is.
   await page.fill('#queue-search','json flag');
-  assert.equal(await page.locator('#queue-list .queue-row').count(),1);
+  assert.equal(await page.locator('#queue-list .queue-item').count(),1);
   assert.equal(await page.locator('.queue-section-pill').textContent(),'Merged or closed');
   await page.locator('#queue-list').getByRole('button',{name:'Show',exact:true}).click();
   assert.equal(await page.inputValue('#queue-search'),'');assert.equal(await sectionOf(209),'history');

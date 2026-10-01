@@ -1,4 +1,4 @@
-"""Local effort estimates, separate from human reviews and full AI review runs."""
+"""Local review load (effort) estimates, separate from human reviews and full AI review runs."""
 from __future__ import annotations
 import argparse
 import fcntl
@@ -20,7 +20,7 @@ import pr_dashboard as dashboard
 import pr_review_tracker as tracker
 import review_update
 
-VERSION = 2
+VERSION = 3
 UPDATE_VERSION = 1
 UPDATE_STATUSES = ('likely-addressed', 'affected', 'untouched')
 INACTIVE_RESULT_DAYS, MAX_INACTIVE_RESULTS = 90, 500
@@ -28,6 +28,9 @@ FEEDBACK_DAYS, MAX_FEEDBACK = 180, 1000
 DEFAULT_CONFIG = {'enabled': False, 'provider': 'codex', 'model': 'gpt-6-luna',
                   'daily_limit': 30, 'batch_limit': 10, 'reasoning': ''}
 EFFORTS = ('quick', 'moderate', 'involved', 'uncertain')
+LOAD_LEVELS = ('low', 'medium', 'high', 'unknown')
+# Must match triage_provider.COMPONENTS, which runs in its own process.
+LOAD_COMPONENTS = ('change_scope', 'required_context', 'conceptual_complexity', 'review_risk')
 MAX_FILES, MAX_PATCH_CHARS, MAX_CONTEXT_CHARS = 300, 24000, 100000
 SHA = re.compile(r'^[0-9a-f]{40}$')
 
@@ -180,6 +183,8 @@ def snapshot(entries, runs=None):
             counts['outdated'] += 1
         if current.get('status') == 'completed':
             counts['estimated'] += 1
+            # A rubric upgrade is waiting work even though the old estimate is still shown.
+            counts['waiting'] += due(entry, record, data['config'])
             counts['uncertain'] += current.get('effort') == 'uncertain'
             if current.get('rerun_status') == 'running' and status.get('state') == 'running' and status.get('current_url') == url:
                 counts['active'] += 1
@@ -209,8 +214,14 @@ def eligible(entry, manual=False):
 def due(entry, record, config):
     if not eligible(entry):
         return False
-    if completed_record(record):
-        return False
+    previous = completed_record(record)
+    if previous:
+        # A newer rubric re-estimates once; the old estimate stays visible meanwhile.
+        if previous.get('version', 0) >= VERSION:
+            return False
+        if record is not previous and record.get('status') in ('failed', 'running', 'stale'):
+            return tracker.parse_time(record['retry_after']) <= datetime.now(timezone.utc)
+        return True
     if not record or record.get('key') != cache_key(entry, config):
         return True
     if record.get('status') in ('failed', 'running', 'stale'):
@@ -290,9 +301,18 @@ def build_context(pr, files):
             'complete': not missing, 'missing': missing[:3]}
 
 
+def valid_components(value):
+    return (isinstance(value, dict) and set(value) == set(LOAD_COMPONENTS)
+            and all(isinstance(c, dict) and set(c) == {'level', 'reason'} and c['level'] in LOAD_LEVELS
+                    and isinstance(c['reason'], str) and 1 <= len(c['reason']) <= 300 for c in value.values()))
+
+
 def validate_assessment(value):
-    if not isinstance(value, dict) or set(value) != {'effort', 'reason', 'attention', 'missing_context'}:
+    if not isinstance(value, dict) or set(value) - {'components'} != {'effort', 'reason', 'attention', 'missing_context'}:
         raise ValueError('The model returned an invalid estimate.')
+    # The breakdown is supplementary: a malformed one is dropped rather than failing the estimate.
+    if 'components' in value and not valid_components(value['components']):
+        value = {key: item for key, item in value.items() if key != 'components'}
     if value['effort'] not in EFFORTS or not isinstance(value['reason'], str) or not 1 <= len(value['reason']) <= 500:
         raise ValueError('The model returned an invalid effort or explanation.')
     for key in ('attention', 'missing_context'):
@@ -615,7 +635,9 @@ def worker(url=None):
                     entries = triage_entries()
                     candidates = ([(url, entries[url])] if eligible(entries.get(url, {}), manual=True) else []) if url else [
                         (u, entry) for u, entry in entries.items() if u not in attempted and due(entry, data['prs'].get(u), config)]
-                    candidates.sort(key=lambda pair: ('review-requested' not in pair[1].get('reasons', []), pair[1].get('pr_created_at', ''), pair[0]))
+                    # PRs with no estimate yet go before rubric-upgrade re-estimates.
+                    candidates.sort(key=lambda pair: (bool(completed_record(data['prs'].get(pair[0]))),
+                                                      'review-requested' not in pair[1].get('reasons', []), pair[1].get('pr_created_at', ''), pair[0]))
                     # Update pre-checks follow effort estimates and share the daily limit; manual re-estimates skip them.
                     updates = [] if url else update_candidates(data, entries, attempted_updates)
                     candidates += [(u, entry, prior) for u, entry, prior in updates]

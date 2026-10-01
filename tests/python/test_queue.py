@@ -250,7 +250,8 @@ class Queue(unittest.TestCase):
   self.fetch(B,T3);self.fetch(A,T2);self.assertEqual(self.record()['metadata']['head_sha'],B)
  def versions(self,updated=T1,head=A,state='OPEN'):return {URL:{'updatedAt':updated,'headRefOid':head,'state':state}}
  def fetched(self,updated=T1,head=A,at=T1):
-  data=q.load();data['prs'][URL].update(fetched={'updated_at':updated,'head_sha':head},checked_at=at,error='');q.save(data)
+  data=q.load();record=data['prs'][URL];record.update(fetched={'updated_at':updated,'head_sha':head},checked_at=at,error='')
+  record['metadata']={**record.get('metadata',{}),'additions':3,'deletions':1,'changed_files':2};q.save(data)
  def run_refresh(self,versions,full=False):
   import dashboard_retention,storage_cleanup
   payload={'metadata':{'head_sha':A,'pr_updated_at':T1,'pr_state':'open'},'events':[],'latest_review':{}}
@@ -268,6 +269,9 @@ class Queue(unittest.TestCase):
   self.assertFalse(q.unchanged(self.record(),self.versions()[URL],q.epoch(T1)+q.FULL_CHECK_SECONDS))
   data=q.load();data['prs'][URL]['error']='GitHub could not be checked.';q.save(data)
   self.assertFalse(q.unchanged(self.record(),self.versions()[URL],now))
+ def test_records_saved_before_sizes_get_one_detailed_fetch(self):
+  self.fetched();data=q.load();del data['prs'][URL]['metadata']['additions'];q.save(data)
+  self.assertFalse(q.unchanged(self.record(),self.versions()[URL],q.epoch(T1)+60))
  def test_detailed_fetch_records_what_it_saw(self):
   q.apply_fetch(URL,{'metadata':{'head_sha':B,'pr_updated_at':T2},'events':[],'latest_review':{}},T2)
   self.assertEqual(self.record()['fetched'],{'updated_at':T2,'head_sha':B})

@@ -5,6 +5,8 @@ import os
 import sys
 import ai_runtime
 
+# The four parts of the review load, after maintainer-cockpit's review cognitive load.
+COMPONENTS = ('change_scope', 'required_context', 'conceptual_complexity', 'review_risk')
 SCHEMA = {
     'type': 'object', 'additionalProperties': False,
     'properties': {
@@ -12,8 +14,14 @@ SCHEMA = {
         'reason': {'type': 'string'},
         'attention': {'type': 'array', 'items': {'type': 'string'}},
         'missing_context': {'type': 'array', 'items': {'type': 'string'}},
+        'components': {'type': 'object', 'additionalProperties': False, 'properties': {
+            name: {'type': 'object', 'additionalProperties': False,
+                   'properties': {'level': {'type': 'string', 'enum': ['low', 'medium', 'high', 'unknown']},
+                                  'reason': {'type': 'string'}},
+                   'required': ['level', 'reason']}
+            for name in COMPONENTS}, 'required': list(COMPONENTS)},
     },
-    'required': ['effort', 'reason', 'attention', 'missing_context'],
+    'required': ['effort', 'reason', 'attention', 'missing_context', 'components'],
 }
 INSTRUCTIONS = """Estimate the HUMAN attention needed to review the supplied pull request.
 Return the required JSON object only. You are a bounded classifier, not a code reviewer.
@@ -44,6 +52,19 @@ when its document discusses security; distinguish prose from executable policy.
 Write reason as one plain sentence under 240 characters explaining the effort.
 Use at most three attention flags and three missing_context entries, each under 160 characters.
 An empty list is valid. No evidence of a defect is not evidence the PR is safe to merge.
+Also rate four components of the review load. Each is low, medium, high, or unknown when the
+supplied evidence cannot support a level. Give each one plain sentence under 160 characters.
+change_scope: how much handwritten behavior changes and how widely it spreads across files and
+components. Generated files, lockfiles and repeated mechanical edits count little.
+required_context: how much unchanged code, domain knowledge or external contract the reviewer
+must load to judge the change.
+conceptual_complexity: how hard the changed logic is to reason about: state, lifecycle,
+concurrency, ordering, algorithms, or many interacting branches.
+review_risk: what a missed defect would cost: public API, persistence or migration, security,
+compatibility, data loss, weakened tests or user-visible failure. Not the likelihood of a defect.
+If a component's reason names a risk or difficulty, its level is at least medium.
+The overall effort follows from the components but is not their average: one high component
+can make the whole PR involved. Quick maps to low, moderate to medium, involved to high.
 """
 
 UPDATE_SCHEMA = {

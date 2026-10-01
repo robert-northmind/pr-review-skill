@@ -1,7 +1,7 @@
 # Code review workspace
 
 Each inbox or My reviews card has one **Open review** entry and an AI status pill
-beside the effort estimate. It opens the AI review tab when a report exists,
+beside the review load estimate. It opens the AI review tab when a report exists,
 otherwise Code changes. Registered HTML/legacy Markdown reports are embedded in
 an opaque sandbox. They cannot access the dashboard or its action token. Embedded
 reports inherit the workspace theme, hide their standalone theme/PR controls,

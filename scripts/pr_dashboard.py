@@ -294,7 +294,7 @@ def fetch_pr_details(canonical: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [gh_executable(), "pr", "view", canonical, "--json",
-             "reviews,comments,createdAt,updatedAt,headRefOid,baseRefOid,title,body"],
+             "reviews,comments,createdAt,updatedAt,headRefOid,baseRefOid,title,body,additions,deletions,changedFiles"],
             capture_output=True, text=True, timeout=30, check=False)
         if result.returncode:
             raise DashboardError(f"Could not refresh details for {canonical}")
@@ -392,7 +392,8 @@ def _refresh_sources() -> None:
         # Search results carry updatedAt; unchanged PRs reuse details for up to an hour.
         entry, updated = snapshot["prs"].get(url, {}), observed[url]["item"].get("updatedAt")
         try:
-            return bool(updated and entry.get("pr_updated_at") and entry.get("head_sha")
+            # Entries saved before PR sizes were recorded get one detailed fetch.
+            return bool(updated and entry.get("pr_updated_at") and entry.get("head_sha") and "additions" in entry
                         and tracker.parse_time(entry["pr_updated_at"]) == tracker.parse_time(updated)
                         and tracker.parse_time(now) - tracker.parse_time(entry["details_checked_at"])
                         < timedelta(seconds=DETAILS_REUSE_SECONDS))
@@ -457,6 +458,9 @@ def _refresh_sources() -> None:
                 entry["pr_updated_at"] = payload.get("updatedAt", "")
                 entry["head_sha"] = payload.get("headRefOid", "")
                 entry["base_sha"] = payload.get("baseRefOid", "")
+                for key, field in (("additions", "additions"), ("deletions", "deletions"), ("changed_files", "changedFiles")):
+                    if isinstance(payload.get(field), int):
+                        entry[key] = payload[field]
                 import dashboard_triage
                 entry["triage_context_hash"] = dashboard_triage.context_hash(payload.get("title", entry.get("title", "")), payload.get("body") or "")
                 entry["details_checked_at"] = now

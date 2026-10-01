@@ -197,3 +197,75 @@ class RendererTests(unittest.TestCase):
         self.assertIn('<span class="flow-number" aria-hidden="true">1</span>',output);self.assertNotIn('flow-number" aria-hidden="true">2',output)
 
 if __name__=='__main__':unittest.main()
+
+
+SEQUENCE_SVG = ('<svg id="{id}" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><style>#x{{fill:red}}</style>'
+                '<defs><symbol id="{id}-computer"><path d="M0 0"/></symbol></defs>'
+                '<g data-et="participant" data-id="A"><rect class="actor"/><text class="actor">App</text></g>'
+                '<line class="messageLine0" data-et="message" data-from="A" data-to="B" marker-end="url(#{id}-arrowhead)" onclick="x()"/></svg>')
+
+class WalkReportTests(unittest.TestCase):
+    """The walk layout, its blocks and pre-rendered Mermaid (runtime stubbed)."""
+    @classmethod
+    def setUpClass(cls):
+        RendererTests.setUpClass();cls.base_data=RendererTests.data;cls.cleanup=RendererTests.temp
+    @classmethod
+    def tearDownClass(cls):cls.cleanup.cleanup()
+    def walk(self,**extra):
+        d=copy.deepcopy(self.base_data);d['layout']='walk';d['stats']={'additions':12,'deletions':3,'files':1}
+        source='sequenceDiagram\n  A->>B: hi'
+        d['sections']=[{'id':'what','tab':'What changed','title':'What changed','claim':'One claim.','lede':'In plain words.','blocks':[
+            {'type':'compare','stacked':True,'panes':[{'label':'Before','tone':'before','blocks':[{'type':'mermaid','source':source,'notes':{'App':'Starts it.'}}]},
+                                                     {'label':'After','tone':'after','blocks':[{'type':'paragraph','text':'Now.'}]}]},
+            {'type':'callouts','items':[{'tone':'bad','title':'Breaks.','text':'Both wait.','finding':'Finding 1'}]}]},
+            {'id':'how','title':'How it works','blocks':[{'type':'pair','change':'The value changes.','blocks':[{'type':'card','icon':'lock','name':'Demo','role':'Holds <count>.','tag':'changed','tone':'hot'}],
+             'diff':[{'type':'source','path':'demo.dart','start':1,'end':3,'caption':'Here.'}]}]}]
+        d.update(extra);return d
+    def render(self,d):
+        import review_mermaid
+        def runtime(items):return {item['id']:{'svg':SEQUENCE_SVG.format(id=item['id'])} for item in items}
+        with patch.object(review_mermaid,'cache_dir',return_value=None),patch.object(review_mermaid,'run_runtime',side_effect=runtime) as call:
+            return render(d),call
+    def test_walk_layout_renders_scenes_blocks_and_fonts(self):
+        output,call=self.render(self.walk())
+        self.assertEqual(call.call_count,1)
+        self.assertIn('data-layout="walk"',output);self.assertIn('<nav class="walk-rail"',output)
+        self.assertIn('<a href="#what">What changed</a>',output);self.assertIn('<h2>One claim.</h2>',output)
+        self.assertIn('+12</span>',output);self.assertIn("font-src data:",output);self.assertIn('@font-face{font-family:"Fraunces"',output)
+        self.assertIn('walk-pane tone-before',output);self.assertIn('walk-callout tone-bad',output);self.assertIn('⚠ Finding 1',output)
+        self.assertIn('walk-card tag-changed tone-hot',output);self.assertIn('Holds &lt;count&gt;.',output)
+        self.assertIn('<div data-participant="App">Starts it.</div>',output)
+        # Mermaid's own style, icon symbols and event handlers never reach the page.
+        self.assertNotIn('fill:red',output);self.assertNotIn('-computer',output);self.assertNotIn('onclick',output)
+        self.assertIn('data-from="A"',output)
+    def test_classic_layout_is_unchanged_by_default(self):
+        output=render(copy.deepcopy(self.base_data))
+        self.assertIn('data-layout="classic"',output);self.assertIn('font-src &#x27;none&#x27;',output);self.assertNotIn('@font-face',output)
+        self.assertIn('<nav aria-label="On this page">',output)
+    def test_walk_places_the_update_record_after_the_findings(self):
+        d=self.walk(update={'scope':'full','previous':{'run_id':'','base':self.base_data['base'],'head':self.base_data['head']},'summary':'Fresh full review.'})
+        output,_=self.render(d)
+        self.assertLess(output.index('id="review-findings"'),output.index('id="since-last-review"'))
+        classic=render({**copy.deepcopy(self.base_data),'update':d['update']})
+        self.assertLess(classic.index('id="since-last-review"'),classic.index('id="review-findings"'))
+    def test_invalid_walk_input_is_rejected(self):
+        bad=[self.walk(layout='slides')]
+        d=self.walk();d['sections'][0]['blocks'][1]['items'][0]['tone']='purple';bad.append(d)
+        d=self.walk();d['sections'][1]['blocks'][0]['blocks'][0]['icon']='rocket';bad.append(d)
+        d=self.walk();d['sections'][1]['blocks'][0]['diff']=[{'type':'mermaid','source':'graph TD\n A-->B'}];bad.append(d)
+        d=self.walk();d['sections'][0]['blocks'][0]['panes'][0]['blocks'][0]['source']='pie\n "a": 1';bad.append(d)
+        for d in bad:
+            with self.assertRaises(ValueError):self.render(d)
+    def test_mermaid_syntax_errors_name_the_diagram(self):
+        import review_mermaid
+        with patch.object(review_mermaid,'cache_dir',return_value=None),patch.object(review_mermaid,'run_runtime',side_effect=lambda items:{i['id']:{'error':'page.evaluate: Parse error on line 2'} for i in items}):
+            with self.assertRaisesRegex(ValueError,'Mermaid syntax error in the diagram starting “sequenceDiagram”: Parse error on line 2'):render(self.walk())
+
+class MermaidSanitizerTests(unittest.TestCase):
+    def test_generated_svg_keeps_hooks_but_drops_active_content(self):
+        from review_diagram import sanitize_mermaid, DiagramError
+        clean=sanitize_mermaid(SEQUENCE_SVG.format(id='mm-1'))
+        self.assertIn('marker-end="url(#mm-1-arrowhead)"',clean);self.assertNotIn('onclick',clean);self.assertNotIn('<style',clean)
+        for svg in ('<svg><foreignObject><div>x</div></foreignObject></svg>','<svg><a href="https://x"><text>x</text></a></svg>',
+                    '<svg><script>alert(1)</script></svg>','<svg><rect style="fill:url(https://evil/x)"/></svg>'):
+            with self.assertRaises(DiagramError):sanitize_mermaid(svg)

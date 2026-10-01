@@ -5,7 +5,7 @@ your attention, understand a change, inspect its code and discussion, and turn
 verified findings into review comments you can edit and post yourself.
 
 Use the dashboard with your GitHub CLI login. Add Codex or Claude Code for AI
-reviews, effort estimates and code chat. You can also run the review skill
+reviews, review load estimates and code chat. You can also run the review skill
 directly from an AI coding agent, without the dashboard.
 
 The app runs on your machine: a Python server with plain HTML, CSS and JavaScript.
@@ -22,9 +22,9 @@ the dashboard does not post comments, approve or merge PRs.
 |---|---|
 | **PR inbox** | Browse review requests, watched repositories and your own PRs. Filter by author, repository, review status or draft state; snooze or hide items. |
 | **My reviews** | Keep an ordered queue, save private notes and reminders, and see when new commits or replies bring a PR back to you. |
-| **Effort estimates** | Get optional Quick, Moderate, Involved or Uncertain estimates, with reasons, filters and a daily call limit. |
+| **Review load** | Get optional Low, Medium, High or Unsure estimates of how much reviewing a PR will take, split into change scope, required context, complexity and risk, with reasons, filters and a daily call limit. |
 | **AI reviews** | Run Codex or Claude Code, follow live progress, add guidance, ask questions, wrap up early or stop a run. Existing PR comments are read first, so findings already raised become replies to their threads. Continue a finished review's session in either agent. After small follow-up commits, update a review instead of redoing it: previous findings are re-checked and only the affected parts are redone. Keep the newest reports and run history. |
-| **Review reports** | Read the outcome and assessment, a plain-words summary, a diagram of the change, a grid of situations before and after, exact source excerpts, step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits in one HTML report. |
+| **Review reports** | Read the outcome and assessment, then a short walk of scenes: what changed (before/after, with Mermaid diagrams where call order matters), why it matters, how it works (each change beside its exact diff) and the blast radius, followed by step-by-step findings with fix sketches, copyable draft comments, a short self-check and verification limits, in one HTML report. |
 | **Code workspace** | Read unified or side-by-side diffs, expand context, open full files and track viewed files. Inspect inline GitHub threads and the PR conversation. |
 | **Code chat** | Ask about selected lines or comments, investigate the pinned revision and draft replies. Conversations persist with their original provider, model and revision. |
 | **Reporting** | Explore daily and weekly review/merge activity, completed-week comparisons and workday trends with time-off exclusions, plus estimated AI review cost for the last 30 days. |
@@ -36,9 +36,9 @@ review assistance; you decide which comments to send and whether to approve.
 
 ## Screenshots
 
-**Inbox:** review requests, effort estimates and an entry into each PR's workspace.
+**Inbox:** one row per review request with its size, review load and AI review state, and an entry into each PR's workspace.
 
-![PR inbox with fictional pull requests, effort estimates and Open review actions](docs/screenshots/inbox-light.jpg)
+![PR inbox with fictional pull requests, review load estimates and Open review actions](docs/screenshots/inbox-light.jpg)
 
 **Code workspace:** the diff, inline review threads and GitHub discussion together.
 
@@ -47,13 +47,13 @@ review assistance; you decide which comments to send and whether to approve.
 <details>
 <summary>More screenshots: reports, review queue, live AI reviews, settings, reporting and AI cost</summary>
 
-**Review report:** the outcome and current assessment lead into a plain-words summary.
+**Review report:** the outcome and current assessment lead into a walk of scenes, one at a time, starting with what changed.
 
-![Review report opening with its assessment and a fictional parser example](docs/screenshots/review-overview-light.jpg)
+![Review report opening with its assessment and before/after diagrams of a fictional parser](docs/screenshots/review-overview-light.jpg)
 
-**Explanation:** a diagram of the change marks where each finding goes wrong, and a grid shows each situation before and after.
+**Why it matters:** a concrete example, one callout per situation with the finding it hits, and a grid of each situation before and after.
 
-![Fictional parser diagram with finding badges, followed by a before/after situation grid](docs/screenshots/review-explainer-light.jpg)
+![Fictional parser situations with finding badges, followed by a before/after situation grid](docs/screenshots/review-explainer-light.jpg)
 
 **Findings:** expand a finding for the problem in one sentence, a walkthrough, whether it is real, a fix sketch and the draft comment.
 
@@ -97,8 +97,9 @@ UI. See [screenshot provenance and refresh instructions](docs/screenshots/README
 
 The inbox, review queue, code browser and reporting work without an AI provider.
 Full AI review validation needs a disposable execution sandbox; report browser
-checks also need Node.js, Playwright and Chrome/Chromium. See
-[review validation setup](references/authoring.md).
+checks also need Node.js, Playwright and Chrome/Chromium. Reports draw Mermaid
+diagrams with the report runtime (`npm ci --prefix scripts/report-runtime`) and the
+installed Chrome. See [review validation setup](references/authoring.md).
 
 ### 1. Clone the repository
 
