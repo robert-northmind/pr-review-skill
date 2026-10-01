@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import subprocess
 import tempfile
@@ -124,6 +125,33 @@ echo confinement-ok
                 process.terminate()
                 process.wait(timeout=5)
 
+    def test_killing_the_callers_group_also_stops_its_command(self):
+        # A cancelled review SIGKILLs its worker's process group, helper included.
+        pid_file = self.workspace / 'command.pid'
+        process = subprocess.Popen([
+            sys.executable, sandbox.__file__, '--workspace', str(self.workspace),
+            '--output', str(self.output), '--', '/bin/sh', '-c',
+            'echo $$ > command.pid; exec /bin/sleep 30',
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        child_pid = None
+        try:
+            deadline = time.monotonic() + 5
+            while not pid_file.exists() and time.monotonic() < deadline:
+                time.sleep(.02)
+            child_pid = int(pid_file.read_text())
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+            deadline = time.monotonic() + 5
+            while alive(child_pid) and time.monotonic() < deadline:
+                time.sleep(.05)
+            self.assertFalse(alive(child_pid))
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+            if child_pid and alive(child_pid):
+                os.kill(child_pid, signal.SIGKILL)
+
     def test_loopback_requires_explicit_option(self):
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
@@ -171,6 +199,14 @@ echo confinement-ok
         self.assertFalse((self.output / 'sandbox.sb').exists())
         self.assertIn('synthetic-private-value', (self.output / 'output.log').read_text())
 
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 if __name__ == '__main__':

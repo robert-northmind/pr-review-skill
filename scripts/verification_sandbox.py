@@ -243,6 +243,43 @@ def kill_group(process):
         pass
 
 
+# Blocks until the helper's end of the pipe closes, which the kernel does even when
+# the helper is SIGKILLed (e.g. a cancelled review killing its worker's process group).
+WATCHDOG = """
+import os, signal, sys
+os.read(0, 1)
+try:
+    os.killpg(int(sys.argv[1]), signal.SIGKILL)
+except ProcessLookupError:
+    pass
+"""
+
+
+def start_watchdog(group):
+    """Kill the command's process group if this helper dies without cleaning up.
+
+    The command runs in its own session, so killing the caller's group misses it.
+    The watchdog has its own session too, so the same kill does not reach it.
+    """
+    read, write = os.pipe()
+    try:
+        watchdog = subprocess.Popen([sys.executable, '-c', WATCHDOG, str(group)], stdin=read,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    start_new_session=True)
+    except BaseException:
+        os.close(write)
+        raise
+    finally:
+        os.close(read)
+    return watchdog, write
+
+
+def stop_watchdog(watchdog, write):
+    watchdog.kill()
+    watchdog.wait()
+    os.close(write)
+
+
 def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
               loopback=False, output=None, presets=(), network=False, host=False,
               repository=None):
@@ -288,13 +325,14 @@ def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
         started_at = time.time()
         started = time.monotonic()
         timed_out = False
-        process = None
+        process = watchdog = None
         try:
             with log_path.open('wb') as log:
                 process = subprocess.Popen(
                     launch, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                 )
+                watchdog = start_watchdog(process.pid)
                 try:
                     exit_code = process.wait(timeout=timeout)
                 except subprocess.TimeoutExpired:
@@ -309,6 +347,9 @@ def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
                 kill_group(process)
                 process.wait()
             raise
+        finally:
+            if watchdog:
+                stop_watchdog(*watchdog)
         result = {
             'command': command, 'cwd': str(cwd), 'exit_code': exit_code,
             'status': 'timed-out' if timed_out else 'passed' if exit_code == 0 else 'failed',
