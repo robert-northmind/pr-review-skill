@@ -1,0 +1,12 @@
+{
+  "name": "pr-review-report-runtime",
+  "private": true,
+  "description": "Renders Mermaid diagrams to static SVG for review reports (see scripts/review_mermaid.py).",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "dependencies": {
+    "mermaid": "11.17.2",
+    "playwright-core": "1.63.0"
+  }
+}

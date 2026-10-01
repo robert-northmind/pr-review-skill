@@ -171,9 +171,13 @@ responsible for sandbox execution and app lifecycle to avoid duplicate builds.
 
 Follow [Explanation](references/explanation.md) using the same pinned source.
 Draft the JSON narrative sections; do not render or register a separate HTML.
-The opening is: plain words, one purpose-built diagram of the change with
-finding badges, a cases grid of situations before and after, source excerpts
-tied to the diagram's steps, and one or two self-check questions.
+Render with `"layout": "walk"`. The opening is a short walk of scenes, each one
+claim: what changed (Before/After), why it matters when the benefit needs proof
+(a concrete example, situation callouts, the cases grid), how it works (each
+logical change paired with its exact hunks), and the blast radius (Not in the
+blast / In the blast, ending with a merge gate). Use Mermaid sequence diagrams
+where call or event order explains the change; see
+[Explanation](references/explanation.md). Keep one or two self-check questions.
 Use the normal concise depth unless the user asks for more detail. After finding
 verification, reconcile the opening, examples and caveats with the final review.
 The lead assembles and validates the complete report only after synthesis.
@@ -444,7 +448,7 @@ The local inbox is served at `http://127.0.0.1:8765/` by `scripts/pr_server.py`.
 It separates requests from watched-repository PRs and PRs the user created,
 with search, repository/review/draft filters, PR age, snoozing, hiding, and run history.
 GitHub participation and AI review progress are separate states. Optional background
-effort estimates help choose a PR; they do not replace review coverage or establish
+review load estimates help choose a PR; they do not replace review coverage or establish
 that a change is safe to approve.
 
 Read [references/dashboard.md](references/dashboard.md) when operating or

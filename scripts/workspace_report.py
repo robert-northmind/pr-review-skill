@@ -6,6 +6,15 @@ body>main{width:100%;max-width:none;margin:0;padding:0 0 32px}
 .topbar,#theme,.pr-link{display:none!important}
 h1{font-size:1.5rem;line-height:1.3;margin:0 0 16px}
 .outcome{font-size:1rem;max-width:none}
+/* Walk reports: no inner frame or paper background; the workspace is the frame. */
+html[data-layout=walk] body{background-image:none!important;font-family:var(--w-sans)}
+html[data-layout=walk] body>main.walk-page{max-width:none;padding:0 0 32px}
+html[data-layout=walk] .walk{border:0;border-radius:0;box-shadow:none;background:transparent;overflow:visible}
+html[data-layout=walk] .walk>header{padding:0 0 22px}
+html[data-layout=walk] .walk>header h1{font-size:clamp(1.6rem,2.6vw,2.2rem);max-width:40ch}
+html[data-layout=walk] .walk-body{border-top:1px solid var(--w-rule)}
+html[data-layout=walk] .walk-rail{background:transparent;padding-left:0}
+html[data-layout=walk] .walk-scenes{padding-right:0}
 </style>'''
 BRIDGE = r'''<script>
 (()=>{
@@ -23,13 +32,19 @@ BRIDGE = r'''<script>
   for(const key of ['bg','panel','fg','muted','line','accent','soft']){
    if(typeof colors?.[key]==='string')document.documentElement.style.setProperty('--'+key,colors[key]);
   }
+  // Walk reports take the workspace's surfaces and keep their own status colours.
+  if(document.documentElement.dataset.layout==='walk')for(const [walk,key] of [['page','bg'],['paper','bg'],['paper-2','soft'],['ink','fg'],['muted','muted'],['rule','line']]){
+   if(typeof colors?.[key]==='string')document.documentElement.style.setProperty('--w-'+walk,colors[key]);
+  }
   resize();
  });
  parent.postMessage({type:'workspace-report-ready'},'*');
+ if(document.documentElement.dataset.layout==='walk')parent.postMessage({type:'workspace-report-layout',layout:'walk'},'*');
  resize();
  document.addEventListener('click',event=>{
   const anchor=event.target.closest('a[href^="#"]');
-  if(!anchor)return;
+  // The walk's scene rail handles its own links (and prevents the default).
+  if(!anchor||event.defaultPrevented)return;
   let target;try{target=document.getElementById(decodeURIComponent(anchor.hash.slice(1)));}catch{return;}
   if(target){event.preventDefault();parent.postMessage({type:'workspace-report-scroll',top:target.getBoundingClientRect().top+window.scrollY},'*');}
  });

@@ -29,7 +29,7 @@
 </header>
 <div id="connection" class="notice" role="status" hidden></div>
 <div id="warnings" class="notice warning" hidden></div>
-<section id="triage-activity" class="triage-activity" aria-label="Review effort activity" hidden>
+<section id="triage-activity" class="triage-activity" aria-label="Review load activity" hidden>
   <div class="triage-activity-text"><span id="triage-spinner" class="triage-spinner" aria-hidden="true" hidden></span><span id="triage-activity-title" role="status" aria-live="polite"></span></div>
   <div class="triage-activity-actions"><button id="triage-progress-run" class="text-button" type="button" hidden>Retry estimates</button><button id="triage-details-show" class="text-button" type="button" aria-label="Triage details">Details</button></div>
   <p id="triage-activity-message" class="muted" hidden></p>
@@ -99,6 +99,7 @@
 <footer><span>Private workspace · GitHub actions here are read-only</span><span>AI results stay available while a new run is in progress.</span></footer>
 </main>
 
+<dialog id="pr-drawer" class="pr-drawer" aria-labelledby="pr-drawer-title"><div class="pr-drawer-head"><p id="pr-drawer-title" class="muted">PR details</p><button type="button" class="button subtle" id="pr-drawer-close">Close</button></div><div id="pr-drawer-body"></div></dialog>
 <dialog id="review-dialog" class="review-dialog" aria-labelledby="review-title">
 <div class="review-dialog-header"><div><span class="review-eyebrow">CODEX · IN-APP REVIEW</span><h2 id="review-title">Codex review</h2><p id="review-subtitle" class="muted"></p></div><button class="button" id="review-close" aria-label="Close review activity">Close</button></div>
 <div class="review-overview"><div class="review-overview-top"><div><strong id="review-status">Starting</strong><p id="review-message" class="muted"></p></div><div class="review-figure"><span id="review-percent">0%</span><span id="review-figure-label" class="muted" hidden>Estimated cost</span></div></div><progress id="review-progress" value="0" max="100" aria-label="Estimated review progress"></progress><p id="review-counts"></p><p id="review-estimate" class="muted review-estimate">Stage estimate, not time remaining. Based on agent checkpoints; skipped checks remain visible. Scope changes can revise progress.</p><div id="review-cost" class="review-cost" hidden></div></div>
@@ -132,7 +133,7 @@
 <dialog id="activity-dialog" class="workspace-dialog" aria-labelledby="activity-heading">
   <div class="dialog-heading"><h2 id="activity-heading">AI activity</h2><button class="button subtle" data-close-dialog>Close</button></div>
   <p id="effective-agent" class="muted"></p><div id="active-run-list"></div>
-          <section id="triage-progress" class="triage-progress" aria-label="Review effort details">
+          <section id="triage-progress" class="triage-progress" aria-label="Review load details">
           <strong id="triage-progress-title" tabindex="-1"></strong>
           <p id="triage-progress-current" class="muted"></p>
           <progress id="triage-progress-bar" aria-label="PRs processed in this run" hidden></progress>
@@ -183,7 +184,7 @@
 <div id="status-options" class="filter-options"></div>
 <p id="status-selection" class="muted" aria-live="polite"></p>
 </section></details>
-<div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label>Review effort<select id="triage-filter"><option value="all">Any effort</option><option value="quick">Quick reviews</option><option value="moderate">Moderate</option><option value="involved">Involved</option><option value="uncertain">Uncertain / unavailable</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="effort">Review effort</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
+<div class="filter-bottom"><label>Drafts<select id="drafts"><option value="all">Include drafts</option><option value="ready">Ready for review</option><option value="only">Drafts only</option></select></label><label>Review load<select id="triage-filter"><option value="all">Any review load</option><option value="quick">Low</option><option value="moderate">Medium</option><option value="involved">High</option><option value="uncertain">Unsure / unavailable</option></select></label><label class="sort-label">Sort<select id="sort"><option value="updated">Recent activity</option><option value="oldest">Waiting longest</option><option value="effort">Review load, lightest first</option></select></label><button class="text-button" id="clear-filters">Clear filters</button></div>
 </section>
 </dialog>
 <dialog id="queue-add-dialog" class="workspace-dialog" aria-labelledby="queue-add-heading">

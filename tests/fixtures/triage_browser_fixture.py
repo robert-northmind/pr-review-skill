@@ -21,10 +21,13 @@ with tempfile.TemporaryDirectory(prefix='triage-browser-') as root:
  entries={};records={}
  for number,effort in enumerate(('quick','moderate','involved','uncertain','stale'),1):
   url=f'https://github.com/example/repo/pull/{number}'
-  entry={'owner':'example','repository':'repo','number':number,'title':f'Example {effort} change','reasons':['review-requested'],'author_login':'colleague','pr_created_at':f'2026-09-0{number}T00:00:00Z','pr_updated_at':'2026-09-10T00:00:00Z','first_seen_at':'2026-09-10T00:00:00Z', **t.metadata(PR)}
+  entry={'owner':'example','repository':'repo','number':number,'title':f'Example {effort} change','reasons':['review-requested'],'author_login':'colleague','pr_created_at':f'2026-09-0{number}T00:00:00Z','pr_updated_at':'2026-09-10T00:00:00Z','first_seen_at':'2026-09-10T00:00:00Z','additions':[14,86,240,63,9][number-1],'deletions':[3,12,58,20,4][number-1],'changed_files':[1,4,9,3,2][number-1], **t.metadata(PR)}
   entries[url]=entry
   records[url]={'id':str(number),'key':t.cache_key(entry,config),**t.revision(entry),**copy.deepcopy(ASSESSMENT),'status':'completed','effort':effort if effort!='stale' else 'quick','provider':'codex','model':config['model'],'version':t.VERSION,'finished_at':'2026-09-16T12:00:00Z'}
   if effort=='stale':records[url]['key']='old'
+  if effort=='quick':records[url]['components']={'change_scope':{'level':'low','reason':'One focused handler change.'},'required_context':{'level':'low','reason':'Local to the command menu.'},'conceptual_complexity':{'level':'low','reason':'Straightforward focus handling.'},'review_risk':{'level':'medium','reason':'Keyboard users notice regressions.'}}
+  if effort=='moderate':records[url]['components']={'change_scope':{'level':'medium','reason':'Retry loop and its tests.'},'required_context':{'level':'medium','reason':'Needs the exporter contract.'},'conceptual_complexity':{'level':'medium','reason':'Backoff and batch ordering.'},'review_risk':{'level':'medium','reason':'Lost telemetry if retries stop.'}}
+  if effort=='involved':records[url]['components']={'change_scope':{'level':'medium','reason':'Three files <change>.'},'required_context':{'level':'high','reason':'Needs the retry contract.'},'conceptual_complexity':{'level':'high','reason':'Concurrent cancellation.'},'review_risk':{'level':'unknown','reason':'Callers are outside the diff.'}}
  records['https://github.com/example/repo/pull/2']['reason']='<img src=x onerror="alert(1)"> is passive PR text.'
  d.save_dashboard({'prs':entries})
  data=t.load();data['prs']=records;t.save(data)

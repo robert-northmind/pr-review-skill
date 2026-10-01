@@ -8,7 +8,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   browser=await chromium.launch({headless:true,channel:'chrome'});
   const page=await browser.newPage({viewport:{width:1360,height:1000}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(url);await page.waitForSelector('.pr-card');await page.click('#settings-show');
+  await page.goto(url);await page.waitForSelector('.pr-row');await page.click('#settings-show');
   assert.equal(await page.locator('.feature-card').count(),3);
   await page.selectOption('#triage-provider','claude');
   assert.equal(await page.inputValue('#triage-model'),'claude-haiku-4-5-20251001');
@@ -23,7 +23,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await page.click('#ai-save');await page.waitForFunction(()=>!settingsDirty&&!aiSaving);
   const settings=await page.evaluate(()=>state.ai.settings);
   assert.equal(settings.triage.provider,'claude');assert.equal(settings.review.provider,'codex');assert.equal(settings.chat.provider,'claude');
-  await page.reload();await page.waitForSelector('.pr-card');await page.click('#settings-show');
+  await page.reload();await page.waitForSelector('.pr-row');await page.click('#settings-show');
   assert.equal(await page.inputValue('#chat-model'),'claude-sonnet-5-5');
   // Dirty windows retain their draft and revision across background polling.
   await page.selectOption('#chat-effort','high');

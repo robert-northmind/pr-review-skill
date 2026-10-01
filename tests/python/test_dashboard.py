@@ -76,10 +76,11 @@ class Refresh(Isolated):
    item={**ITEM,'updatedAt':stamp}
    with patch.object(t,'utc_now',return_value=at):
     return self.refresh(lambda reason:[item] if reason=='review-requested' else [],
-                        {'reviews':[],'comments':[],'updatedAt':stamp,'headRefOid':'b'*40}).call_count
+                        {'reviews':[],'comments':[],'updatedAt':stamp,'headRefOid':'b'*40,'additions':4,'deletions':1,'changedFiles':2}).call_count
   self.assertEqual(refresh('2026-01-04T00:00:00+00:00'),1)
   self.assertEqual(refresh('2026-01-04T00:30:00+00:00'),0)
   self.assertEqual(d.load_dashboard()['prs'][URL]['details_checked_at'],'2026-01-04T00:00:00+00:00')
+  self.assertEqual({k:d.load_dashboard()['prs'][URL][k] for k in ('additions','deletions','changed_files')},{'additions':4,'deletions':1,'changed_files':2})
   self.assertEqual(refresh('2026-01-04T01:00:00+00:00'),1)
   self.assertEqual(refresh('2026-01-04T01:10:00+00:00',later),1)
   self.assertEqual(d.load_dashboard()['prs'][URL]['pr_updated_at'],later)

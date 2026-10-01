@@ -709,6 +709,7 @@ import { installChatResize } from "./chat-resize.mjs";
     $("review-count").textContent = data.review?.artifact ? "Ready" : "Not run";
     const next = JSON.stringify(data.review);
     if (next !== reviewSignature) {
+      $("ai-view").classList.remove("ai-view-wide");
       $("ai-view").innerHTML = reviewHTML(data.review, data, esc);
       reviewSignature = next;
     }
@@ -1247,6 +1248,8 @@ import { installChatResize } from "./chat-resize.mjs";
     const frame = document.querySelector(".review-frame");
     if (!frame || event.source !== frame.contentWindow) return;
     if (event.data?.type === "workspace-report-ready") { syncReportTheme(); return; }
+    // Walk reports use the full width of the AI review tab.
+    if (event.data?.type === "workspace-report-layout") { $("ai-view").classList.toggle("ai-view-wide", event.data.layout === "walk"); return; }
     if (event.data?.type === "workspace-report-size") {
       const height = event.data.height;
       if (Number.isFinite(height) && height > 0 && height <= 1000000) frame.style.height = Math.ceil(height) + "px";

@@ -286,6 +286,31 @@ class Triage(Isolated):
    self.assertEqual(t.validate_assessment(assessment),assessment)
   for bad in ({**ASSESSMENT,'effort':'safe'}, {**ASSESSMENT,'extra':True},{**ASSESSMENT,'attention':'bad'}, {**ASSESSMENT,'reason':''}):
    with self.assertRaises(ValueError):t.validate_assessment(bad)
+ def test_review_load_components_are_kept_or_dropped_but_never_fail_the_estimate(self):
+  import triage_provider
+  self.assertEqual(t.LOAD_COMPONENTS,triage_provider.COMPONENTS)
+  self.assertEqual(triage_provider.SCHEMA['properties']['components']['required'],list(t.LOAD_COMPONENTS))
+  parts={name:{'level':'medium','reason':'Needs the caller contract.'} for name in t.LOAD_COMPONENTS}
+  assessment={**ASSESSMENT,'components':parts}
+  self.assertEqual(t.validate_assessment(assessment),assessment)
+  for broken in ({**parts,'review_risk':{'level':'severe','reason':'x'}},{**parts,'extra':parts['review_risk']},
+                 {**parts,'change_scope':{'level':'low','reason':''}},'medium'):
+   self.assertEqual(t.validate_assessment({**ASSESSMENT,'components':broken}),ASSESSMENT)
+  record=self.run_one(model=lambda *_:(t.validate_assessment(assessment),{}))
+  self.assertEqual(record['components'],parts)
+ def test_a_newer_rubric_re_estimates_completed_estimates_once(self):
+  record=self.run_one()
+  entry=t.triage_entries()[URL]
+  self.assertFalse(t.due(entry,record,self.config))
+  older={**record,'version':t.VERSION-1}
+  self.assertTrue(t.due(entry,older,self.config))
+  waiting={'status':'failed','retry_after':'2999-01-01T00:00:00+00:00','previous_estimate':older}
+  self.assertFalse(t.due(entry,waiting,self.config))
+  self.assertTrue(t.due(entry,{**waiting,'retry_after':'2000-01-01T00:00:00+00:00'},self.config))
+  self.assertEqual(t.view(entry,waiting,self.config)['effort'],older['effort'])
+  # The upgrade counts as waiting work, so Estimate all waiting can run it.
+  data=t.load();data['prs'][URL]=older;t.save(data)
+  self.assertEqual(t.snapshot({URL:self.entry})['counts']['waiting'],1)
  def test_invalid_config_preserves_saved_values(self):
   for values in ({'enabled':'yes'},{'daily_limit':True},{'daily_limit':0},{'batch_limit':21},{'provider':'other'},{'model':'bad\nmodel'}):
    with self.assertRaises(ValueError):t.configure(values)

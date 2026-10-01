@@ -98,3 +98,46 @@ def sanitize(markup):
     if parser.stack:
         raise DiagramError(f'Diagram markup leaves <{parser.stack[-1]}> unclosed')
     return ''.join(parser.out)
+
+
+# Mermaid output is generated, not authored, so it gets its own
+# allowlist: Mermaid's SVG vocabulary and data-* hooks, but still no links, scripts,
+# <style>, foreignObject or url() outside the diagram's own markers.
+MERMAID_TAGS = SVG_TAGS | {'lineargradient', 'stop', 'filter', 'fedropshadow'}
+MERMAID_ATTRS = {a.lower() for a in SVG_ATTRS} | {
+    'class', 'id', 'role', 'name', 'style', 'alignment-baseline', 'clip-rule', 'fill-rule', 'flood-color',
+    'flood-opacity', 'stddeviation', 'gradientunits', 'offset', 'stop-color', 'stop-opacity', 'aria-roledescription',
+    'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden', 'tabindex'}
+MERMAID_UNSAFE = re.compile(r'\\|javascript:|expression|@import|url\s*\((?!\s*#mm-[A-Za-z0-9_-]+\s*\))', re.I)
+
+
+class _MermaidSanitizer(_Sanitizer):
+    def _attrs(self, tag, attrs):
+        parts = []
+        for name, value in attrs:
+            value = value or ''
+            if not (name in MERMAID_ATTRS or re.fullmatch(r'data-[a-z0-9-]+', name)):
+                continue
+            if MERMAID_UNSAFE.search(value):
+                raise DiagramError(f'Mermaid attribute value not allowed in {name}')
+            parts.append(f' {name}="{html.escape(value, quote=True)}"')
+        return ''.join(parts)
+
+    def handle_starttag(self, tag, attrs, closing=False):
+        if tag not in MERMAID_TAGS:
+            raise DiagramError(f'Mermaid output contains <{tag}>; use a sequence diagram or flowchart')
+        attributes = self._attrs(tag, attrs)
+        if closing:
+            self.out.append(f'<{tag}{attributes}></{tag}>')
+        else:
+            self.out.append(f'<{tag}{attributes}>'); self.stack.append(tag)
+
+
+def sanitize_mermaid(svg):
+    svg = re.sub(r'<style\b[\s\S]*?</style>', '', svg)
+    svg = re.sub(r'<defs><symbol\b[\s\S]*?</symbol></defs>', '', svg)
+    parser = _MermaidSanitizer()
+    parser.feed(svg); parser.close()
+    if parser.stack:
+        raise DiagramError('Mermaid output is not well nested')
+    return ''.join(parser.out)

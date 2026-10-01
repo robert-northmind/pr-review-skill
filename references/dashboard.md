@@ -44,13 +44,27 @@ start, stop, or modify any service.
 
 My reviews, Inbox, Your PRs and Reporting are the main views. Inbox groups
 Requested, Watching, Snoozed and Hidden. Filters opens a drawer; active filters
-remain visible above the cards. Cards keep author avatars, usernames and effort
-badges visible. The primary action advances the personal review workflow; AI
-notes and the action menu sit together on the right (below the title on mobile).
-The card's **••• → AI tools** menu can start a first AI review or rerun existing
-notes in both Inbox and My reviews. **Open review** opens the code/report workspace.
+remain visible above the list. Inbox, Your PRs and every My reviews section are
+tables with one row per PR: the PR (repository and number, title, author avatar and
+username), its size (+additions −deletions, files), review load, AI review and when
+it was updated (My reviews shows a Status column instead, see below). The row ends
+with the primary action, **Open review** (the code/report workspace) and a **•••**
+menu. **••• → AI tools** can start a first AI review or rerun existing notes in
+both Inbox and My reviews. Tab counts show “5 of 47” when filters hide PRs.
 
-Settings is a persistent drawer with Review agent, Effort estimates, Repositories
+Clicking a row (or Enter on a focused row) opens the side panel with the PR's full
+card: review load details, update suggestion, AI review progress and run history.
+It stays in sync with the list and keeps open sections while the page refreshes.
+The AI review cell shows live progress (status, percent, current step, **Live ↗**)
+while a review runs, otherwise the AI review state, verdict and cost, plus
+**Update AI review** when an update of an older report is suggested. Wide tables
+scroll sideways on narrow screens.
+
+PR sizes come from GitHub sync (`additions`, `deletions`, `changedFiles`) and from
+the My reviews check; PRs saved before sizes were recorded get one detailed fetch.
+A size shows “–” until then.
+
+Settings is a persistent drawer with Review agent, Review load estimates, Repositories
 and Appearance sections. AI activity contains running reviews and estimate progress.
 
 **Sync GitHub** updates inbox discovery, saved reviews and reporting history.
@@ -68,10 +82,10 @@ Requested from you includes direct reviewer requests and assignments.
 Watching includes open PRs from watched repositories. Your PRs includes
 your authored PRs. Hidden PRs can be restored. Filters are saved in the
 browser, independently from the registry. Legacy star filters are ignored.
-Cards emphasize the PR title with repository and PR number above it, plus age since GitHub
-creation alongside recent activity. Missing opening dates show “Age unknown”
-until a GitHub refresh; first-seen time is never used as PR age.
-Secondary actions appear in a grouped menu beside each card’s primary action.
+Rows emphasize the PR title with repository and PR number above it. The side
+panel shows age since GitHub creation alongside recent activity. Missing opening
+dates show “Age unknown” until a GitHub refresh; first-seen time is never used as
+PR age. Secondary actions appear in the ••• menu beside each row's primary action.
 
 GitHub participation distinguishes comments, approvals, requested changes,
 and dismissed reviews. It is not inferred from an AI run finishing. Legacy
@@ -136,7 +150,7 @@ Authenticated JSON POST `/snooze` takes `url` and `days` (1, 2, or 7);
 
 **My reviews** is a durable personal queue across repositories, independent of
 Requested/Watching membership and their filters. Use **Add to Up next** on an
-inbox card or paste a GitHub PR URL, including a PR outside watched repositories.
+inbox row or paste a GitHub PR URL, including a PR outside watched repositories.
 Starting an AI review also saves an untracked PR in Up next; AI completion never
 completes the human review.
 
@@ -147,7 +161,15 @@ closed, Stopped tracking). Stages map to sections as `reviewing` → In progress
 closed → Merged or closed, and `removed` → Stopped tracking.
 
 - Every section collapses via its heading, with its count always visible, and
-  remembers its state per browser. Back to you highlights its count.
+  remembers its state per browser. Back to you highlights its count and marks its
+  rows with ●.
+- Each section is a table like the Inbox, with a Status column: why the PR is in
+  this section, a due reminder, links to what is new and sync errors. Your private
+  note shows under the title. Row buttons: In progress: Open review, **Hand back to
+  author**; Back to you: Open review, **Continue review**; Up next: ↑, Open review,
+  **Start review**; Waiting: Remind me, Open review, Review now; Stopped tracking:
+  Track again, Open review. **Pause**, **Mark updates seen** and **Keep waiting**
+  are in •••. The side panel repeats the row's actions with the full context.
 - **Up next** rows are numbered in queue order; only the first has a primary
   Start review button. Move up swaps with the previous PR.
 - **Start review** (Review now, Continue review) records the displayed commit
@@ -406,26 +428,32 @@ previous run and head, the new base/head and the triage settings; failures
 retry after an hour. Results live under `updates` in `triage.json` and are
 pruned when their PR leaves the inbox and active My reviews.
 
-Cards show the recommendation with the matching button emphasised. The update
+The side panel shows the recommendation with the matching button emphasised, and the row's AI review cell offers **Update AI review** unless the rules require a full review. The update
 launch copies the pre-check into `update-context.json` for the review lead only.
 It is advice: the review re-checks every previous finding either way, and its
 reviewers never see it.
 
-Cards with a finished report that recorded a verdict show it as a compact chip
+Rows with a finished report that recorded a verdict show it as a compact chip
 (for example **✓ Approvable · high**), read from the report's
 `review-verdict.json`. It is advisory, derived by the renderer from the report's
 findings and coverage, and is hidden when the sidecar is missing, malformed or
 for a different head.
 
-## Initial review effort
+## Review load
 
-Effort estimates are separate from full AI review runs, GitHub participation,
-severity and the human review queue. Cards show **Quick**, **Moderate**,
-**Involved**, or **Uncertain**, plus a short reason and context notes. These
-estimate reading effort, not correctness or readiness to approve. Use the
-Review effort filter or sort; the saved order in My reviews stays unchanged.
-Estimate details contains provider/revision details and optional feedback:
-About right, Took more effort, or Took less effort. Rate a handful of PRs after
+Review load estimates are separate from full AI review runs, GitHub participation,
+severity and the human review queue. The side panel's card shows **Review load Low**, **Medium**,
+**High**, or **Unsure** (stored as the `quick`, `moderate`, `involved` and
+`uncertain` effort), with four small bars for its parts: change scope, required
+context, conceptual complexity and review risk. Each part has a level and a one-line
+reason. These estimate review work, not correctness or readiness to approve. The
+idea follows maintainer-cockpit's review cognitive load. Hovering or focusing the
+badge explains what it measures and shows the reason and the four levels; clicking
+it opens Review load details with each part's reason. Use the Review load filter
+or sort; the saved order in My reviews stays unchanged. An estimate for an older
+commit or different settings has a dashed outline. Estimates made before the parts
+existed show the word only. Review load details also contains provider/revision
+details and optional feedback: About right, Took more effort, or Took less effort. Rate a handful of PRs after
 normal reviews; a separate manual evaluation exercise is unnecessary.
 
 A compact activity strip above the tabs appears during startup and estimation,
@@ -433,7 +461,7 @@ showing a spinner and processed PR count across inbox, My reviews and Reporting.
 It disappears after successful completion. With automatic estimates enabled,
 failures and interruptions remain as small notices; the daily-limit notice is
 shown only when estimates are waiting. Retry estimates appears when work can
-actually be retried. Details opens AI activity at the effort estimate progress.
+actually be retried. Details opens AI activity at the review load estimate progress.
 
 AI activity retains the current PR and stage, progress bar, estimated/waiting totals,
 UTC daily usage, last-run summary, failure details, and Estimate all waiting.
@@ -488,7 +516,7 @@ python3 scripts/dashboard_triage.py configure --enabled true --provider codex --
 python3 scripts/dashboard_triage.py status
 ```
 
-**Estimate effort** on an eligible card starts an initial estimate for just that
+**Estimate review load** on an eligible card starts an initial estimate for just that
 PR. It also permits an explicit draft estimate, while drafts remain excluded
 from automatic runs. **Re-estimate** updates a completed estimate. Both actions
 respect hidden/snoozed exclusions, saved provider settings, worker exclusivity,
@@ -521,11 +549,13 @@ raw descriptions or patches. Cache identity includes provider/model/reasoning, r
 version, base/head revisions and a digest of title/body. GitHub is rechecked
 before accepting results; local changes during a request also invalidate them.
 Completed estimates keep their original effort, reason, and revision when the PR
-or triage settings change. An **Outdated** badge identifies these estimates;
+or triage settings change. A dashed badge outline identifies these estimates;
 filters and sorting still use their original effort. Refresh GitHub and Estimate
 all waiting only schedule PRs without a completed estimate (including eligible
-failed initial attempts). Outdated estimates are counted separately from waiting
-PRs. **Re-estimate** on a card processes only that PR, even when its estimate is
+failed initial attempts), plus completed estimates made under an older rubric
+version, which are re-estimated once while the old estimate stays visible (a failed
+upgrade waits an hour, like a failed initial attempt). Other outdated estimates are
+counted separately from waiting PRs. **Re-estimate** on a card processes only that PR, even when its estimate is
 still current, using the saved provider and daily limit. Hidden/snoozed and other
 ineligible PRs remain excluded. A busy worker prevents duplicate starts. The
 previous estimate stays visible during a rerun and is retained on failure or

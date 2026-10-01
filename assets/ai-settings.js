@@ -1,6 +1,6 @@
 'use strict';
 let aiDraft=null, aiSaved=null, aiRevision='', aiSaving=false;
-const aiFeatures={triage:['Triage','Estimate the human effort needed to review a PR.'],review:['AI review','Investigate changes and produce review notes.'],chat:['Chat','Ask questions about code in the review workspace.']};
+const aiFeatures={triage:['Triage','Estimate the review load of a PR before any AI review.'],review:['AI review','Investigate changes and produce review notes.'],chat:['Chat','Ask questions about code in the review workspace.']};
 function aiOptions(values,value,label){
  const options=[...new Set(values)];if(!options.includes(value))options.push(value);
  return options.map(v=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(v?(values.includes(v)?v:v+' (saved · outside presets)'):label)}</option>`).join('');

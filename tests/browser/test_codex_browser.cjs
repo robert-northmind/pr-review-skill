@@ -73,8 +73,9 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(await deep.locator('#review-percent').isVisible(),false);
   assert.equal(await deep.locator('#review-estimate').isVisible(),false);
   assert.equal(await deep.locator('.review-stage[data-state=blocked]').count(),1);
-  assert.equal(await deep.locator('.review-summary progress').count(),0);
-  assert.doesNotMatch(await deep.locator('.review-summary').first().textContent(),/85%/);
+  // A finished run's row shows its result, not the last progress.
+  assert.equal(await deep.locator('.row-ai progress').count(),0);
+  assert.doesNotMatch(await deep.locator('.row-ai').first().textContent(),/85%/);
   await deep.reload();await deep.waitForSelector('#review-result a');
   assert.equal(await deep.locator('#review-status').textContent(),'Finished · 1 stage blocked');
   for(const status of ['completed','failed','cancelled','blocked']){
@@ -91,7 +92,9 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await deep.reload();
   assert.equal(await deep.locator('#review-dialog').isVisible(),false);
   assert.equal(new URL(deep.url()).searchParams.has('review'),false);
-  await deep.locator('[data-review-open]').first().click();
+  // A finished run's activity opens from the side panel.
+  await deep.locator('.pr-row td.row-updated,.pr-row td.queue-status').first().click();
+  await deep.locator('#pr-drawer-body [data-review-open]').first().click();
   await deep.waitForSelector('#review-result a');
   // Reopening the same run must ignore a slower response from the old view.
   await deep.unroute('**/api/review?*');

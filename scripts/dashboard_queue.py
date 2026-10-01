@@ -287,6 +287,7 @@ def classify(url, login, pr, comments, discussion, requests, reviews):
                     pr_updated_at=pr.get('updated_at', ''), pr_created_at=pr.get('created_at', ''),
                     pr_state='merged' if pr.get('merged_at') else pr.get('state', ''),
                     closed_at=pr.get('closed_at') or '', merged_at=pr.get('merged_at') or '')
+    metadata.update({key: pr[key] for key in ('additions', 'deletions', 'changed_files') if isinstance(pr.get(key), int)})
     import dashboard_triage
     metadata['triage_context_hash'] = dashboard_triage.context_hash(pr.get('title') or metadata['title'], pr.get('body') or '')
     mine = lambda item: (item.get('user') or {}).get('login', '').lower() == login.lower()
@@ -482,7 +483,8 @@ def remote_versions(urls):
 def unchanged(record, remote, now):
     """An open PR whose updatedAt and head match the last detailed fetch within the hour."""
     fetched = record.get('fetched') or {}
-    return bool(remote and remote.get('state') == 'OPEN' and not record.get('error')
+    # Records saved before PR sizes were recorded get one detailed fetch.
+    return bool(remote and remote.get('state') == 'OPEN' and not record.get('error') and 'additions' in record.get('metadata', {})
                 and fetched.get('updated_at') and epoch(fetched['updated_at']) == epoch(remote.get('updatedAt'))
                 and fetched.get('head_sha') == remote.get('headRefOid')
                 and now - epoch(record.get('checked_at')) < FULL_CHECK_SECONDS)

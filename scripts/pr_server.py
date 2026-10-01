@@ -101,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             body = re.sub(r"href=([\"'])(file://[^\"']+)\1", local_link, path.read_text())
             if embedded: body=workspace_report.embed(body)
             self._send(200,body,'text/html; charset=utf-8',
-                ("sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; connect-src 'none'; frame-ancestors FRAME; base-uri 'none'; form-action 'none'").replace('FRAME', "'self'" if embedded else "'none'"))
+                ("sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; frame-ancestors FRAME; base-uri 'none'; form-action 'none'").replace('FRAME', "'self'" if embedded else "'none'"))
         elif suffix in ('.png','.jpg','.jpeg','.webp','.gif'):
             self._send(200,path.read_bytes(),mimetypes.guess_type(str(path))[0])
         else:

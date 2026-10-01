@@ -53,6 +53,10 @@ the real objects and say where it stops being accurate.
 
 ## Shape the page to the change
 
+With the walk layout (the default), follow the scene order in "Walk layout"
+below instead of this list. Keep the plain-words idea: in the outcome and in each
+scene's lede, before any identifiers.
+
 Lead with a concrete title and a short outcome paragraph: the problem, new
 behavior, and essential condition or trade-off. Put this before navigation and
 long metadata. The renderer shows the PR link and assessment beside it, retains
@@ -91,6 +95,48 @@ only the outcome, one grid or diagram, and one excerpt. Put general stack
 concepts beyond the plain-words section in collapsed “New to …?” blocks;
 prerequisites and essential caveats remain visible. Deep mode can add
 alternatives; distinguish inferred trade-offs from documented author decisions.
+
+## Walk layout
+
+Render new reports with `"layout": "walk"` ([Authoring](authoring.md)); classic remains for older reports. Each
+narrative section becomes a scene in a left-hand rail, shown one at a time. Give
+every scene a short `tab` label (two or three words), a `claim` headline that
+states the scene's one point in plain words, and an optional one- or two-sentence
+`lede`. Usually three to five scenes, in this order, keeping only the ones that
+add a distinct claim:
+
+1. **What changed** (`tab`: "What changed"). Old and new behavior together: a
+   `compare` block with `before`/`after` panes. When the PR changes call, request
+   or event order, put a Mermaid `sequenceDiagram` in each pane (or one diagram
+   when only the new path matters). Otherwise use the diagram form that fits.
+2. **Why it matters**, only when the claimed benefit needs proof. Start the lede
+   with "Let's take an example:", call the human actor `User`, and state the
+   goal, scale and assumptions. Use `callouts` (good / warn / bad, one per
+   situation, with the finding badge where a finding fails) and at most one
+   sequence diagram that traces the decisive steps. The cases grid belongs here.
+3. **How it works.** One `pair` per important logical change: the change in
+   plain words plus a few `card`s for the real components (tag `new`, `changed`,
+   `removed` or `existing`; tone `hot` where a finding sits), beside the exact
+   `source` excerpts that implement it. Skip cosmetic hunks. No Mermaid here.
+4. **Blast radius** (always last). A two-pane `compare`: `Not in the blast`
+   (tone `safe`) for untouched contracts and callers, `In the blast` (tone
+   `risk`) for behavior the PR can break, ending with a `gate` card "Do not merge
+   until…" or "Safe to merge when…". Even a low-risk PR keeps both panes.
+
+Findings, self-check and verification become later scenes automatically. A
+finding whose failure is an ordering problem (race, deadlock, retry, lost
+update) should carry a Mermaid sequence of its failure in `review.visuals`.
+
+### When to use Mermaid
+
+Use a Mermaid `sequenceDiagram` when the reader must follow who calls whom in
+what order: request/response paths, retries, threads and locks, lifecycle events,
+start-up and restart. Use a Mermaid `flowchart` only for a real branching
+decision. Skip Mermaid for documentation-only, test-only, rename, dependency-bump
+and pure styling changes, and wherever a cases grid, card or excerpt already says
+it. Keep diagrams to the few actors the story needs (up to about six), messages
+short and in plain words, no semicolons. Every participant, message and order
+must match the pinned source; label diagrams source-traced unless executed.
 
 ## Choose the diagram for the idea
 

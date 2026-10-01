@@ -1148,6 +1148,11 @@
   display: block;
   text-align: left;
 }
+.ai-view.ai-view-wide {
+  max-width: 1640px;
+  padding-left: 32px;
+  padding-right: 32px;
+}
 .review-frame {
   width: 100%;
   display: block;
