@@ -86,7 +86,8 @@ an environment blocker from a product test failure.
 On macOS, prefer the bundled `scripts/verification_sandbox.py` for local CLI
 checks. It builds the execution profile, provides a clean HOME/cache, denies
 external networking, and terminates the command's process group on timeout or
-exit. Give it a disposable workspace and only the runtime/dependency directories
+exit. A watchdog also stops the command if the helper itself is killed, for
+example when a review is cancelled. Give it a disposable workspace and only the runtime/dependency directories
 needed by the selected check. It never falls back to unsandboxed execution on
 its own.
 For example (replace the paths with the actual review workspace and installed SDK):
