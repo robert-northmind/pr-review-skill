@@ -108,7 +108,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 -----
 IBM Plex Sans and IBM Plex Mono — SIL Open Font License 1.1 (via @fontsource/ibm-plex-sans, @fontsource/ibm-plex-mono)
 
-Copyright 2019 IBM Corp. All rights reserved. IBMPlexSans-Italic[wdth,wght].ttf: Copyright 2019 IBM Corp. All rights reserved.
+IBM Plex Sans: Copyright 2019 IBM Corp. All rights reserved.
+IBM Plex Mono: Copyright 2017 IBM Corp. All rights reserved.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
