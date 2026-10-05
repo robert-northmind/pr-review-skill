@@ -27,7 +27,7 @@
       </div>
       <div class="title-row">
         <h1 id="pr-title">Review workspace</h1>
-        <span class="open-badge" id="pr-state">Open</span>
+        <span class="open-badge" id="pr-state" hidden>Open</span>
       </div>
       <div class="pr-caption">
         <span id="pr-author"></span><span id="comparison"></span
@@ -55,9 +55,25 @@
         </div>
       </div>
     </header>
-    <p id="loading-workspace" class="muted" role="status">
-      Loading review workspace…
-    </p>
+    <div id="loading-workspace" class="workspace-loading">
+      <div class="loading-diff" aria-hidden="true">
+        <span></span><span class="deleted"></span><span class="added"></span
+        ><span class="added"></span><span></span>
+      </div>
+      <p class="loading-heading">
+        <strong>Loading review workspace</strong
+        ><span id="loading-percent" aria-hidden="true"></span>
+      </p>
+      <div
+        class="loading-bar"
+        id="loading-bar"
+        role="progressbar"
+        aria-label="Loading review workspace"
+      >
+        <span></span>
+      </div>
+      <p id="loading-step" class="muted" role="status">Connecting to GitHub</p>
+    </div>
     <p id="storage-error" class="storage-error" role="status" hidden></p>
     <p id="load-error" class="notice warning" role="alert" hidden></p>
     <div class="workspace-body" id="workspace-body" hidden>

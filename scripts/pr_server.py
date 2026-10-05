@@ -28,6 +28,7 @@ import workspace_github
 import workspace_chat
 import workspace_comments
 import workspace_report
+import workspace_progress
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/ai-config','/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
@@ -155,7 +156,13 @@ class Handler(BaseHTTPRequestHandler):
                 url=query.get('url',[''])[0]
                 rev=query.get('revision',[None])[0]
                 if parsed.path == '/api/workspace':
-                    self._send(200,workspace.load(url,rev))
+                    load_id=query.get('load',[''])[0]
+                    try:
+                        self._send(200,workspace.load(url,rev,workspace_progress.reporter(load_id)))
+                    finally:
+                        workspace_progress.finish(load_id)
+                elif parsed.path == '/api/workspace-progress':
+                    self._send(200,workspace_progress.snapshot(query.get('load',[''])[0]))
                 elif parsed.path == '/api/workspace-file':
                     self._send(200,workspace_github.file_diff(url,rev,query.get('path',[''])[0]))
                 elif parsed.path == '/api/workspace-comments':

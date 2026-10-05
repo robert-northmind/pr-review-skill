@@ -36,7 +36,7 @@ import {
 import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
 import { reviewHTML, unavailableHTML } from "./review.mjs";
-import { chatProgress, activityHTML } from "./progress.mjs";
+import { chatProgress, activityHTML, loadProgress } from "./progress.mjs";
 import { chatMarkdown } from "./chat-markdown.mjs";
 import { installChatResize } from "./chat-resize.mjs";
 (() => {
@@ -1171,9 +1171,45 @@ import { installChatResize } from "./chat-resize.mjs";
       }
     }
   });
+  function watchLoad(loadId) {
+    const started = Date.now();
+    let timer;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const snapshot = await api.loadProgress(loadId);
+        if (stopped) return;
+        const view = loadProgress(snapshot, Date.now() - started);
+        const bar = $("loading-bar");
+        bar.classList.toggle("indeterminate", view.percent === null);
+        if (view.percent === null) bar.removeAttribute("aria-valuenow");
+        else bar.setAttribute("aria-valuenow", view.percent);
+        bar.style.setProperty("--loaded", (view.percent ?? 0) / 100);
+        $("loading-percent").textContent = view.percent === null ? "" : view.percent + "%";
+        $("loading-step").textContent = view.label;
+        // Show what is loading as soon as GitHub returns the pull request.
+        if (snapshot.title) {
+          $("pr-title").textContent = snapshot.title;
+          $("pr-identity").textContent = `${snapshot.repository} #${snapshot.number}`;
+        }
+      } catch {
+        // Progress is decorative; the load request reports real failures.
+      }
+      if (!stopped) timer = setTimeout(poll, 400);
+    };
+    timer = setTimeout(poll, 150);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }
   async function init() {
+    const loadId =
+      crypto.randomUUID?.() ||
+      Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const stopWatching = watchLoad(loadId);
     try {
-      data = await api.load(params.get("revision"));
+      data = await api.load(params.get("revision"), loadId).finally(stopWatching);
       saved = hydrate(data.saved);
       saver = new SaveQueue(
         api,
@@ -1202,6 +1238,7 @@ import { installChatResize } from "./chat-resize.mjs";
       $("pr-title").textContent = data.title;
       $("pr-author").textContent = data.author;
       $("pr-state").textContent = data.prState || "Open";
+      $("pr-state").hidden = false;
       $("comparison").textContent =
         data.base.slice(0, 12) + " → " + data.head.slice(0, 12);
       $("file-count").textContent = data.files.length;

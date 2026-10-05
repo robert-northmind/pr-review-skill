@@ -789,6 +789,98 @@
   color: var(--muted);
   margin: 10px 0 24px;
 }
+/* Loading: a small diff that keeps writing itself above step-weighted progress. */
+.workspace-loading {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  padding: 24px 24px 12vh;
+  border-top: 1px solid var(--line);
+}
+.workspace-loading > * {
+  width: min(340px, calc(100vw - 48px));
+}
+.loading-diff {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 26px;
+}
+.loading-diff span {
+  height: 8px;
+  border-radius: 2px;
+  background: var(--soft);
+  transform-origin: left;
+  animation: loading-write 2.6s cubic-bezier(.3, .7, .4, 1) infinite both;
+}
+.loading-diff .deleted {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.loading-diff .added {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--success);
+}
+.loading-diff span:nth-child(1) { width: 58%; }
+.loading-diff span:nth-child(2) { width: 74%; animation-delay: .14s; }
+.loading-diff span:nth-child(3) { width: 86%; animation-delay: .28s; }
+.loading-diff span:nth-child(4) { width: 46%; animation-delay: .42s; }
+.loading-diff span:nth-child(5) { width: 32%; animation-delay: .56s; }
+@keyframes loading-write {
+  0% { transform: scaleX(0); opacity: 1; }
+  32%, 78% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+.loading-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.loading-heading strong {
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+#loading-percent {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.loading-bar {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--soft);
+  overflow: hidden;
+}
+.loading-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-orange), var(--brand-red));
+  transform-origin: left;
+  transform: scaleX(var(--loaded, 0));
+  transition: transform .5s ease-out;
+}
+.loading-bar.indeterminate span {
+  width: 28%;
+  transform: none;
+  animation: loading-sweep 1.4s ease-in-out infinite;
+}
+@keyframes loading-sweep {
+  from { margin-left: -28%; }
+  to { margin-left: 100%; }
+}
+#loading-step {
+  margin-top: 10px;
+  min-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-diff span { animation: none; }
+  .loading-bar span { transition: none; }
+  .loading-bar.indeterminate span { animation: none; width: 100%; opacity: .35; }
+}
 .storage-error {
   margin: 0;
   padding: 8px 25px;

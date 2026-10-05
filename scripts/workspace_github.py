@@ -57,12 +57,22 @@ def cached(url, rev):
     return tracker.read_json(path)
 
 
-def manifest(url):
+# Recursive trees are usually the slowest reads, so they count double in load progress.
+TREE_UNITS = 2
+
+
+def manifest(url, progress=None):
     """Pin head, find merge base, and reject a PR that changed during pagination."""
+    report = progress or (lambda *_, **__: None)
     url, repo, number = identity(url)
+    report('Reading the pull request', 0)
     pr = api(f'repos/{repo}/pulls/{number}')
     head, target = pr['head']['sha'], pr['base']['sha']
     revision(target, head)
+    pages = (pr['changed_files'] + 99) // 100
+    # The last unit covers the caller restoring viewed files, notes and the review.
+    total = 4 + pages + 2 * TREE_UNITS
+    report('Finding the merge base', 1, total, title=pr['title'], repository=repo, number=number)
     compare = api(f'repos/{repo}/compare/{target}...{head}?per_page=1')
     base = compare['merge_base_commit']['sha']
     rev = revision(base, head)
@@ -71,17 +81,21 @@ def manifest(url):
         touch(cache)
         result = tracker.read_json(cache)
         result.update(title=pr['title'], author=pr['user']['login'], prState=pr['state'])
+        report('Restoring your review state', 2, 3)
         return result
     if pr['changed_files'] > 3000:
         raise ValueError('GitHub exposes at most 3,000 changed files. This PR cannot be loaded completely.')
     files = []
-    for page in range(1, (pr['changed_files'] + 99) // 100 + 1):
+    for page in range(1, pages + 1):
+        report(f'Listing changed files, page {page} of {pages}' if pages > 1 else 'Listing changed files', 1 + page, total)
         files.extend(api(f'repos/{repo}/pulls/{number}/files?per_page=100&page={page}'))
+    report('Checking for new commits', 2 + pages, total)
     latest = api(f'repos/{repo}/pulls/{number}')
     if latest['head']['sha'] != head or latest['base']['sha'] != target or len(files) != pr['changed_files']:
         raise ValueError('The PR changed while loading. Refresh the comparison to retry.')
     trees = {}
-    for side, sha in (('base', base), ('head', head)):
+    for index, (side, sha) in enumerate((('base', base), ('head', head))):
+        report(f'Reading the {side} file tree', 3 + pages + index * TREE_UNITS, total)
         tree_data = api(f'repos/{repo}/git/trees/{sha}?recursive=1')
         trees[side] = {item['path']: item for item in tree_data['tree']}
     result = {'url': url, 'repository': repo, 'number': number, 'title': pr['title'],
@@ -101,6 +115,7 @@ def manifest(url):
         ]).encode()).hexdigest()
         result['files'].append(item)
     tracker.atomic_write(cache, result)
+    report('Restoring your review state', total - 1, total)
     return result
 
 
