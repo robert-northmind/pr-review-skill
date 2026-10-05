@@ -184,6 +184,22 @@ chat.worker(sys.argv[1],sys.argv[2])
         self.assertEqual(loaded['provider_session_id'],'old-session')
         self.assertTrue(loaded['context_seeded'])
 
+    def test_manifest_reports_step_weighted_progress(self):
+        pr={'head':{'sha':HEAD},'base':{'sha':BASE},'changed_files':1,'title':'PR','user':{'login':'x'},'state':'open'}
+        tree={'tree':[{'path':'x','mode':'100644','sha':'c'*40}]}
+        steps=[]
+        with patch.object(github,'api',side_effect=[pr,{'merge_base_commit':{'sha':'d'*40}},[{'filename':'x','status':'added'}],pr,tree,tree]):
+            github.manifest(URL,lambda step,done,total=None,**details:steps.append((step,done,total,details)))
+        self.assertEqual([(s[0],s[1],s[2]) for s in steps],[
+            ('Reading the pull request',0,None),('Finding the merge base',1,9),('Listing changed files',2,9),
+            ('Checking for new commits',3,9),('Reading the base file tree',4,9),('Reading the head file tree',6,9),
+            ('Restoring your review state',8,9)])
+        self.assertEqual(steps[1][3],{'title':'PR','repository':'example/repo','number':1})
+        steps.clear()
+        with patch.object(github,'api',side_effect=[pr,{'merge_base_commit':{'sha':'d'*40}}]):
+            github.manifest(URL,lambda step,done,total=None,**_:steps.append((step,done,total)))
+        self.assertEqual(steps[-1],('Restoring your review state',2,3))
+
     def test_manifest_detects_commit_race(self):
         pr={'head':{'sha':HEAD},'base':{'sha':BASE},'changed_files':1,'title':'PR','user':{'login':'x'},'state':'open'}
         with patch.object(github,'api',side_effect=[pr,{'merge_base_commit':{'sha':'d'*40}},[{'filename':'x'}],{**pr,'head':{'sha':'e'*40}}]):

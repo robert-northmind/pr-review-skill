@@ -30,8 +30,8 @@ def update_check(url, head, runs):
     return dashboard_triage.update_view(url, {'head_sha': head}, prior)
 
 
-def load(url, rev=None):
-    comparison = github.cached(url, rev) if rev else github.manifest(url)
+def load(url, rev=None, progress=None):
+    comparison = github.cached(url, rev) if rev else github.manifest(url, progress)
     private = store.read(url) if rev else store.reconcile(url, comparison)
     return {**comparison, 'chat_config': ai_settings.selected('chat'), 'saved': {**private, 'viewed': [f['path'] for f in comparison['files'] if private['viewed'].get(f['path']) == f['fingerprint']], 'threads': chat.conversations(url)},
             'review': review(comparison['url'], comparison['head'])}

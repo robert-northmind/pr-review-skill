@@ -141,7 +141,10 @@ assert.ok(fallback.includes('/artifact?path=%2Ftmp%2Freview+%26+notes.html'));
 assert.ok(fallback.includes('Its commit could not be checked'));
 assert.equal(unavailableHTML(new Error('Offline'), null, esc), 'Offline');
 
-const {chatProgress, activityHTML} = await import('../../assets/code-workspace/progress.mjs');
+const {chatProgress, activityHTML, loadProgress} = await import('../../assets/code-workspace/progress.mjs');
+assert.deepEqual(loadProgress(null), {percent:null, label:'Connecting to GitHub'});
+assert.deepEqual(loadProgress({step:'Reading the base file tree', done:6, total:11}, 2500), {percent:55, label:'Reading the base file tree'});
+assert.deepEqual(loadProgress({step:'Restoring your review state', done:11, total:11}, 65000), {percent:99, label:'Restoring your review state · 1m 5s'});
 const progressThread = {status:'running', started_at:100, progress:'Reading file…', activity:[{at:102,text:'<source>'}]};
 assert.equal(chatProgress(progressThread, 165000), 'Reading file… · 1m 5s');
 assert.equal(chatProgress({...progressThread,status:'stopping'}), 'Stopping…');

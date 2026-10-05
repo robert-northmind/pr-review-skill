@@ -30,8 +30,11 @@ export class WorkspaceAPI {
       endpoint + "?" + new URLSearchParams({ url: this.url, ...query }),
     );
   }
-  load(revision) {
-    return this.get("/api/workspace", revision ? { revision } : {});
+  load(revision, load) {
+    return this.get("/api/workspace", { ...(revision ? { revision } : {}), load });
+  }
+  loadProgress(load) {
+    return this.get("/api/workspace-progress", { load });
   }
   file(revision, path) {
     return this.get("/api/workspace-file", { revision, path });

@@ -36,7 +36,7 @@ import {
 import { visibleRows as projectRows, selectionFor } from "./diff.mjs";
 import { WorkspaceAPI, SaveQueue } from "./api.mjs";
 import { reviewHTML, unavailableHTML } from "./review.mjs";
-import { chatProgress, activityHTML } from "./progress.mjs";
+import { chatProgress, activityHTML, loadProgress } from "./progress.mjs";
 import { chatMarkdown } from "./chat-markdown.mjs";
 import { installChatResize } from "./chat-resize.mjs";
 (() => {
@@ -400,9 +400,47 @@ import { installChatResize } from "./chat-resize.mjs";
     paintSelection();
     updateLayout();
   }
+  // The current file follows scrolling: the last card whose header has reached the toolbar.
+  let scrollFrame = 0,
+    followScrollAfter = 0;
+  function followScroll() {
+    scrollFrame = 0;
+    if (performance.now() < followScrollAfter) return;
+    const column = document.querySelector(".diff-column");
+    const edge = document.querySelector(".diff-toolbar").getBoundingClientRect().bottom + 1;
+    const cards = [...column.querySelectorAll(".file-card")];
+    let current = cards[0];
+    // Short files at the end never reach the toolbar, so the bottom selects the last file.
+    if (column.scrollTop + column.clientHeight >= column.scrollHeight - 2) current = cards.at(-1);
+    else
+      for (const card of cards) {
+        if (card.getBoundingClientRect().top > edge) break;
+        current = card;
+      }
+    const index = Number(current?.dataset.fileIndex);
+    if (!current || index === activeFile) return;
+    activeFile = index;
+    for (const link of $("file-tree").querySelectorAll(".file-link"))
+      link.setAttribute("aria-current", String(Number(link.dataset.jump) === index));
+    // Scroll only the sidebar; scrollIntoView could also move the clipped page containers.
+    const link = $("file-tree").querySelector('[aria-current="true"]');
+    const sidebar = document.querySelector(".file-sidebar");
+    if (!link || !sidebar.offsetParent) return;
+    const l = link.getBoundingClientRect(),
+      s = sidebar.getBoundingClientRect();
+    if (l.top < s.top) sidebar.scrollTop -= s.top - l.top;
+    else if (l.bottom > s.bottom) sidebar.scrollTop += l.bottom - s.bottom;
+  }
+  document.querySelector(".diff-column").addEventListener(
+    "scroll",
+    () => (scrollFrame ||= requestAnimationFrame(followScroll)),
+    { passive: true },
+  );
   async function jump(file, ids = null, side = "head") {
     if (!(await ensureFile(file))) return;
     activeFile = file;
+    // Keep the chosen file current even when it cannot scroll up to the toolbar.
+    followScrollAfter = performance.now() + 200;
     $("file-filter").value = "";
     $("unviewed-only").checked = false;
     saved.collapsed = saved.collapsed.filter(
@@ -1171,9 +1209,45 @@ import { installChatResize } from "./chat-resize.mjs";
       }
     }
   });
+  function watchLoad(loadId) {
+    const started = Date.now();
+    let timer;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const snapshot = await api.loadProgress(loadId);
+        if (stopped) return;
+        const view = loadProgress(snapshot, Date.now() - started);
+        const bar = $("loading-bar");
+        bar.classList.toggle("indeterminate", view.percent === null);
+        if (view.percent === null) bar.removeAttribute("aria-valuenow");
+        else bar.setAttribute("aria-valuenow", view.percent);
+        bar.style.setProperty("--loaded", (view.percent ?? 0) / 100);
+        $("loading-percent").textContent = view.percent === null ? "" : view.percent + "%";
+        $("loading-step").textContent = view.label;
+        // Show what is loading as soon as GitHub returns the pull request.
+        if (snapshot.title) {
+          $("pr-title").textContent = snapshot.title;
+          $("pr-identity").textContent = `${snapshot.repository} #${snapshot.number}`;
+        }
+      } catch {
+        // Progress is decorative; the load request reports real failures.
+      }
+      if (!stopped) timer = setTimeout(poll, 400);
+    };
+    timer = setTimeout(poll, 150);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }
   async function init() {
+    const loadId =
+      crypto.randomUUID?.() ||
+      Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const stopWatching = watchLoad(loadId);
     try {
-      data = await api.load(params.get("revision"));
+      data = await api.load(params.get("revision"), loadId).finally(stopWatching);
       saved = hydrate(data.saved);
       saver = new SaveQueue(
         api,
@@ -1202,6 +1276,7 @@ import { installChatResize } from "./chat-resize.mjs";
       $("pr-title").textContent = data.title;
       $("pr-author").textContent = data.author;
       $("pr-state").textContent = data.prState || "Open";
+      $("pr-state").hidden = false;
       $("comparison").textContent =
         data.base.slice(0, 12) + " → " + data.head.slice(0, 12);
       $("file-count").textContent = data.files.length;

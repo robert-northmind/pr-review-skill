@@ -55,6 +55,19 @@ class WorkspaceHTTP(test_dashboard.HTTP):
             start.assert_not_called()
             self.assertEqual(self.request('/workspace-chat','POST',{'url':URL},self.auth())[0],202)
 
+    def test_load_progress_is_polled_during_load_and_cleared_after(self):
+        import workspace_progress
+        seen=[]
+        def load(url,progress=None):
+            progress('Listing changed files',2,9,title='Test PR')
+            seen.append(json.loads(self.request('/api/workspace-progress?'+urlencode({'url':URL,'load':'load-1234'}))[2]))
+            return manifest()
+        with patch.object(github,'manifest',side_effect=load),patch.object(workspace,'review',return_value={'artifact':None,'run':None}):
+            self.assertEqual(self.request('/api/workspace?'+urlencode({'url':URL,'load':'load-1234'}))[0],200)
+        self.assertEqual(seen,[{'step':'Listing changed files','done':2,'total':9,'title':'Test PR'}])
+        self.assertEqual(workspace_progress.snapshot('load-1234'),{'step':None,'done':0,'total':None})
+        self.assertIsNone(workspace_progress.reporter('../bad id'))
+
     def test_saved_report_lookup_survives_github_failure(self):
         query='?'+urlencode({'url':URL})
         report={'artifact':{'path':'/tmp/saved.html','version':'v1'},'run':None}
