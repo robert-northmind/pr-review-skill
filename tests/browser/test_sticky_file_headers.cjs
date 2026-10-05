@@ -26,6 +26,8 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   // The next file pushes the old header out; no stack of earlier headers.
   await page.locator('#file-1 .code-row').first().waitFor();await scrollFile(1,120);
   assert.ok(await page.evaluate(()=>document.querySelector('#file-0 .file-header').getBoundingClientRect().bottom<=document.querySelector('.diff-toolbar').getBoundingClientRect().bottom));
+  // The Changed files list follows scrolling, not only clicks.
+  await page.waitForFunction(()=>document.querySelector('#file-tree [aria-current="true"]')?.dataset.jump==='1');
   await scrollFile(0);
   const saved=page.waitForResponse(r=>r.url().includes('/workspace-save')&&r.request().method()==='POST');
   await page.locator('#file-0 [data-viewed]').check();await saved;

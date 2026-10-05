@@ -400,9 +400,47 @@ import { installChatResize } from "./chat-resize.mjs";
     paintSelection();
     updateLayout();
   }
+  // The current file follows scrolling: the last card whose header has reached the toolbar.
+  let scrollFrame = 0,
+    followScrollAfter = 0;
+  function followScroll() {
+    scrollFrame = 0;
+    if (performance.now() < followScrollAfter) return;
+    const column = document.querySelector(".diff-column");
+    const edge = document.querySelector(".diff-toolbar").getBoundingClientRect().bottom + 1;
+    const cards = [...column.querySelectorAll(".file-card")];
+    let current = cards[0];
+    // Short files at the end never reach the toolbar, so the bottom selects the last file.
+    if (column.scrollTop + column.clientHeight >= column.scrollHeight - 2) current = cards.at(-1);
+    else
+      for (const card of cards) {
+        if (card.getBoundingClientRect().top > edge) break;
+        current = card;
+      }
+    const index = Number(current?.dataset.fileIndex);
+    if (!current || index === activeFile) return;
+    activeFile = index;
+    for (const link of $("file-tree").querySelectorAll(".file-link"))
+      link.setAttribute("aria-current", String(Number(link.dataset.jump) === index));
+    // Scroll only the sidebar; scrollIntoView could also move the clipped page containers.
+    const link = $("file-tree").querySelector('[aria-current="true"]');
+    const sidebar = document.querySelector(".file-sidebar");
+    if (!link || !sidebar.offsetParent) return;
+    const l = link.getBoundingClientRect(),
+      s = sidebar.getBoundingClientRect();
+    if (l.top < s.top) sidebar.scrollTop -= s.top - l.top;
+    else if (l.bottom > s.bottom) sidebar.scrollTop += l.bottom - s.bottom;
+  }
+  document.querySelector(".diff-column").addEventListener(
+    "scroll",
+    () => (scrollFrame ||= requestAnimationFrame(followScroll)),
+    { passive: true },
+  );
   async function jump(file, ids = null, side = "head") {
     if (!(await ensureFile(file))) return;
     activeFile = file;
+    // Keep the chosen file current even when it cannot scroll up to the toolbar.
+    followScrollAfter = performance.now() + 200;
     $("file-filter").value = "";
     $("unviewed-only").checked = false;
     saved.collapsed = saved.collapsed.filter(
