@@ -304,7 +304,7 @@ function rowAvatar(pr){
  return `<span class="avatar-wrap row-avatar"><span class="avatar-fallback" aria-hidden="true">${esc(login.slice(0,1).toUpperCase())}</span><img class="author-avatar" src="${esc(avatar)}" alt="" width="20" height="20" loading="lazy" referrerpolicy="no-referrer"></span>`;
 }
 function rowIdentity(pr,extra=''){
- return `<div class="row-repo">${esc(pr.owner+'/'+pr.repository)} <a href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">#${esc(pr.number)}</a>${pr.is_draft?' <span class="chip">Draft</span>':''}${extra}</div><a class="row-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="row-author">${rowAvatar(pr)}${esc(pr.author_login?'@'+pr.author_login:'Unknown author')}</div>`;
+ return `<div class="row-repo" title="${esc(pr.owner+'/'+pr.repository+' #'+pr.number)}"><span class="row-repo-name"><span class="row-owner">${esc(pr.owner)}/</span><span>${esc(pr.repository)}</span></span><a href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">#${esc(pr.number)}</a>${pr.is_draft?' <span class="chip">Draft</span>':''}${extra}</div><a class="row-title" href="${esc(safeUrl(pr.url))}" target="_blank" rel="noopener">${esc(pr.title)}</a><div class="row-author">${rowAvatar(pr)}${esc(pr.author_login?'@'+pr.author_login:'Unknown author')}</div>`;
 }
 // AI review column: live progress while a review runs, otherwise its result and cost.
 function aiCell(pr){

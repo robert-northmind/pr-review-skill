@@ -44,7 +44,7 @@ function queueMenu(pr,organize=[]){
 function queueRemind(pr){
  const w=pr.workflow, set=!!w.remind_at;
  const options=[[1,'1 day'],[3,'3 days'],[7,'1 week']].map(([days,label])=>queueButton(pr,'remind',label,false,`data-days="${days}"`)).join('')+(set?queueButton(pr,'remind','Clear reminder',false,'data-days="0"'):'');
- return `<details class="snooze-picker queue-remind"><summary class="button" aria-label="${set?'Change reminder':'Set a reminder'} for PR ${esc(pr.number)}">${set?'⏰ '+esc(when(w.remind_at)):'Remind me'}</summary><div class="snooze-options"><p class="muted">Back to you in</p>${options}</div></details>`;
+ return `<details class="snooze-picker queue-remind${set?' queue-remind-set':''}"><summary class="button" title="${set?'Reminder '+esc(when(w.remind_at)):'Remind me'}" aria-label="${set?'Change reminder':'Set a reminder'} for PR ${esc(pr.number)}"><span aria-hidden="true">⏰</span><span class="queue-remind-label">${set?esc(when(w.remind_at)):'Remind me'}</span></summary><div class="snooze-options"><p class="muted">Back to you in</p>${options}</div></details>`;
 }
 function queueDetails(pr,withRun){
  const w=pr.workflow, run=pr.run, reviewed=w.review_observation?.head_sha;
@@ -61,10 +61,11 @@ function queueTitle(pr){return `<a class="pr-title" target="_blank" rel="noopene
 // Each section is a table like the Inbox; a row opens the side panel with the details.
 function queueActions(pr,index,key){
  const w=pr.workflow,open=codeWorkspaceLink(pr);
- if(key==='reviewing')return open+queueButton(pr,'wait','Hand back to author',true)+queueMenu(pr,[...((w.reasons||[]).length?[queueButton(pr,'acknowledge','Mark updates seen')]:[]),queueButton(pr,'stop','Pause')]);
- if(key==='attention')return open+queueButton(pr,'start','Continue review',true)+queueMenu(pr,[queueButton(pr,'acknowledge','Keep waiting')]);
- if(key==='up_next')return (index>0?queueButton(pr,'move_up','↑',false,`title="Move up" aria-label="Move PR ${esc(pr.number)} up"`):'')+open+queueButton(pr,'start','Start review',index===0)+queueMenu(pr);
- if(key==='waiting')return queueRemind(pr)+open+queueButton(pr,'start','Review now')+queueMenu(pr);
+ // The row's own next step comes first and Open review sits under it; the table stacks them beside the ••• menu.
+ if(key==='reviewing')return queueButton(pr,'wait','Hand back to author',true)+open+queueMenu(pr,[...((w.reasons||[]).length?[queueButton(pr,'acknowledge','Mark updates seen')]:[]),queueButton(pr,'stop','Pause')]);
+ if(key==='attention')return queueButton(pr,'start','Continue review',true)+open+queueMenu(pr,[queueButton(pr,'acknowledge','Keep waiting')]);
+ if(key==='up_next')return queueButton(pr,'start','Start review',index===0)+open+queueMenu(pr)+(index>0?queueButton(pr,'move_up','↑',false,`title="Move up" aria-label="Move PR ${esc(pr.number)} up"`):'');
+ if(key==='waiting')return queueButton(pr,'start','Review now')+open+queueMenu(pr)+queueRemind(pr);
  if(key==='removed')return queueButton(pr,'restore','Track again')+open+queueMenu(pr);
  if(key==='search')return queueButton(pr,'show','Show')+open;
  return open+queueMenu(pr);

@@ -121,18 +121,25 @@ main{max-width:1320px;padding:24px 28px}
 .pr-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
 .pr-table tr:last-child td{border-bottom:0}
 /* Review load columns fit the widest badge ("Medium" plus bars, ~95px) so it never spills into AI review. */
-.pr-table th:nth-child(2){width:96px}.pr-table th:nth-child(3){width:124px}.pr-table th:nth-child(4){width:230px}.row-ai .queue-ai-run{max-width:206px}.pr-table th:nth-child(5){width:92px}.pr-table th:nth-child(6){width:330px}
-.queue-table th:nth-child(1){width:34px}.queue-table th:nth-child(2){width:auto}.queue-table th:nth-child(3){width:90px}.queue-table th:nth-child(4){width:124px}.queue-table th:nth-child(5){width:220px}.queue-table th:nth-child(6){width:200px}.queue-table th:nth-child(7){width:360px}
+.pr-table th:nth-child(2){width:96px}.pr-table th:nth-child(3){width:124px}.pr-table th:nth-child(4){width:230px}.row-ai .queue-ai-run{max-width:206px}.pr-table th:nth-child(5){width:92px}.pr-table th:nth-child(6){width:232px}
+.queue-table th:nth-child(1){width:34px}.queue-table th:nth-child(2){width:auto}.queue-table th:nth-child(3){width:90px}.queue-table th:nth-child(4){width:124px}.queue-table th:nth-child(5){width:220px}.queue-table th:nth-child(6){width:200px}.queue-table th:nth-child(7){width:232px}
 .pr-row{cursor:pointer}.pr-row:hover{background:color-mix(in srgb,var(--fg) 3%,var(--surface))}
 .pr-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.row-repo{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row-repo a{text-decoration:none}
+/* The PR number always shows; a long owner gives way first, then the repository name. */
+.row-repo{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden}.row-repo a{text-decoration:none}.row-repo>*{flex-shrink:0}
+.row-repo>.row-repo-name{display:flex;min-width:0;flex-shrink:1}.row-repo-name>span{overflow:hidden;text-overflow:ellipsis;min-width:0}.row-repo-name>.row-owner{flex-shrink:1000;min-width:2.5em}
 .row-title{display:block;margin:2px 0;font-size:13.5px;font-weight:600;line-height:1.4;text-decoration:none;overflow-wrap:anywhere}.row-title:hover{text-decoration:underline}
 .row-author{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
 .row-avatar,.row-avatar .avatar-fallback,.row-avatar .author-avatar{width:20px;height:20px}.row-avatar .avatar-fallback{font-size:10px}
 .row-size{white-space:nowrap;font-variant-numeric:tabular-nums}.row-add{color:var(--success)}.row-del{color:var(--danger)}.row-size small{display:block;color:var(--muted);font-size:11px}
 .row-ai .chip{margin:2px 4px 2px 0}
 .row-updated{white-space:nowrap;color:var(--muted)}
-.row-actions .pr-actions{flex-wrap:nowrap;max-width:none}.row-actions .button{min-height:32px;padding:5px 10px}
+/* Row actions stack (next step, then Open review) beside the ••• menu, leaving the width to the Pull request column. */
+.row-actions .pr-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-auto-flow:row dense;gap:6px;align-items:start;max-width:none}.row-actions .button{min-height:32px;padding:5px 10px}
+.row-actions .pr-actions>*{grid-column:1}.row-actions .pr-actions>.button{width:100%}
+/* Small controls (•••, move up, reminder) share a narrow column; the reminder shows as ⏰ and its date stays in Status. */
+.row-actions .pr-actions>.action-disclosure,.row-actions .pr-actions>[data-queue-action=move_up],.row-actions .pr-actions>.queue-remind{grid-column:2}
+.row-actions .queue-remind-label,.row-actions .queue-remind>summary::after{display:none}.row-actions .queue-remind-set>summary{border-color:var(--accent);background:var(--accent-soft)}
 .load-none{color:var(--muted)}
 .queue-rank{color:var(--muted);font-weight:700;text-align:center;padding-left:8px!important;padding-right:0!important}
 .queue-rank-first{color:var(--accent)}.queue-rank-attention{color:var(--brand-orange);font-size:10px}
@@ -152,7 +159,7 @@ main{max-width:1320px;padding:24px 28px}
 #pr-drawer-body{padding:16px 18px}#pr-drawer-body .pr-card{margin:0}
 .queue-panel-actions{margin:12px 0 4px}
 /* Wide tables scroll sideways on narrow screens; on wide ones the ••• menus must not be clipped. */
-@media(max-width:1100px){.pr-table-wrap{overflow-x:auto}.pr-table{min-width:1160px}.queue-table{min-width:1300px}}
+@media(max-width:1100px){.pr-table-wrap{overflow-x:auto}.pr-table{min-width:1060px}.queue-table{min-width:1180px}}
 /* Review load: one word, four bars (one per part), an explanatory popover on hover or focus. */
 :root{--load-low:#2f7a4f;--load-low-soft:#e6f3eb;--load-medium:#94600a;--load-medium-soft:#fff3d9;--load-high:#b3403f;--load-high-soft:#fde9e7;--load-unknown:#6b7280}
 :root[data-theme=dark]{--load-low:#8fd6aa;--load-low-soft:#20372a;--load-medium:#f0c16d;--load-medium-soft:#3a2f1c;--load-high:#f5a3a0;--load-high-soft:#3d2222;--load-unknown:#9aa3ae}
