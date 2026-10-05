@@ -614,9 +614,17 @@
   margin: 0;
 }
 .message.user {
-  padding: 10px 12px;
-  background: var(--soft);
+  padding: 10px 12px 10px 14px;
+  background: var(--accent-soft);
   border-radius: 7px;
+  box-shadow: inset 3px 0 var(--primary-bg);
+}
+/* Each question starts a new turn, so it is easy to find scrolling back up. */
+.message.user:not(:first-child) {
+  margin-top: 34px;
+}
+.message.user header {
+  color: var(--accent);
 }
 .message .text-button {
   font-size: 11px;
