@@ -74,11 +74,12 @@ const pr=number=>`https://github.com/demo/workbench/pull/${number}`;
   await card(207).locator('.queue-remind > summary').click();
   await card(207).getByRole('button',{name:'3 days',exact:true}).click();
   await expectToast('#207 comes back to you');
-  assert.match(await card(207).locator('.queue-remind > summary').textContent(),/⏰/);
+  assert.equal(await card(207).locator('.queue-remind-set').count(),1);
   await card(207).locator('.queue-remind > summary').click();
   await card(207).getByRole('button',{name:'Clear reminder',exact:true}).click();
   await expectToast('Reminder for #207 cleared.');
-  assert.equal(await card(207).locator('.queue-remind > summary').textContent(),'Remind me');
+  assert.equal(await card(207).locator('.queue-remind-set').count(),0);
+  assert.equal(await card(207).locator('.queue-remind-label').textContent(),'Remind me');
 
   // Stop tracking keeps the PR visible under Finished; Track again restores it.
   await card(205).locator('.pr-overflow > summary').click();
