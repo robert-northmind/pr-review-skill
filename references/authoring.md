@@ -322,12 +322,27 @@ python3 scripts/render_review.py input.json /absolute/output.html
 node scripts/check_review.cjs /absolute/output.html /absolute/validation-directory input.json
 ```
 
-The checker uses `require('playwright')`. If the available runtime lives
-elsewhere, set `PR_REVIEW_PLAYWRIGHT_MODULE` to its absolute module path. Set
-`PR_REVIEW_CHROME_PATH` to an installed Chromium/Chrome executable only when
-bundled Playwright Chromium is unavailable. Use the host's dependency discovery
-rather than downloading another browser unnecessarily. Browser launching may
-require the normal host tool permission mechanism.
+The checker drives the installed Chrome through the report runtime's
+`playwright-core` (`npm ci --prefix scripts/report-runtime`). Set
+`PR_REVIEW_CHROME_PATH` to choose another Chromium/Chrome executable, or
+`PR_REVIEW_PLAYWRIGHT_MODULE` to a full Playwright module to use its bundled
+browser. Use the host's dependency discovery rather than downloading another
+browser unnecessarily.
+
+Both commands launch headless Chrome: the renderer for Mermaid blocks, the
+checker always. Chrome cannot start inside the Codex sandbox (macOS shows a
+crash dialog), so inside it both refuse with an error instead. In a dashboard
+review, render and check with one command:
+
+```sh
+python3 scripts/report_check.py --run-id <run-id>
+```
+
+It renders the run's `input.json` to `review.html`, checks it into
+`report-check/` and prints both outputs as JSON, exiting non-zero on any
+error. The review worker runs the steps outside the sandbox, so the reviewer
+can fix and rerun without escalation. With no live dashboard worker it runs
+them directly, which needs the normal host permission for launching a browser.
 
 The checker writes `validation.json` and desktop/phone screenshots in both
 themes, including expanded and collapsed states when findings are present. Exit 1 means a

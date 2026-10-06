@@ -36,6 +36,11 @@ when skipping validation, explain the gap. Do not estimate elapsed time, invent
 percentages, count tool calls as completed work, or mark the report done early.
 Progress messages must be short and nonsensitive, without source excerpts,
 credentials, raw command output or speculative defect claims.
+Chrome cannot start in your sandbox, so do not launch a browser yourself. Keep
+the report input in this run's input.json, then render and check it with
+{cli.replace('pr_review_tracker.py', 'report_check.py')} --run-id {run_id}
+The worker writes review.html and report-check/ (results and screenshots)
+outside the sandbox; fix any errors and rerun it.
 The existing review.html remains the final deliverable. Register it and finish
 all task states. Do not publish anything to GitHub.
 '''

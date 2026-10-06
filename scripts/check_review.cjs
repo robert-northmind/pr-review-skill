@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 const fs=require('fs');const path=require('path');const {pathToFileURL}=require('url');const {execFileSync}=require('child_process');
-const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
+const runtime=path.join(__dirname,'report-runtime');const {chromePath,refuseInSandbox}=require(path.join(runtime,'chrome.cjs'));
+refuseInSandbox();
+// The report runtime's playwright-core drives the installed Chrome; PR_REVIEW_PLAYWRIGHT_MODULE may name a full Playwright instead.
+let chromium;
+try{({chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||path.join(runtime,'node_modules','playwright-core')));}
+catch{console.error(process.env.PR_REVIEW_PLAYWRIGHT_MODULE?'Cannot load PR_REVIEW_PLAYWRIGHT_MODULE':'Install the report runtime: npm ci --prefix '+runtime);process.exit(2);}
 const [fileArg,outputArg,inputArg]=process.argv.slice(2);
 if(!fileArg||!outputArg){console.error('Usage: check_review.cjs page.html validation-directory [input.json]');process.exit(2);}
 const file=path.resolve(fileArg),output=path.resolve(outputArg);fs.mkdirSync(output,{recursive:true});
@@ -10,7 +15,8 @@ function check(ok,message){if(!ok)result.errors.push(message);}
 (async()=>{
  let browser;
  try{
-  browser=await chromium.launch({headless:true,...(process.env.PR_REVIEW_CHROME_PATH?{executablePath:process.env.PR_REVIEW_CHROME_PATH}:{})});
+  const bundled=process.env.PR_REVIEW_PLAYWRIGHT_MODULE&&!process.env.PR_REVIEW_CHROME_PATH;
+  browser=await chromium.launch({headless:true,...(bundled?{}:{executablePath:chromePath()})});
   const context=await browser.newContext();const requests=[];
   await context.route(/^https?:/,route=>{requests.push(route.request().url());return route.abort();});
   const page=await context.newPage();page.on('pageerror',e=>result.errors.push('Page JavaScript: '+e.message));
@@ -39,8 +45,12 @@ function check(ok,message){if(!ok)result.errors.push(message);}
    check(await assessment.locator('details,.review-comment,.scenario,.flow,.sequence,.diagram,.cases').count()===0,'Overview assessment hides caveats or contains drafts');
    const box=await assessment.boundingBox();
    check(box&&box.y+box.height<=900,'Assessment extends below first desktop viewport; inspect overview length');
+   // A verdict card starts collapsed; its shortcut sits inside the body.
+   const collapsed=await assessment.evaluate(e=>e.tagName==='DETAILS'&&!e.open);
+   if(collapsed)await assessment.locator(':scope > summary').click();
    await assessment.locator('.findings-link').click();
    check(await page.locator('#review-findings').evaluate(e=>e.getBoundingClientRect().top>=-1&&e.getBoundingClientRect().top<innerHeight),'Overview shortcut does not reach findings');
+   if(collapsed)await assessment.evaluate(e=>{e.open=false;});
    await page.evaluate(()=>scrollTo(0,0));
   }
   if(sourceInput){for(const source of inventory.sources){

@@ -7,25 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 const {chromium} = require('playwright-core');
+const {chromePath, refuseInSandbox} = require('./chrome.cjs');
 
-function chromePath() {
-  const candidates = [
-    process.env.PR_REVIEW_CHROME_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-  ].filter(Boolean);
-  const cache = path.join(process.env.HOME || '', 'Library/Caches/ms-playwright');
-  if (fs.existsSync(cache)) {
-    for (const dir of fs.readdirSync(cache).filter(d => /^chromium-\d+$/.test(d)).sort().reverse()) {
-      candidates.push(path.join(cache, dir, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'));
-      candidates.push(path.join(cache, dir, 'chrome-mac/Chromium.app/Contents/MacOS/Chromium'));
-    }
-  }
-  const found = candidates.find(p => fs.existsSync(p));
-  if (!found) throw new Error('No Chrome or Chromium found; set PR_REVIEW_CHROME_PATH');
-  return found;
-}
+refuseInSandbox();
 
 (async () => {
   const items = JSON.parse(fs.readFileSync(0, 'utf8'));
