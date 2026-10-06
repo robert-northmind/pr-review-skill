@@ -66,7 +66,7 @@ def run_runtime(items):
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(f'Mermaid rendering could not run: {error}') from None
     if run.returncode:
-        detail = (run.stderr.strip().splitlines() or ['no output'])[-1][:300]
+        detail = (run.stderr.strip().splitlines() or ['no output'])[0][:300]
         raise ValueError(f'Mermaid rendering failed: {detail}')
     return json.loads(run.stdout)
 

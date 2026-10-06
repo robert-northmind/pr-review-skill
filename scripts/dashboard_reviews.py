@@ -13,6 +13,7 @@ import time
 import ai_cost
 import ai_runtime
 import pr_discussion
+import report_check
 import storage_cleanup
 from review_context import WRAP_UP_PROMPT, message_prompt, review_prompt
 import pr_review_tracker as tracker
@@ -106,6 +107,8 @@ class ReviewWorker:
         self.cancel_requested = threading.Event()
         self.needs_input = threading.Event()
         self.inbox_offset = 0
+        # The reviewer's sandbox cannot launch Chrome; this worker renders and checks the report for it.
+        self.report_check = report_check.Service(run_id)
 
     def event(self, kind, text):
         if kind == 'attention':
@@ -177,6 +180,10 @@ class ReviewWorker:
                 self.deliver_messages()
             except OSError:
                 pass  # The inbox is retried on the next tick.
+            try:
+                self.report_check.poll()
+            except (OSError, tracker.TrackerError):
+                pass  # The request is retried on the next tick.
             if time.monotonic() - heartbeat >= HEARTBEAT_SECONDS:
                 self.activity.heartbeat()
                 heartbeat = time.monotonic()

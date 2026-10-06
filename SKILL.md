@@ -419,6 +419,9 @@ and embeds copy controls. Validate comment boundaries with
 `scripts/validate_review_notes.py`, then run `scripts/check_review.cjs` and
 inspect desktop/phone screenshots in light/dark modes. Check the HTML works
 without the authoring files, including comment-copy or its manual fallback.
+Both steps launch headless Chrome, which cannot start inside the Codex sandbox.
+In a dashboard review, run them with `scripts/report_check.py --run-id <id>`;
+the review worker runs them outside the sandbox and returns the result.
 If browser checks are unavailable, report that specific limitation.
 
 Before handoff, reconcile the coverage inventory, current assessment, every
