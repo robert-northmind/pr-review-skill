@@ -82,6 +82,18 @@ class RendererTests(unittest.TestCase):
         self.assertIn('a &lt; b',output)
         self.assertIn('id="verification"',output)
         self.assertEqual(output.count('<script>'),1)
+    def test_attribution_footer_ends_every_draft_and_its_copy(self):
+        d=copy.deepcopy(self.data)
+        d['review']['markdown']='<details class="review-finding">\n<summary>P2 · Retry is skipped</summary>\n\n<!-- review-comment:start -->\nCould we retry?\n<!-- review-comment:end -->\n\n</details>'
+        d['comment_attribution']={'tool':'Codex','model':'gpt-6.1-sol','person':'Robert'}
+        output=render(d)
+        self.assertIn("Could we retry?\n\n*Posted by Codex (gpt-6.1-sol) on Robert&#x27;s behalf.*</textarea>",output)
+        self.assertIn("<em>Posted by Codex (gpt-6.1-sol) on Robert&#x27;s behalf.</em>",output)
+        d['comment_attribution']={'tool':'Claude Code','person':'Robert'}
+        self.assertIn("*Posted by Claude Code on Robert&#x27;s behalf.*</textarea>",render(d))
+        for bad in [{'tool':'Codex'},{'tool':'Codex','person':'R_b'},{'tool':'Codex','person':'Robert','extra':'x'},'Codex']:
+            d['comment_attribution']=bad
+            with self.assertRaises(ValueError):render(d)
     def test_ranges_fail_instead_of_inventing_code(self):
         for start,end in [(0,2),(2,99),(3,2)]:
             d=copy.deepcopy(self.data);d['sections'][0]['blocks'][0].update(start=start,end=end)

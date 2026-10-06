@@ -18,6 +18,7 @@ block types that explain this particular change.
   "base": "FULL_COMPARISON_BASE_SHA",
   "head": "FULL_REVIEWED_HEAD_SHA",
   "context": "Historical comparison, prepared YYYY-MM-DD. PR state checked separately.",
+  "comment_attribution": {"tool": "Claude Code", "model": "claude-opus-5-5", "person": "Robert"},
   "sections": [
     {"id": "plain-words", "title": "In plain words", "blocks": [
       {"type": "paragraph", "text": "Who is affected, what used to happen, what happens now, and the condition that matters."}
@@ -107,6 +108,15 @@ non-PR changes. For local-only commits omit `repo_url` if GitHub cannot resolve
 them. Working-tree excerpts never receive a false commit permalink; label
 uncommitted context clearly. Untracked files can be extracted but have no Git
 added-line metadata; identify them in the caption.
+
+`comment_attribution` adds one footer line to every draft comment, shown in the
+report and included in the copied Markdown, for example
+`*Posted by Claude Code (claude-opus-5-5) on Robert's behalf.*`. Use your actual
+tool and model ID, never a guessed one; omit `model` when it is unknown. `person`
+is the first name of the person the review is for (from `git config user.name`
+unless they say otherwise). Dashboard reviews receive the exact values in the
+launch prompt. Omit the field for no footer. Do not write the footer in the
+drafts yourself; the validator rejects it.
 
 The `review` object is required. Its `base` and `head` must exactly match the
 explanation revisions; the renderer rejects a mismatch. Read `review.md` as a

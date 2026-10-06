@@ -1,11 +1,38 @@
 """Shared review instructions for every provider."""
+import json
 from pathlib import Path
+import subprocess
 import sys
 import pr_review_tracker as tracker
 
 SKILL = Path(__file__).resolve().parent.parent
 
-def review_prompt(run_id, prompt):
+TOOLS = {'codex': 'Codex', 'claude': 'Claude Code'}
+
+
+def person_name():
+    """First name from git config, used in the draft comments' on-behalf footer."""
+    try:
+        name = subprocess.run(['git', 'config', 'user.name'], capture_output=True, text=True, timeout=5).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return name[0] if name else ''
+
+
+def attribution_note(job):
+    tool, person = TOOLS.get((job or {}).get('provider', '')), person_name()
+    if not tool or not person:
+        return ''
+    model = job.get('model', '')
+    value = json.dumps({'tool': tool, 'model': model or 'YOUR_MODEL_ID', 'person': person})
+    hint = '' if model else ' Replace YOUR_MODEL_ID with your actual model ID, or drop model if unknown.'
+    return f'''
+Set "comment_attribution": {value} in input.json. The renderer appends the
+on-behalf footer to every draft comment; do not write it in the drafts yourself.{hint}
+'''
+
+
+def review_prompt(run_id, prompt, job=None):
     import shlex
     cli = shlex.join([sys.executable, str(SKILL / 'scripts/pr_review_tracker.py')])
     root = tracker.tracker_root()
@@ -43,7 +70,7 @@ The worker writes review.html and report-check/ (results and screenshots)
 outside the sandbox; fix any errors and rerun it.
 The existing review.html remains the final deliverable. Register it and finish
 all task states. Do not publish anything to GitHub.
-'''
+{attribution_note(job)}'''
 
 
 WRAP_UP_PROMPT = '''The person who requested this review asked you to wrap up now.

@@ -221,7 +221,7 @@ class ReviewWorker:
         self.activity.state('running', 'Connecting to the selected provider…')
         result = self.client.run(ai_runtime.Request(
             mode='review', cwd=str(tracker.tracker_root()),
-            prompt=review_prompt(self.run_id, job['prompt']),
+            prompt=review_prompt(self.run_id, job['prompt'], job),
             model=job.get('model', ''), effort=job.get('effort', ''),
         ), ai_runtime.Callbacks(emit=self.event, session=session))
         self.cost = result.get('cost')

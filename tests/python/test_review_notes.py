@@ -111,6 +111,10 @@ class Validation(unittest.TestCase):
         for body in ('<!-- review-comment:end -->', '<!-- review-comment:start -->', '<!-- review-comment:start -->\n<!-- review-comment:end -->', '<!-- review-comment:start -->\n**Confidence:** 90\n<!-- review-comment:end -->'):
             with self.subTest(body=body): self.assertTrue(validate(body)[0])
 
+    def test_handwritten_attribution_footer_is_rejected(self):
+        body = "<!-- review-comment:start -->\nCould we fix it?\n\n_Posted by Codex (gpt-6-astra) on Robert's behalf._\n<!-- review-comment:end -->"
+        self.assertIn('on-behalf footer', validate(body)[0][0])
+
     def test_unresolved_finding_cannot_be_copied(self):
         body = '**Disposition:** Needs confirmation\n\n<!-- review-comment:start -->\nCould we fix it?\n<!-- review-comment:end -->'
         self.assertTrue(validate(body)[0])

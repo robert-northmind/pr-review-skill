@@ -230,7 +230,8 @@ No arbitrary minimum or maximum finding count applies.
 Put the comment body as ordinary Markdown between the exact standalone
 `<!-- review-comment:start -->` and `<!-- review-comment:end -->` lines.
 The report renderer adds a Copy comment button; only that body is copied, including
-intended Markdown links and code fences. Put placement, disposition, confidence,
+intended Markdown links and code fences, plus the on-behalf footer from
+`comment_attribution` (see [Authoring](authoring.md)). Put placement, disposition, confidence,
 severity and internal reasoning outside the markers. Do not wrap the whole
 body in a blockquote; use blockquotes inside it only for intentional quotations.
 
