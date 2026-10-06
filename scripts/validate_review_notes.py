@@ -102,6 +102,8 @@ def validate(text: str) -> tuple[list[str], list[str]]:
                 errors.append(f'Line {start_line}: empty comment.')
             if re.search(r'^(?:\*\*)?(?:Disposition|Evidence|Placement|Confidence|Severity|Reviewer)\s*:', body, re.M | re.I):
                 errors.append(f'Line {start_line}: review metadata inside copyable comment.')
+            if re.search(r"^[\W_]*(?:Posted|Drafted|Commented) by .*\bbehalf\b", body, re.M | re.I):
+                errors.append(f'Line {start_line}: the renderer adds the on-behalf footer from comment_attribution; remove it from the draft.')
             if re.search(r'^\s*(?:\[P[0-3]\]|P[0-3]\s*[:·]|(?:nit|blocker):)', body, re.M | re.I):
                 errors.append(f'Line {start_line}: severity/review label inside comment.')
             if '—' in body:

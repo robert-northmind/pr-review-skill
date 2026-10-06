@@ -366,7 +366,8 @@ before writing the artifact.
   directly and hedge interpretations or preferences. Do not invent the user's
   feelings, prior actions, agreement, apologies or promises to open an issue.
 - Keep severity, confidence, agent identities, placement and audit rationale
-  outside the copyable body. Preserve the uncertainty of the verified finding:
+  outside the copyable body. The renderer appends the only attribution, an
+  on-behalf footer from `comment_attribution` in the report input. Preserve the uncertainty of the verified finding:
   a conditional failure must not become certain in the draft.
 - Check draft meaning against the finding and checked remediation one last time.
   A voice rewrite must not add unsupported claims or soften a serious defect

@@ -86,6 +86,9 @@ function check(ok,message){if(!ok)result.errors.push(message);}
     if(!fence&&line.trim()==='<!-- review-comment:end -->'){expected.push(current.join('\n').replace(/^\n+|\n+$/g,''));current=null;continue;}
     if(current)current.push(line);
    }
+   // Mirrors comment_footer in render_review.py.
+   const by=sourceInput.comment_attribution,footer=by?`*Posted by ${by.tool.trim()}${by.model&&by.model.trim()?` (${by.model.trim()})`:''} on ${by.person.trim()}'s behalf.*`:'';
+   if(footer)expected.forEach((body,i)=>{expected[i]=body+'\n\n'+footer;});
    check(expected.length===result.comments,'Comment block count differs from input');
    for(let i=0;i<result.comments;i++)check(await comments.nth(i).locator('.comment-source').inputValue()===expected[i],'Copy payload differs from authored Markdown');
   }

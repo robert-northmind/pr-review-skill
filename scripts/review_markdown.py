@@ -58,13 +58,13 @@ def cells(line):
     return result
 
 
-def render(text, inline, escape, depth=0, visual=None):
+def render(text, inline, escape, depth=0, visual=None, footer=''):
     if depth > 24:
         return '<pre>' + escape(text) + '</pre>'
     lines = text.replace('\r\n', '\n').split('\n')
     parts, i = [], 0
     def sub(body, allow_visual=True):
-        return render('\n'.join(body), inline, escape, depth + 1, visual if allow_visual else None)
+        return render('\n'.join(body), inline, escape, depth + 1, visual if allow_visual else None, footer)
     def table_at(index):
         if index + 1 >= len(lines) or '|' not in lines[index]: return False
         cols, delimiters = cells(lines[index]), cells(lines[index + 1])
@@ -90,6 +90,7 @@ def render(text, inline, escape, depth=0, visual=None):
             parts.append('<pre><code>' + escape('\n'.join(block)) + '</code></pre>')
         elif s == START and (end := find_close(lines, i + 1, END)) is not None:
             body = '\n'.join(lines[i + 1:end]).strip('\n')
+            if footer: body += '\n\n' + footer
             parts.append('<section class="review-comment"><button type="button" class="copy-comment">Copy comment</button>'
                          '<span class="copy-status" role="status"></span><div class="comment-body">'
                          + sub(body.split('\n'), allow_visual=False) + '</div><textarea class="comment-source" hidden readonly aria-label="Comment Markdown">'

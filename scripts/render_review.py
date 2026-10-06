@@ -95,6 +95,19 @@ def review_inline(data):
         return re.sub(r'<a href="([^"<>]*)"[^>]*>(.*?)</a>', link, rendered)
     return inline
 
+def comment_footer(data):
+    """The on-behalf line appended to every draft comment, e.g. *Posted by Codex (gpt-6-astra) on Robert's behalf.*"""
+    value = data.get('comment_attribution')
+    if value is None: return ''
+    if not isinstance(value, dict) or set(value) - {'tool', 'model', 'person'}:
+        raise ValueError('comment_attribution takes tool, model and person')
+    for key in value:
+        if not isinstance(value[key], str) or not re.fullmatch(r"(?:[^\W_]|[ .'-]){0,60}", value[key]):
+            raise ValueError('comment_attribution values must be short plain text')
+    tool, model, person = (value.get(key, '').strip() for key in ('tool', 'model', 'person'))
+    if not tool or not person: raise ValueError('comment_attribution needs tool and person')
+    return f"*Posted by {tool}{f' ({model})' if model else ''} on {person}'s behalf.*"
+
 def review_markdown(text, data):
     inline = review_inline(data)
     def visual(key):
@@ -102,7 +115,7 @@ def review_markdown(text, data):
         if not isinstance(value, dict) or value.get('type') not in VISUAL_TYPES:
             raise ValueError('Review visual must reference a defined diagram, cases, table, flow, sequence or scenario')
         return blocks([value], data)
-    return render_markdown(text, inline, esc, visual=visual)
+    return render_markdown(text, inline, esc, visual=visual, footer=comment_footer(data))
 
 def git(repository, *args):
     return subprocess.check_output(['git', '-C', str(repository), *args], text=True)

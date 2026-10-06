@@ -19,6 +19,16 @@ class DashboardLaunch(unittest.TestCase):
              patch.object(Path, 'home', return_value=Path('/tmp/example-user')):
             self.assertIn('/tmp/example-user/Development', dashboard.local_checkout_hint())
 
+    def test_review_prompt_passes_real_provider_model_and_person_for_comment_footer(self):
+        import review_context
+        with patch.object(review_context, 'person_name', return_value='Robert'):
+            prompt = review_context.review_prompt('RUN', 'Review it', {'provider': 'codex', 'model': 'gpt-6-astra'})
+            self.assertIn('"comment_attribution": {"tool": "Codex", "model": "gpt-6-astra", "person": "Robert"}', prompt)
+            self.assertIn('YOUR_MODEL_ID', review_context.review_prompt('RUN', 'Review it', {'provider': 'claude', 'model': ''}))
+            self.assertNotIn('comment_attribution', review_context.review_prompt('RUN', 'Review it'))
+        with patch.object(review_context, 'person_name', return_value=''):
+            self.assertNotIn('comment_attribution', review_context.review_prompt('RUN', 'Review it', {'provider': 'codex', 'model': 'x'}))
+
     def test_both_providers_share_review_worker_and_keep_feature_selection(self):
         from test_dashboard import Isolated, URL
         import ai_settings
