@@ -21,16 +21,17 @@ class Settings(Isolated):
     def test_mixed_providers_and_profile_memory(self):
         settings=a.load();settings['triage']['provider']='claude';settings['chat']['provider']='claude'
         a.save(settings,a.revision(a.load()))
-        self.assertEqual(a.selected('triage')['model'],'claude-haiku-4-5-20251001')
+        self.assertEqual(a.selected('triage')['model'],'claude-haiku-5-5')
         self.assertEqual(a.selected('chat')['model'],'claude-sonnet-5-5')
         self.assertEqual(a.load()['review'],settings['review'])
         a.configure_triage({'provider':'codex'})
         a.configure_triage({'provider':'claude'})
-        self.assertEqual(a.selected('triage')['model'],'claude-haiku-4-5-20251001')
+        self.assertEqual(a.selected('triage')['model'],'claude-haiku-5-5')
 
     def test_invalid_update_does_not_partially_save(self):
         before=a.load();bad=copy.deepcopy(before)
         bad['chat']['provider']='claude'
+        bad['triage']['profiles']['claude']['model']='claude-haiku-4-5-20251001'
         bad['triage']['profiles']['claude']['effort']='high'
         with self.assertRaises(ValueError):a.save(bad)
         self.assertEqual(a.load(),before)
