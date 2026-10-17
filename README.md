@@ -272,6 +272,7 @@ four complete weeks plus the current week.
 | [Code workspace](references/code-workspace.md) | Diff behavior, GitHub comments, persistent chat and current limits. |
 | [Development](docs/development.md) | Tests, browser setup, repository structure and security scans. |
 | [Screenshot maintenance](docs/screenshots/README.md) | Synthetic fixtures and repeatable screenshot capture. |
+| [Changelog](CHANGELOG.md) | Notable changes, newest first. |
 | [Recovery](RECOVERY.md) | Git recovery procedures. |
 
 ## Development and recovery
