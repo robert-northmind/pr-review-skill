@@ -1,132 +1,118 @@
 # Changelog
 
-Notable changes to the PR review dashboard and skill, newest first. The project
-has no version numbers, so entries are grouped by the date they reached `main`.
-Each entry says what a user or reviewer notices, with the pull request number
-when there is one.
+Notable changes to the PR review dashboard and skill, newest first. Each pull
+request gets its own section with the day it merged; changes that went to `main`
+without a pull request are grouped by day.
 
-## Unreleased
+## #21 · Explain why a PR exists before what it changes (unreleased)
 
-### Added
-
-- Review reports explain why a PR exists before what it changes, on one
-  scrolling page: a sourced "Why this PR exists" lead, the outcome, At a glance
-  with findings and rare "Needs your judgment" questions, a background with a
-  where-it-sits map for unfamiliar repositories, the change with a visual that
-  fits its kind, key code inline and the blast radius (#21).
+- Review reports are one scrolling page: a sourced "Why this PR exists" lead,
+  the outcome, At a glance with findings and rare "Needs your judgment"
+  questions, a background with a where-it-sits map for unfamiliar repositories,
+  the change with a visual that fits its kind, key code inline and the blast
+  radius.
 - **Settings → AI settings → Repositories I know well**: listed repositories
-  skip introductory background in their reports (#21).
+  skip introductory background in their reports.
 - **In-depth explanation** checkbox in **Run with guidance…** for a Deep
-  explainer (#21).
+  explainer.
+- Fixed: code-walk file badges come from Git, so unchanged context files are no
+  longer shown as changed or new.
+- Fixed: wrapped Mermaid labels keep the space between words for screen readers
+  and search.
+- Fixed: an earlier review's verdict no longer reads like the current one.
 
-### Fixed
+## #20 · Review context selection and inbox filter presets · 2026-10-16
 
-- Code-walk file badges come from Git, so unchanged context files are no longer
-  shown as changed or new (#21).
-- Wrapped Mermaid labels keep the space between words for screen readers and
-  search (#21).
-- An earlier review's verdict no longer reads like the current one (#21).
+- Guided reviews can include selected private notes or Ask AI conversations.
+- Inbox filter presets.
 
-## 2026-10-16
-
-### Added
-
-- Guided reviews can include selected private notes or Ask AI conversations;
-  inbox filter presets (#20).
-
-## 2026-10-10
-
-### Changed
+## 2026-10-10 · no pull request
 
 - Claude Haiku 5.5 is offered and is the default Claude triage model.
 
-## 2026-10-06
+## #19 · On-behalf footer for draft comments · 2026-10-06
 
-### Added
+- Draft review comments end with an on-behalf footer.
 
-- Draft review comments end with an on-behalf footer (#19).
+## #18 · Reports rendered outside the Codex sandbox · 2026-10-06
 
-### Changed
+- AI review reports are rendered and checked outside the Codex sandbox.
 
-- AI review reports are rendered and checked outside the Codex sandbox (#18).
+## #17 · Review workspace polish · 2026-10-05
 
-## 2026-10-05
+- Loading progress, a scroll-synced file list and clearer chat questions.
 
-### Added
+## #16 · Row actions fit · 2026-10-05
 
-- Review workspace loading progress, a scroll-synced file list and clearer chat
-  questions (#17).
+- Row actions stack so the repository name and PR number fit.
 
-### Fixed
-
-- Row actions stack so the repository name and PR number fit (#16).
-
-## 2026-10-02
-
-### Fixed
+## 2026-10-02 · no pull request
 
 - The review load badge no longer overlaps the AI review column.
 
-## 2026-10-01
+## #15 · Review load, list view and walk reports · 2026-10-01
 
-### Added
+- Review load estimates, a list view and walk-style review reports.
 
-- Review load estimates, a list view and walk-style review reports (#15).
+## #14 · Cancelled reviews stop their checks · 2026-10-01
 
-### Fixed
+- Cancelling a review stops the check command it is running.
 
-- Cancelling a review stops the check command it is running (#14).
+## #13 · More PR checks run locally · 2026-09-30
 
-## 2026-09-30
+- Sandbox presets, a fetch step and trusted host runs.
 
-### Added
+## #12 · GPT-6.1 Sol for Codex · 2026-09-30
 
-- More PR checks run locally: sandbox presets, a fetch step and trusted host
-  runs (#13).
-- The cost of each AI review (#11).
-- An approval verdict at the top of AI reviews (#10).
-- GPT-6.1 Sol for Codex, also used for Codex Chat (#12).
+- GPT-6.1 Sol is offered for Codex and used for Codex Chat.
 
-### Fixed
+## #11 · AI review cost · 2026-09-30
 
-- Faster GitHub sync; GPT-6 Sol and Luna work in Codex (#9).
+- Each AI review shows what it cost.
 
-## 2026-09-29
+## #10 · Approval verdict · 2026-09-30
 
-### Added
+- AI reviews open with an approval verdict.
 
-- Update an AI review after small follow-up commits instead of redoing it (#6).
-- GPT-6 Codex models; security reviewers stay at the lead reviewer's tier (#8).
+## #9 · Faster GitHub sync · 2026-09-30
 
-### Changed
+- GitHub sync is faster; GPT-6 Sol and Luna work in Codex.
 
-- Sonnet 5.5 replaces Sonnet 5 for Claude Code (#7).
+## #8 · GPT-6 Codex models · 2026-09-29
 
-## 2026-09-28
+- GPT-6 Codex models are offered; security reviewers stay at the lead
+  reviewer's tier.
 
-### Fixed
+## #7 · Sonnet 5.5 for Claude Code · 2026-09-29
 
-- Abandoned review runs no longer block storage cleanup (#5).
+- Sonnet 5.5 replaces Sonnet 5.
 
-## 2026-09-25
+## #6 · Update an AI review · 2026-09-29
 
-### Added
+- After small follow-up commits, update a review instead of redoing it.
 
-- PR explanations with diagrams, and findings taught step by step (#1).
-- Continue a finished AI review in Claude Code or Codex (#2).
+## #5 · Cleanup no longer blocked · 2026-09-28
+
+- Abandoned review runs no longer block storage cleanup.
+
+## #4 · Hardened workspace chat · 2026-09-25
+
+- Hardened Codex workspace chat and wider GitHub reads for both chats.
+
+## #3 · PR discussion and storage cleanup · 2026-09-25
+
 - Reviews read the PR discussion first; storage cleanup; chats point at the
-  review (#3).
+  review.
 
-### Changed
+## #2 · Continue a review in an agent · 2026-09-25
 
-- Hardened Codex workspace chat and wider GitHub reads for both chats (#4).
+- Continue a finished AI review in Claude Code or Codex.
 
-## 2026-09-24
+## #1 · Diagrams and step-by-step findings · 2026-09-25
 
-### Added
+- PR explanations with diagrams, and findings taught step by step.
+
+## 2026-09-24 · no pull request
 
 - Ask, steer and wrap up a running AI review.
-
-### Fixed
-
 - The dashboard restores instantly when going back from the workspace.

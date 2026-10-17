@@ -11,10 +11,11 @@
 Update [CHANGELOG.md](CHANGELOG.md) in the same change whenever you add,
 change, fix or remove something a user or reviewer would notice:
 
-- Add one line per change under `## Unreleased`, in `Added`, `Changed`,
-  `Fixed` or `Removed`. Create the subsection if it is missing.
-- Describe the effect in plain words, not the implementation, and end with the
-  pull request number once it exists, e.g. `(#21)`.
+- Each pull request has its own section, newest first:
+  `## #21 · Short title (unreleased)`. Create it when the pull request exists;
+  when it merges, replace `(unreleased)` with `· <merge day>` (`· 2026-10-17`).
+- Changes committed to `main` without a pull request go under
+  `## <day> · no pull request`.
+- One plain-words line per change, describing the effect rather than the
+  implementation; start a fix with `Fixed:`.
 - Skip internal refactors, test-only and CI-only changes.
-- When a pull request merges, its entries move from `Unreleased` to a section
-  dated with the merge day (`## 2026-10-17`), newest first.
