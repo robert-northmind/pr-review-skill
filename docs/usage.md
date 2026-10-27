@@ -86,7 +86,7 @@ duplicate comment. Model selection
 is an adaptive policy, not a guarantee of review quality. See the
 [review approach](../references/review-practices.md) and
 [allocation policy](../references/reviewer-allocation.md).
-Review comments are drafts; read and edit them before posting them yourself.
+Review agents still produce drafts without publishing. In the embedded workspace report or a standalone artifact report, a finding with a verified source or existing thread link can open the trusted workspace and be explicitly posted as a comment or reply through your `gh` login; the comment rail's Draft reply remains copy-only.
 
 ## Keep track of your reviews
 
@@ -237,8 +237,7 @@ The dashboard runs on your machine, but AI features send data off your machine:
 The server listens only on your machine's loopback interface. Treat generated
 reports and screenshots as potentially containing private code and review data.
 
-Dashboard GitHub operations are read-only: they do not post comments, approve,
-or merge PRs. The skill uses isolated checkouts and runs PR code in a sandbox.
+Dashboard GitHub operations are read-only by default. An explicit confirmation on an embedded or standalone AI review finding opens the trusted workspace, which can post that already-rendered draft as a GitHub comment or reply through your `gh` login; the artifact itself remains sandboxed and the dashboard still does not approve, merge or resolve threads. The skill uses isolated checkouts and runs PR code in a sandbox.
 Checks the sandbox blocks run on your Mac only for repositories you list under
 Settings, Repositories, **Run blocked checks outside the sandbox**; they use a
 throwaway copy and a clean environment but can read your files and use the
@@ -291,7 +290,11 @@ GitHub review threads appear under the lines they discuss, and **Comments** list
 every thread plus the general PR conversation. Show all, only unresolved, or no
 comments inline, and hide bot comments. **Ask AI** attaches a comment to the chat;
 **Draft reply** checks whether the current code addresses it and drafts a reply
-for you to copy. Nothing is posted to GitHub.
+for you to copy. Embedded and standalone artifact findings offer **Ask AI about
+this finding**; findings with a rendered draft also offer a post link. Those links
+open the trusted workspace on the selected finding, where you can review and
+confirm **Post comment** or **Post reply**. Nothing is posted without that explicit
+finding action.
 
 Finished HTML reviews stay in the dashboard; completion does not open an external
 browser. See [workspace architecture, limits and tests](../references/code-workspace.md).

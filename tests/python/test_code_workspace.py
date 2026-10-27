@@ -11,6 +11,7 @@ import time
 import unittest
 from unittest.mock import patch
 import workspace_github as github
+import code_workspace
 import workspace_store as store
 import workspace_chat as chat
 import workspace_comments as comments
@@ -263,6 +264,153 @@ chat.worker(sys.argv[1],sys.argv[2])
         return [page('reviewThreads',threads,True),page('reviewThreads',[left]),
                 page('comments',[note('i1','Later',at='2026-01-03T00:00:00Z')]),
                 page('reviews',[note('r1','',state='APPROVED'),note('r2','Needs tests',state='CHANGES_REQUESTED',at='2026-01-02T00:00:00Z')])]
+
+    def test_posting_a_finding_uses_the_pinned_head_and_invalidates_comments(self):
+        response = subprocess.CompletedProcess([], 0, stdout=json.dumps({'id': 123, 'html_url': 'https://github.com/example/repo/pull/1#discussion_r123'}).encode(), stderr=b'')
+        with patch.object(comments.subprocess, 'run', return_value=response) as run:
+            result = comments.post(URL, {'revision': REV, 'body': 'Please keep this guard.',
+                                         'target': {'mode': 'inline', 'commit_id': HEAD,
+                                                    'path': 'src/a.ts', 'line': 4, 'side': 'RIGHT'}})
+        self.assertTrue(result['posted'])
+        command = run.call_args.args[0]
+        self.assertIn('repos/example/repo/pulls/1/comments', command)
+        self.assertIn('commit_id=' + HEAD, command)
+        self.assertIn('line=4', command)
+        self.assertIn('side=RIGHT', command)
+        with self.assertRaisesRegex(ValueError, 'pinned pull request head'):
+            comments.post(URL, {'revision': REV, 'body': 'x',
+                                'target': {'mode': 'inline', 'commit_id': BASE,
+                                           'path': 'src/a.ts', 'line': 4, 'side': 'RIGHT'}})
+
+    def test_posting_a_finding_can_reply_to_a_review_comment(self):
+        response = subprocess.CompletedProcess([], 0, stdout=b'{"html_url":"https://github.com/example/repo/pull/1#discussion_r9"}', stderr=b'')
+        with patch.object(comments.subprocess, 'run', return_value=response) as run:
+            comments.post(URL, {'revision': REV, 'body': 'The latest commit still has this case.',
+                                'target': {'mode': 'reply', 'in_reply_to': 9}})
+        command = run.call_args.args[0]
+        self.assertIn('repos/example/repo/pulls/1/comments', command)
+        self.assertIn('body=The latest commit still has this case.', command)
+        self.assertIn('in_reply_to=9', command)
+
+    def finding_report(self, run_id, title, draft='Draft'):
+        directory = tracker.tracker_root() / 'runs' / run_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'review.md').write_text(
+            f'<details class="review-finding">\n<summary>P2 · {title}</summary>\n\n'
+            '**P2 · Comment · Source-verified** · General PR comment\n\n'
+            f'<!-- review-comment:start -->\n{draft}\n<!-- review-comment:end -->\n</details>')
+        return directory
+
+    def test_posting_an_emptied_finding_draft_is_rejected(self):
+        self.finding_report('finding-empty-run', 'Keep the guard')
+        with patch.object(code_workspace, 'review', return_value={
+                'artifact': {'run_id': 'finding-empty-run', 'head_sha': HEAD, 'version': 'v1'}}), \
+                patch.object(comments, 'post') as post:
+            for body in ('', '  '):
+                with self.assertRaisesRegex(ValueError, 'must contain text'):
+                    code_workspace.post_finding(URL, {'revision': REV, 'version': 'v1', 'finding': 'finding-1', 'body': body})
+        post.assert_not_called()
+
+    def test_finding_question_stays_on_the_report_it_came_from(self):
+        older = self.finding_report('finding-older-run', 'Cache bug')
+        self.finding_report('finding-newer-run', 'Test gap')
+        reports = {'older': {'run_id': 'finding-older-run', 'head_sha': HEAD, 'version': 'older'},
+                   'newer': {'run_id': 'finding-newer-run', 'head_sha': HEAD, 'version': 'newer'}}
+        lookup = lambda path=None, version=None, pr_url=None: reports.get(version)
+        with patch.object(code_workspace.runtime, 'registered_report', side_effect=lookup), \
+                patch.object(code_workspace, 'review', return_value={'artifact': reports['newer']}):
+            [context] = chat.normalize_contexts(URL, self.comparison, [{
+                'kind': 'finding', 'finding': 1, 'report_head': HEAD, 'report_version': 'older',
+                'base': BASE, 'head': HEAD}])
+            self.assertEqual(context['label'], 'Finding 1 · P2 · Cache bug')
+            self.assertEqual(context['report_version'], 'older')
+            self.assertIn(str(older / 'review.md'), context['snippet'])
+            with self.assertRaisesRegex(ValueError, 'no longer available'):
+                chat.normalize_contexts(URL, self.comparison, [{
+                    'kind': 'finding', 'finding': 1, 'report_head': HEAD, 'report_version': 'removed',
+                    'base': BASE, 'head': HEAD}])
+            # The AI is pointed at, and may read, the report the finding came from.
+            thread = {'contexts': [context], 'messages': [{'role': 'user', 'text': 'Still true?'}]}
+            readable = chat.readable_reports({**self.comparison, 'url': URL}, thread)
+            self.assertEqual(readable[0], str(older) + '/')
+            self.assertIn(str(tracker.tracker_root() / 'runs' / 'finding-newer-run') + '/', readable)
+            prompt = json.loads(chat.turn_context({**self.comparison, 'url': URL}, thread))
+            self.assertIn(str(older), prompt['ai_review'])
+
+    def test_finding_target_uses_placement_metadata_not_background_links(self):
+        run_id = 'finding-metadata-target-run'
+        directory = tracker.tracker_root() / 'runs' / run_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'review.md').write_text(
+            '<details class="review-finding">\n<summary>P2 · Placed finding</summary>\n\n'
+            '**P2 · Comment · Source-verified** · '
+            '[cache.py:13–14](https://github.com/example/repo/blob/' + HEAD + '/src/cache.py#L13-L14)\n\n'
+            'Is it real? An older report mentioned '
+            '[a resolved thread](https://github.com/example/repo/pull/1#discussion_r9).\n\n'
+            '<!-- review-comment:start -->\nDraft placement.\n<!-- review-comment:end -->\n'
+            '</details>\n\n'
+            '<details class="review-finding">\n<summary>P2 · General finding</summary>\n\n'
+            '**P2 · Comment · Source-verified** · General PR comment\n\n'
+            'The walkthrough mentions [caller.py:7](https://github.com/example/repo/blob/' + HEAD + '/caller.py#L7).\n\n'
+            '<!-- review-comment:start -->\nDraft conversation comment.\n<!-- review-comment:end -->\n'
+            '</details>')
+        with patch.object(code_workspace, 'review', return_value={
+                'artifact': {'run_id': run_id, 'head_sha': HEAD, 'version': 'v1'}}):
+            placed = code_workspace.finding(URL, REV, 'v1', 'finding-1')
+            general = code_workspace.finding(URL, REV, 'v1', 'finding-2')
+        self.assertEqual((placed['target']['mode'], placed['target']['path'], placed['target']['line']),
+                         ('inline', 'src/cache.py', 14))
+        self.assertNotIn('discussion_r9', placed['target']['label'])
+        self.assertEqual(general['target']['mode'], 'conversation')
+
+    def test_review_finding_attachment_uses_saved_report_not_browser_title(self):
+        run_id = 'finding-run'
+        directory = tracker.tracker_root() / 'runs' / run_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'review.md').write_text('<details class="review-finding">\n<summary>P2 · Keep the guard</summary>\n\n<!-- review-comment:start -->\nDraft\n<!-- review-comment:end -->\n</details>')
+        with patch.object(code_workspace, 'review', return_value={'artifact': {'run_id': run_id, 'head_sha': HEAD}}):
+            [context] = chat.normalize_contexts(URL, self.comparison, [{
+                'kind': 'finding', 'finding': 1, 'report_head': HEAD,
+                'base': BASE, 'head': HEAD, 'label': 'forged title'}])
+        self.assertEqual(context['label'], 'Finding 1 · P2 · Keep the guard')
+        self.assertNotIn('forged title', context['snippet'])
+        self.assertIn('review.md', context['snippet'])
+
+    def test_finding_preview_rebuilds_an_existing_reply_target_from_the_saved_report(self):
+        run_id = 'finding-reply-target-run'
+        directory = tracker.tracker_root() / 'runs' / run_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'review.md').write_text(
+            '<details class="review-finding">\n<summary>P2 · Keep the guard</summary>\n\n'
+            '**P2 · Comment · Source-verified** · '
+            '[existing thread](https://github.com/example/repo/pull/1#discussion_r9)\n\n'
+            '<!-- review-comment:start -->\nDraft\n<!-- review-comment:end -->\n'
+            '</details>')
+        with patch.object(code_workspace, 'review', return_value={
+                'artifact': {'run_id': run_id, 'head_sha': HEAD, 'version': 'v1'}}):
+            result = code_workspace.finding(URL, REV, 'v1', 'finding-1')
+        self.assertTrue(result['can_post'])
+        self.assertEqual(result['target']['mode'], 'reply')
+        self.assertEqual(result['target']['in_reply_to'], 9)
+        self.assertIn('#discussion_r9', result['target']['label'])
+
+    def test_finding_preview_rebuilds_an_inline_target_from_the_saved_report(self):
+        run_id = 'finding-target-run'
+        directory = tracker.tracker_root() / 'runs' / run_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'review.md').write_text(
+            '<details class="review-finding">\n<summary>P2 · Keep the guard</summary>\n\n'
+            '**P2 · Comment · Source-verified** · '
+            '[src/a.ts](https://github.com/example/repo/blob/' + HEAD + '/src/a.ts#L1-L2)\n\n'
+            '<!-- review-comment:start -->\nDraft\n<!-- review-comment:end -->\n'
+            '</details>')
+        with patch.object(code_workspace, 'review', return_value={
+                'artifact': {'run_id': run_id, 'head_sha': HEAD, 'version': 'v1'}}):
+            result = code_workspace.finding(URL, REV, 'v1', 'finding-1')
+        self.assertTrue(result['can_post'])
+        self.assertEqual(result['target']['mode'], 'inline')
+        self.assertEqual(result['target']['line'], 2)
+        self.assertEqual(result['target']['start_line'], 1)
 
     def test_comments_are_read_with_paginated_queries_only(self):
         seen=[]

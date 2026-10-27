@@ -19,6 +19,7 @@ from agent_options import CATALOG
 
 ARTIFACT_NAMES = ('review-html', 'explanation-html', 'review-markdown')
 TERMINAL = {'completed', 'completed-with-gaps', 'failed', 'blocked', 'cancelled'}
+LEGACY_RUN_STALE_SECONDS = 60 * 60
 
 
 def artifact_allowed(path):
@@ -35,6 +36,31 @@ def artifact_version(artifact):
     # they are registered again, including replacements at the same path.
     return artifact.get('version') or hashlib.sha256(
         json.dumps(artifact, sort_keys=True).encode()).hexdigest()
+
+
+def registered_report(path=None, version=None, pr_url=None):
+    """Find the review report registration for a served path or a version ID."""
+    try:
+        path = Path(path).resolve(strict=True) if path else None
+    except (OSError, ValueError):
+        return None
+    runs, _ = tracker.load_all_runs(dashboard.STALE_RUN_HOURS)
+    for run in sorted(runs, key=lambda r: r.get('created_at', ''), reverse=True):
+        if pr_url and run.get('pr_url') != pr_url:
+            continue
+        for artifact in run.get('artifacts', []):
+            if artifact.get('name') not in ('review-html', 'review-markdown'):
+                continue
+            if version and artifact_version(artifact) != version:
+                continue
+            try:
+                if path and Path(artifact.get('path', '')).resolve() != path:
+                    continue
+            except (OSError, ValueError):
+                continue
+            return {'run_id': run['run_id'], 'name': artifact['name'], 'version': artifact_version(artifact),
+                    'head_sha': artifact.get('head_sha', run.get('head_sha', ''))}
+    return None
 
 
 def mark_artifact_opened(run_id, name, version):
@@ -125,6 +151,10 @@ def summarize_run(run, checked_sha=''):
     job = reviews.job_state(run['run_id'])
     if job:
         status = job['status']
+    elif status == 'running' and age_seconds(run.get('updated_at', '')) > LEGACY_RUN_STALE_SECONDS:
+        # Legacy sessions have no local worker to report liveness. Do not leave a
+        # dead terminal session blocking a new review indefinitely.
+        status = 'no-activity'
     return {'run_id': run['run_id'], 'status': status, 'tool': run.get('tool', ''),
         'created_at': run.get('created_at', ''), 'updated_at': run.get('updated_at', ''),
         'head_sha': run.get('head_sha', ''), 'session_reference': run.get('session_reference', ''),
@@ -211,8 +241,9 @@ def guidance_prompt(guidance):
 
 
 def active_runs(canonical, runs):
+    active = {'starting', 'queued', 'running', 'stopping'}
     return [r for r in runs if r['pr_url'] == canonical and
-            (summarize_run(r)['status'] not in TERMINAL or
+            (summarize_run(r)['status'] in active or
              (reviews.read_job(r['run_id']) and reviews.worker_alive(r['run_id'])))]
 
 

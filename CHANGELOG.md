@@ -5,6 +5,16 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #23 · Finding actions from saved reports
+
+- Saved report findings can open the trusted workspace directly for Ask AI or an explicitly confirmed draft post, including replies to existing threads.
+- Fixed: cancelled browser requests no longer produce a server traceback while loading dashboard assets.
+- Fixed: finding posts now use only the finding’s placement metadata, not unrelated links in its explanation.
+- Fixed: abandoned legacy reviews now show no recent activity instead of blocking a new review forever.
+- Fixed: finding links in an older saved report no longer ask about or post the newest report's finding with the same number.
+- Fixed: posting an emptied comment box is refused instead of posting the original AI draft.
+- Fixed: if a new report arrives while the post dialog is open, posting now asks you to reload instead of using the new report's target.
+
 ## #22 · Snooze in My reviews · 2026-10-20
 
 - **Snooze** (1 day, 3 days, 1 week) on PRs in Up next and In progress sets
