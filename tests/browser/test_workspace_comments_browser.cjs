@@ -107,18 +107,46 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   assert.match(postRequests[0].body,/existing batching behavior/);
   const findingAsks=[];
   page.on('request',request=>{if(request.url().endsWith('/workspace-chat'))findingAsks.push(request.postDataJSON());});
+  const findingAsked=page.waitForRequest(request=>request.method()==='POST'&&request.url().endsWith('/workspace-chat'));
   await report.locator('button', {hasText:'Ask AI about this finding'}).click();
-  await page.locator('.context-attachment').waitFor();
+  // The previous conversation's attachment can still be showing, so wait for this one.
+  await page.locator('#chat-context',{hasText:'AI review finding'}).waitFor();
+  await findingAsked;
   assert.match(await page.locator('#chat-context').innerText(),/AI review finding/);
   assert.equal(findingAsks.at(-1).contexts[0].kind,'finding');
   assert.equal(findingAsks.at(-1).contexts[0].finding,1);
   assert.equal(findingAsks.at(-1).contexts[0].report_version,'fixture-v1');
+  // Let the answer finish; later pages restore a running conversation and would not ask.
+  await page.locator('.message.user',{hasText:'Explain review finding'}).waitFor();
+  await page.locator('[data-save-message="1"]').waitFor();
   // Standalone artifact links use the same trusted workspace actions with a deep link.
   const deepLink=await context.newPage();
   await deepLink.goto(new URL('/workspace?'+new URLSearchParams({url:'https://github.com/example/telemetry-sdk/pull/248',tab:'review',finding:'finding-1',finding_action:'post'}),page.url()).href);
   await deepLink.locator('#post-dialog').waitFor();
   assert.equal(await deepLink.locator('#post-dialog').isVisible(),true);
   assert.match(await deepLink.locator('#post-target').innerText(),/existing GitHub review thread.*discussion_r42/);
+  // The link acts once: a reload or restored tab must not reopen the dialog or ask again.
+  const linkParams=()=>deepLink.evaluate(()=>['finding','finding_action','version'].filter(key=>new URL(location.href).searchParams.has(key)));
+  const reloadWorkspace=async()=>{
+   // Comments load after the link action, so any repeated action has been sent by then.
+   const settled=deepLink.waitForResponse(response=>response.url().includes('/api/workspace-comments'));
+   await deepLink.reload();await settled;
+  };
+  assert.deepEqual(await linkParams(),[]);
+  await reloadWorkspace();
+  assert.equal(await deepLink.locator('#post-dialog').isVisible(),false);
+  const linkAsks=[];
+  deepLink.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/workspace-chat'))linkAsks.push(request);});
+  const linkAsked=deepLink.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/workspace-chat'));
+  await deepLink.goto(new URL('/workspace?'+new URLSearchParams({url:'https://github.com/example/telemetry-sdk/pull/248',tab:'review',finding:'finding-1',finding_action:'ask',version:'fixture-v1'}),page.url()).href);
+  const linkThread=await (await linkAsked).json();
+  // Wait for the answer: a running conversation would hide a repeated question.
+  await deepLink.waitForFunction(id=>new URL(location.href).searchParams.get('chat')===id,linkThread.id);
+  await deepLink.locator('[data-save-message="1"]').waitFor();
+  assert.equal(linkAsks.length,1);
+  assert.deepEqual(await linkParams(),[]);
+  await reloadWorkspace();
+  assert.equal(linkAsks.length,1);
   // A link from another saved report must not act on this report's finding with the same number.
   const deepAsks=[];
   deepLink.on('request',request=>{if(request.url().endsWith('/workspace-chat'))deepAsks.push(request);});
@@ -126,6 +154,7 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
    await deepLink.goto(new URL('/workspace?'+new URLSearchParams({url:'https://github.com/example/telemetry-sdk/pull/248',tab:'review',finding:'finding-1',finding_action:action,version:'older-report'}),page.url()).href);
    await deepLink.locator('#workspace-toast',{hasText:'another AI review report'}).waitFor();
    assert.equal(await deepLink.locator('#post-dialog').isVisible(),false);
+   assert.deepEqual(await linkParams(),[]);
   }
   assert.equal(deepAsks.length,0);
   await deepLink.close();

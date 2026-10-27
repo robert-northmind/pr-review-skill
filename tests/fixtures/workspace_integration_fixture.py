@@ -97,7 +97,11 @@ def main():
         stack.enter_context(patch.object(comments,'post',return_value={'posted':True,'url':'https://github.com/example/telemetry-sdk/pull/248#discussion_r43'}))
         # Fail closed: the fixture must never reach GitHub or a provider.
         stack.enter_context(patch.object(comments,'graphql',side_effect=AssertionError('Fixture network disabled')))
-        stack.enter_context(patch.object(github,'api',side_effect=AssertionError('Fixture network disabled')))
+        def live_pr(endpoint):
+            # Posting checks the live PR head; nothing else may read GitHub.
+            if endpoint!='repos/example/telemetry-sdk/pulls/248':raise AssertionError('Fixture network disabled')
+            return {'state':'open','head':{'sha':comparison['head']}}
+        stack.enter_context(patch.object(github,'api',side_effect=live_pr))
         stack.enter_context(patch.object(pr_server.runtime,'mark_artifact_opened',return_value={'opened':True}))
         stack.enter_context(patch.object(pr_server.runtime,'start_launch',return_value={'run_id':'fixture','transport':'in-app'}))
         dashboard.save_dashboard({'prs':{URL:{'owner':'example','repository':'telemetry-sdk','number':248,'title':comparison['title'],'reasons':['review-requested'],'head_sha':comparison['head']}}})

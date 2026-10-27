@@ -631,10 +631,14 @@ import { installChatResize } from "./chat-resize.mjs";
   }
   async function activateFindingLink() {
     const id = queryFindingId(),
-      action = params.get("finding_action");
+      action = params.get("finding_action"),
+      version = params.get("version");
+    // A link acts once: a reload or restored tab must not ask or open the dialog again.
+    const url = new URL(location.href);
+    ["finding", "finding_action", "version"].forEach((key) => url.searchParams.delete(key));
+    history.replaceState(null, "", url);
     if (!id || !["ask", "post"].includes(action)) return;
     setTab("review");
-    const version = params.get("version");
     if (version && version !== data.review?.artifact?.version) {
       notify("This link is from another AI review report. Open the current report to use its findings.");
       return;

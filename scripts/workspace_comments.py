@@ -144,6 +144,11 @@ def _gh_post(args, kind):
         raise ValueError('GitHub is unavailable or timed out. Check gh authentication and retry.') from error
     if result.returncode:
         # Do not echo GitHub CLI output: it can contain repository text or credential-shaped data.
+        # gh reports HTTP errors on stderr as "gh: <message> (HTTP <status>)".
+        stderr = result.stderr.decode('utf-8', 'replace') if isinstance(result.stderr, bytes) else str(result.stderr or '')
+        if re.search(r'^gh: .*\(HTTP 422\)$', stderr, re.MULTILINE):
+            raise ValueError(f'GitHub rejected this {kind}. Check its target and text; '
+                             'an inline comment must be on a line in the pull request diff.')
         raise ValueError(f'GitHub could not post this {kind}. Check access and gh authentication.')
     try:
         value = json.loads(result.stdout) if result.stdout else {}

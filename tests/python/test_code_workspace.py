@@ -311,6 +311,46 @@ chat.worker(sys.argv[1],sys.argv[2])
                     code_workspace.post_finding(URL, {'revision': REV, 'version': 'v1', 'finding': 'finding-1', 'body': body})
         post.assert_not_called()
 
+    def test_posting_a_finding_checks_the_live_pull_request_first(self):
+        self.finding_report('finding-live-run', 'Keep the guard')
+        request = {'revision': REV, 'version': 'v1', 'finding': 'finding-1', 'body': 'Keep the guard.'}
+        cases = [({'state': 'open', 'head': {'sha': HEAD}}, None),
+                 ({'state': 'open', 'head': {'sha': 'e' * 40}}, 'new commits'),
+                 ({'state': 'closed', 'head': {'sha': HEAD}}, 'no longer open'),
+                 ({'state': 'open'}, 'invalid pull request data'),
+                 ({'state': 'open', 'head': {'sha': 'not-a-sha'}}, 'invalid pull request data'),
+                 ([], 'invalid pull request data'),
+                 (ValueError('GitHub could not read this PR or file.'), 'could not read')]
+        for live, error in cases:
+            with self.subTest(error=error), patch.object(code_workspace, 'review', return_value={
+                    'artifact': {'run_id': 'finding-live-run', 'head_sha': HEAD, 'version': 'v1'}}), \
+                    patch.object(github, 'api', side_effect=[live]) as api, \
+                    patch.object(comments, 'post', return_value={'posted': True}) as post:
+                if error:
+                    with self.assertRaisesRegex(ValueError, error):
+                        code_workspace.post_finding(URL, request)
+                    post.assert_not_called()
+                else:
+                    code_workspace.post_finding(URL, request)
+                    post.assert_called_once()
+                api.assert_called_once_with('repos/example/repo/pulls/1')
+
+    def test_rejected_github_posts_are_not_reported_as_an_access_problem(self):
+        target = {'mode': 'inline', 'commit_id': HEAD, 'path': 'src/a.ts', 'line': 400, 'side': 'RIGHT'}
+        body = b'{"message":"Validation Failed","errors":[{"message":"private-marker (HTTP 422)"}]}'
+        cases = [(b'gh: Validation Failed (HTTP 422)\n', 'rejected this comment'),
+                 (b'gh: Unprocessable Entity (HTTP 422)\n', 'rejected this comment'),
+                 (b'warning: retrying\ngh: Validation Failed (HTTP 422)\nline outside the diff\n', 'rejected this comment'),
+                 ('gh: Validation Failed (HTTP 422)\n', 'rejected this comment'),
+                 (b'gh: Not Found (HTTP 404)\n', 'Check access and gh authentication'),
+                 (b'private-marker (HTTP 422)\n', 'Check access and gh authentication')]
+        for stderr, message in cases:
+            failed = subprocess.CompletedProcess([], 1, stdout=body, stderr=stderr)
+            with self.subTest(stderr=stderr), patch.object(comments.subprocess, 'run', return_value=failed), \
+                    self.assertRaisesRegex(ValueError, message) as raised:
+                comments.post(URL, {'revision': REV, 'body': 'x', 'target': target})
+            self.assertNotIn('private-marker', str(raised.exception))
+
     def test_finding_question_stays_on_the_report_it_came_from(self):
         older = self.finding_report('finding-older-run', 'Cache bug')
         self.finding_report('finding-newer-run', 'Test gap')
