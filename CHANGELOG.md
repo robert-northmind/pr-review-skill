@@ -5,6 +5,12 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #26 · Safer finding actions
+
+- Fixed: reloading or restoring a tab opened from a finding link no longer asks the AI again or reopens the post dialog.
+- Fixed: posting a finding is refused if the pull request has closed or has new commits since the workspace loaded.
+- Fixed: when GitHub rejects a posted comment, for example a line outside the diff, the message says so instead of blaming access.
+
 ## #23 · Finding actions from saved reports
 
 - Saved report findings can open the trusted workspace directly for Ask AI or an explicitly confirmed draft post, including replies to existing threads.

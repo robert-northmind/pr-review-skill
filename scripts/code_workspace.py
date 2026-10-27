@@ -199,6 +199,19 @@ def finding(url, revision, version, finding_id):
                        'but posting is disabled until the report is current.') if stale else ''}
 
 
+def _require_live_head(url, head):
+    """The workspace comparison is cached, so check GitHub right before posting."""
+    _, repo, number = github.identity(url)
+    pr = github.api(f'repos/{repo}/pulls/{number}')
+    live = pr.get('head') if isinstance(pr, dict) else None
+    if not isinstance(live, dict) or not SHA.fullmatch(str(live.get('sha') or '')):
+        raise ValueError('GitHub returned invalid pull request data.')
+    if pr.get('state') != 'open':
+        raise ValueError('This pull request is no longer open. Reload the workspace before posting.')
+    if live['sha'] != head:
+        raise ValueError('This pull request has new commits. Reload the workspace before posting.')
+
+
 def post_finding(url, request):
     if not isinstance(request, dict):
         raise ValueError('Expected a comment request.')
@@ -212,6 +225,7 @@ def post_finding(url, request):
     body = request.get('body', preview['body'])
     if not isinstance(body, str) or not body.strip():
         raise ValueError('Comment must contain text.')
+    _require_live_head(canonical, preview['current_head'])
     result = comments.post(canonical, {'revision': revision, 'body': body, 'target': preview['target']})
     return {**result, 'finding': preview['finding'], 'target': preview['target']['mode']}
 
