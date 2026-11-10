@@ -11,6 +11,11 @@ request are grouped by day.
 - Reports add an "Is this the right approach?" section with a verdict, the right rule and prior art.
 - The report check fails diagram labels that spill out of their box or the drawing.
 
+## #33 · Copyable finding handoff prompts
+
+- Review findings can be handed to a local coding agent with the file, line and
+  feedback in one plain-text prompt.
+
 ## #26 · Safer finding actions
 
 - Fixed: reloading or restoring a tab opened from a finding link no longer asks the AI again or reopens the post dialog.
