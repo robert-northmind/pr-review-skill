@@ -46,6 +46,8 @@ SEARCH_JSON_FIELDS = "url,title,repository,number,isDraft,createdAt,updatedAt,au
 # implied by --repo. upsert() derives owner/repository from the URL either
 # way, so this doesn't lose anything.
 PR_LIST_JSON_FIELDS = "url,title,number,isDraft,createdAt,updatedAt,author"
+# GitHub search returns at most 1000 results; team review requests alone can pass 100.
+SOURCE_LIMIT = 1000
 STALE_RUN_HOURS = 6.0
 DETAILS_REUSE_SECONDS = 3600
 SERVER_HOST = "127.0.0.1"
@@ -231,7 +233,7 @@ def run_gh_search(reason: str) -> list[dict[str, Any]]:
                 "--json",
                 SEARCH_JSON_FIELDS,
                 "--limit",
-                "100",
+                str(SOURCE_LIMIT),
             ],
             check=False,
             capture_output=True,
@@ -267,7 +269,7 @@ def run_gh_pr_list(repo: str) -> list[dict[str, Any]]:
                 "--json",
                 PR_LIST_JSON_FIELDS,
                 "--limit",
-                "100",
+                str(SOURCE_LIMIT),
             ],
             check=False,
             capture_output=True,
@@ -368,10 +370,10 @@ def _refresh_sources() -> None:
         for source, items, error in pool.map(fetch, sources):
             if error:
                 warnings.append(error)
-            elif len(items) < 100:
+            elif len(items) < SOURCE_LIMIT:
                 complete.add(source)
             else:
-                warnings.append(f"{source}: showing the first 100 results; existing entries were preserved.")
+                warnings.append(f"{source}: showing the first {SOURCE_LIMIT} results; existing entries were preserved.")
             for item in items:
                 try:
                     url, owner, repo, number = tracker.canonical_pr_url(item.get("url", ""))

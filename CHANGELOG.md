@@ -5,6 +5,10 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## 2026-11-10 · no pull request
+
+- Fixed: GitHub sync no longer stops at 100 PRs per source and warns, which happened once team review requests passed 100.
+
 ## #34 · Hand-drawn explainer visuals
 
 - Review reports draw their explainer pictures by hand for each PR: a before/after under the outcome, the mechanism in the change section, and the main problem.

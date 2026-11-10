@@ -53,8 +53,8 @@ class Refresh(Isolated):
  def test_complete_absence_removes_membership(self):
   self.refresh(lambda _:[]);self.assertNotIn(URL,d.load_dashboard()['prs'])
  def test_truncated_source_preserves_unseen_entries(self):
-  self.refresh(lambda reason:[{**ITEM,'url':f'https://github.com/example/repo/pull/{i+2}'} for i in range(100)] if reason=='review-requested' else [])
-  self.assertIn(URL,d.load_dashboard()['prs']);self.assertIn('first 100',d.load_dashboard()['refresh_warnings'][0])
+  self.refresh(lambda reason:[{**ITEM,'url':f'https://github.com/example/repo/pull/{i+2}'} for i in range(d.SOURCE_LIMIT)] if reason=='review-requested' else [])
+  self.assertIn(URL,d.load_dashboard()['prs']);self.assertIn(f'first {d.SOURCE_LIMIT}',d.load_dashboard()['refresh_warnings'][0])
  def test_partial_failure_preserves_other_reason(self):
   data=d.load_dashboard();data['prs'][URL]['reasons']=['assignee','review-requested'];d.save_dashboard(data)
   self.refresh(lambda reason: (_ for _ in ()).throw(d.DashboardError('Unavailable')) if reason=='assignee' else ([ITEM] if reason=='review-requested' else []))
