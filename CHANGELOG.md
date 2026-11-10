@@ -5,6 +5,12 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #34 · Hand-drawn explainer visuals
+
+- Review reports draw their explainer pictures by hand for each PR: a before/after under the outcome, the mechanism in the change section, and the main problem.
+- Reports add an "Is this the right approach?" section with a verdict, the right rule and prior art.
+- The report check fails diagram labels that spill out of their box or the drawing.
+
 ## #33 · Copyable finding handoff prompts
 
 - Review findings can be handed to a local coding agent with the file, line and

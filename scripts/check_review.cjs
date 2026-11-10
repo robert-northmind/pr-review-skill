@@ -50,6 +50,13 @@ function check(ok,message){if(!ok)result.errors.push(message);}
   if(target&&inventory.explanationWords>target&&inventory.explanationWords<=ceiling)result.warnings.push('Explanation prose is over target: '+inventory.explanationWords+' > '+target+'; trim repetition if possible without dropping essential caveats.');
   result.explanationWords=inventory.explanationWords;result.explanationTarget=target;
 
+  // Hand-drawn SVG: every label must stay inside the drawing and inside the box it sits in.
+  const svgFit=await page.evaluate(()=>{const out=[];for(const svg of document.querySelectorAll('.diagram-body svg')){const frame=svg.getBoundingClientRect();if(!frame.width)continue;const boxes=[...svg.querySelectorAll('rect')].filter(r=>!r.closest('defs,marker')).map(r=>r.getBoundingClientRect());
+   for(const text of svg.querySelectorAll('text')){const b=text.getBoundingClientRect();if(!b.width)continue;const label=JSON.stringify(text.textContent.trim().slice(0,40));
+    if(b.left<frame.left-1||b.right>frame.right+1||b.top<frame.top-1||b.bottom>frame.bottom+1){out.push('clipped '+label);continue;}
+    const cx=b.left+b.width/2,cy=b.top+b.height/2,box=boxes.filter(r=>cx>r.left&&cx<r.right&&cy>r.top&&cy<r.bottom).sort((a,c)=>a.width*a.height-c.width*c.height)[0];
+    if(box&&(b.left<box.left-1||b.right>box.right+1))out.push('overflows its box '+label);}}return out;});
+  check(!svgFit.length,'Diagram labels do not fit: '+svgFit.slice(0,5).join(', ')+(svgFit.length>5?' (+'+(svgFit.length-5)+' more)':''));
   if(inventory.long.length)result.warnings.push(inventory.long.length+' sentences/paragraph fragments exceed 30 words; inspect readability without dropping essential conditions.');
   check(inventory.csp?.includes("default-src 'none'")&&inventory.csp?.includes("connect-src 'none'")&&inventory.csp?.includes("base-uri 'none'")&&inventory.csp?.includes("form-action 'none'"),'Missing restrictive CSP');
   check(!inventory.assets.length,'External assets, images, frames, or forms present');check(inventory.whitespace,'Code block does not preserve whitespace');check(inventory.rows.every(r=>r.height===0||Math.abs(r.height-r.lineHeight)<1),'Source rows have extra vertical spacing');

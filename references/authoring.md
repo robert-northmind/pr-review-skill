@@ -316,6 +316,16 @@ Optional paper blocks (omitting them preserves the existing authored layers):
   source unless true. Source labels are plain text and optional URLs must be
   HTTPS without credentials. Renders visibly under the title as “Why this PR
   exists”, with source chips and an “inferred from the diff” chip when true.
+  Optional `visual` is a `diagram` block (the before/after picture), rendered
+  under the outcome so the top lines stay in the first viewport.
+- `right_approach`: `{verdict, text, rule?, prior_art?: [{label, url?}],
+  visual?}`. `verdict` is `yes`, `mostly`, `no` or `open`; `text` is one to
+  three sentences; `rule` is one sentence shown as “The right rule:”;
+  `prior_art` has at most four source chips; `visual` is a `diagram` block of
+  the main problem. Text and rule total at most 90 words, enforced by the
+  renderer and excluded from the per-kind cap. Paper only. Renders as an
+  “Is this the right approach?” section after the section with id `change` or
+  `the-change` (else the first section), with an “Approach” jump link.
 - `orientation`: an alternative to `background`; providing both is rejected.
   Required `open` is boolean and `teaser` is at most 12 words. Native details
   summary reads “Background” plus the teaser. Require `map` or `story`.
@@ -327,7 +337,7 @@ Optional paper blocks (omitting them preserves the existing authored layers):
   All authored orientation text, including teaser, map labels and names, must
   total at most 120 words. The checker counts orientation in the explanation
   cap only when initially open; the renderer enforces 120 words in either state.
-- Section-level `approach`: `{text, source?: {label, url?}, suggested?: bool}`.
+- Section-level `approach` (older inputs; prefer `right_approach`): `{text, source?: {label, url?}, suggested?: bool}`.
   `text` is one or two sentences, rendered after section prose in an “Approach”
   callout. Require a source, or `suggested: true` to label it “our note, not
   stated by the author”; source and suggested true are mutually exclusive.
@@ -443,6 +453,26 @@ only when it fits the concept.
   - connectors and text: an empty `dg-arrow` shows ↓, `dg-arrow dg-arrow-right`
     shows →; `dg-label` (small heading), `dg-code` (identifier), `dg-note`;
   - `dg-badge` (finding marker), `dg-badge-good`, `dg-badge-warn`.
+  - SVG kit for hand-drawn pictures (see
+    [Hand-drawn visuals](explanation.md#hand-drawn-visuals)): text `dg-t`
+    (12px sans), `dg-mono` (identifiers), `dg-lbl` (row heading), `dg-dim`,
+    `dg-t-good`, `dg-t-bad`, `dg-t-hot`; boxes `dg-box`, `dg-box-hot` (the
+    part this PR changes), `dg-box-good`, `dg-box-bad`, `dg-box-muted`;
+    connectors `dg-wire`, `dg-wire-good`, `dg-wire-bad` (dashed) with a
+    marker path in `dg-head` or `dg-head-bad`; timelines `dg-axis`, `dg-bar`,
+    `dg-bar-bad`, `dg-tick`, `dg-tick-good`, `dg-tick-bad`, `dg-dot`,
+    `dg-dot-good`, `dg-dot-bad`, `dg-dot-warn`. The browser check fails a
+    label that leaves the drawing or the box it sits in.
+
+    ```html
+    <svg viewBox="0 0 700 120" role="img" aria-label="The start was rounded to ms; now it keeps µs">
+     <defs><marker id="dg-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="dg-head" d="M0,0L10,5L0,10z"/></marker></defs>
+     <text class="dg-lbl" x="0" y="16">Before</text>
+     <rect class="dg-box" x="0" y="26" width="170" height="36" rx="6"/><text class="dg-t dg-mono" x="85" y="49" text-anchor="middle">timestamp − duration</text>
+     <path class="dg-wire" d="M170 44 H226" marker-end="url(#dg-ah)"/>
+     <rect class="dg-box-bad" x="230" y="26" width="220" height="36" rx="6"/><text class="dg-t dg-t-bad" x="340" y="49" text-anchor="middle">start rounded to whole ms</text>
+    </svg>
+    ```
   For SVG, use a `viewBox` so it scales to a phone, keep labels at least 12px,
   and use `fill="currentColor"` or `var(--fg)`, `var(--muted)`, `var(--line)`,
   `var(--panel)`, `var(--soft)`, `var(--accent)`, `var(--good)`, `var(--bad)`,
