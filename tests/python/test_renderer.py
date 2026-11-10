@@ -404,6 +404,36 @@ class PaperReportTests(unittest.TestCase):
         d=self.round_three();d['glance']['judgment']=[]
         self.assertNotIn('<h3>Needs your judgment</h3>',render(d))
 
+    def svg(self, label='Before and after'):
+        return {'type':'diagram','html':f'<svg viewBox="0 0 200 40" role="img" aria-label="{label}"><rect class="dg-box" x="0" y="0" width="90" height="30"/><text class="dg-t dg-mono" x="8" y="20">old</text></svg>','caption':'Source-traced.'}
+
+    def test_hand_drawn_why_visual_and_right_approach(self):
+        d=self.round_three();d['why']['visual']=self.svg()
+        d['right_approach']={'verdict':'mostly','text':'The cache is the simplest fit. One edge is missed.','rule':'Build the item directly.',
+                             'prior_art':[{'label':'Flutter SDK'}],'visual':self.svg('Main problem')}
+        d['sections'].append({'id':'later','title':'Later','claim':'Later','blocks':[{'type':'paragraph','text':'More.'}]})
+        output=render(d)
+        # The before/after picture sits under the outcome, keeping the top lines short.
+        self.assertLess(output.index('<p class="outcome">'),output.index('<div class="paper-before-after">'))
+        self.assertLess(output.index('<div class="paper-before-after">'),output.index('<h2>At a glance</h2>'))
+        self.assertIn('class="dg-t dg-mono"',output)
+        # The verdict follows the change section and comes before the next one.
+        self.assertLess(output.index('<section id="code"'),output.index('<section id="right-approach"'))
+        self.assertLess(output.index('<section id="right-approach"'),output.index('<section id="later"'))
+        self.assertIn('<div class="paper-verdict tone-warn"><p><strong>Mostly.</strong>',output)
+        self.assertIn('<strong>The right rule:</strong> Build the item directly.',output)
+        self.assertIn('>prior art</span><span class="paper-source-chip">Flutter SDK</span>',output)
+        self.assertIn('href="#right-approach">Approach</a>',output)
+        bad=[('verdict','maybe'),('text','One. Two. Three. Four.'),('text','word '*91),('rule','One. Two.'),
+             ('prior_art',[{'label':'x'}]*5),('visual',{'type':'mermaid','source':'graph TD'}),('extra',1)]
+        for key,value in bad:
+            d2=copy.deepcopy(d);d2['right_approach'][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):render(d2)
+        d2=copy.deepcopy(d);d2['why']['visual']={'type':'cases'}
+        with self.assertRaises(ValueError):render(d2)
+        d2=copy.deepcopy(d);d2['layout']='walk'
+        with self.assertRaisesRegex(ValueError,'paper layout'):render(d2)
+
     def test_findings_preview_stops_at_two(self):
         d=self.paper();d['review']['markdown']='\n\n'.join(
             f'<details class="review-finding">\n<summary>P2 · Problem {i}</summary>\n\n**The problem in one sentence:** Value {i} is lost.\n\n</details>' for i in range(1,5))

@@ -176,11 +176,13 @@ responsible for sandbox execution and app lifecycle to avoid duplicate builds.
 Follow [Explanation](references/explanation.md) using the same pinned source.
 Draft the JSON narrative sections; do not render or register a separate HTML.
 Render with `"layout": "paper"`: one scrolling page with a claim title, a
-sourced "why this PR exists" lead, a short standfirst, At a glance (kind, blast
-radius, findings, rare judgment questions), a background with a where-it-sits
-map when the prompt's `Reader familiarity` calls for it, one section on the change
-with the visual that fits its kind, code changes shown inline in plain words,
-and the blast radius ending with a merge gate. See
+sourced "why this PR exists" lead with a hand-drawn before/after picture when
+it fits, a short standfirst, At a glance (kind, blast radius, findings, rare
+judgment questions), a background with a where-it-sits map when the prompt's
+`Reader familiarity` calls for it, one section on the change with a hand-drawn
+SVG diagram of the mechanism, an "Is this the right approach?" verdict with a
+picture of the main problem when there is one, code changes shown inline in
+plain words, and the blast radius ending with a merge gate. See
 [Explanation](references/explanation.md) for word caps, diagram choice and the
 absolute-claim pass. Keep one or two self-check questions.
 Use the normal concise depth unless the user asks for more detail. After finding

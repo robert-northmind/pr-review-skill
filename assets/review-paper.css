@@ -61,3 +61,6 @@ html[data-layout=paper] main{max-width:1040px;background:var(--panel);padding:28
  .paper-page .cases th,.paper-page .cases td{display:block;width:auto;min-width:0;border:0;border-bottom:1px solid var(--line);padding:10px 12px;overflow-wrap:anywhere}
  .paper-page .cases td:last-child{border-bottom:0}.paper-page .cases td:before{content:attr(data-label);display:block;font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:5px}
 }
+.paper-page .diagram-body svg .dg-mono{font-family:var(--w-mono)}.paper-before-after .diagram{margin:22px 0 0}.paper-before-after .caption{margin-bottom:0}
+.paper-verdict{max-width:75ch;border:1px solid color-mix(in srgb,var(--tone) 40%,var(--line));border-left:4px solid var(--tone);border-radius:6px;background:color-mix(in srgb,var(--tone) 7%,var(--panel));padding:12px 16px;margin:4px 0 8px}
+.paper-verdict p{margin:0 0 8px}.paper-verdict .paper-rule{font-size:.93rem}.paper-verdict>:last-child{margin-bottom:0}

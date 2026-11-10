@@ -546,8 +546,17 @@ def source_chip(value):
     return f'<span class="paper-source-chip">{content}</span>'
 
 
+def paper_visual(value, label):
+    """A hand-drawn diagram attached to a paper layer (why or right approach)."""
+    if not isinstance(value, dict) or value.get('type') != 'diagram':
+        raise ValueError(f'{label} visual must be a diagram block')
+    object_fields(value, 'type title html caption', f'{label} visual')
+    text_field(value.get('caption'), f'{label} visual caption', sentences=2)
+    return diagram(value)
+
+
 def paper_why(value):
-    object_fields(value, 'text sources inferred', 'why')
+    object_fields(value, 'text sources inferred visual', 'why')
     text = text_field(value.get('text'), 'why text', sentences=2, words=45)
     if not isinstance(value.get('inferred'), bool): raise ValueError('why inferred must be true or false')
     sources = value.get('sources', [])
@@ -556,6 +565,36 @@ def paper_why(value):
     chips = ''.join(source_chip(source) for source in sources)
     if value['inferred']: chips += '<span class="paper-source-chip">inferred from the diff</span>'
     return f'<div class="paper-why"><h2>Why this PR exists</h2><p>{esc(text)}</p><div class="paper-source-chips" data-exclude-count>{chips}</div></div>'
+
+
+def paper_before_after(value):
+    """The why's before/after picture sits under the outcome, so the top lines stay in the first viewport."""
+    return f'<div class="paper-before-after">{paper_visual(value["visual"], "why")}</div>' if 'visual' in value else ''
+
+
+RIGHT_APPROACH_VERDICTS = {'yes': ('Yes', 'good'), 'mostly': ('Mostly', 'warn'), 'no': ('No', 'bad'), 'open': ('Open question', 'muted')}
+
+
+def paper_right_approach(value):
+    object_fields(value, 'verdict text rule prior_art visual', 'right_approach')
+    if value.get('verdict') not in RIGHT_APPROACH_VERDICTS:
+        raise ValueError('right_approach verdict must be yes, mostly, no or open')
+    label, tone = RIGHT_APPROACH_VERDICTS[value['verdict']]
+    text = text_field(value.get('text'), 'right_approach text', sentences=3)
+    prose = [text]
+    rule = ''
+    if 'rule' in value:
+        rule_text = text_field(value['rule'], 'right_approach rule', sentences=1); prose.append(rule_text)
+        rule = f'<p class="paper-rule"><strong>The right rule:</strong> {esc(rule_text)}</p>'
+    # The section is excluded from the per-kind cap, so it carries its own.
+    text_field(' '.join(prose), 'right_approach', words=90)
+    prior = value.get('prior_art', [])
+    if not isinstance(prior, list) or len(prior) > 4: raise ValueError('right_approach prior_art needs zero to four sources')
+    chips = ''.join(source_chip(item) for item in prior)
+    chips = f'<div class="paper-source-chips" data-exclude-count><span class="paper-source-chip">prior art</span>{chips}</div>' if chips else ''
+    visual = paper_visual(value['visual'], 'right_approach') if 'visual' in value else ''
+    return (f'<section id="right-approach" data-section="Is this the right approach?" data-exclude-count><h2>Is this the right approach?</h2>'
+            f'<div class="paper-verdict tone-{tone}"><p><strong>{label}.</strong> {esc(text)}</p>{rule}{chips}</div>{visual}</section>')
 
 
 def paper_orientation(value):
@@ -689,7 +728,8 @@ def paper_layers(data):
     if 'The change' not in targets:
         candidate = next((s for s in data.get('sections', []) if s['id'] not in targets.values()), None)
         if candidate: targets['The change'] = candidate['id']
-    links = [f'<a href="#{esc(targets[label])}">{label}</a>' for label in ('The change', 'Code', 'Blast radius') if label in targets]
+    if 'right_approach' in data: targets['Approach'] = 'right-approach'
+    links = [f'<a href="#{esc(targets[label])}">{label}</a>' for label in ('The change', 'Approach', 'Code', 'Blast radius') if label in targets]
     links.append(f'<a href="#review-findings">Findings ({len(findings)})</a>')
     separator = '<span aria-hidden="true"> · </span>'
     result += f'<nav class="paper-jumps" aria-label="Jump to">{separator.join(links)}</nav>'
@@ -916,6 +956,14 @@ def render(data):
             split = next((i for i, block in enumerate(section['blocks']) if block['type'] not in {'paragraph', 'list'}), len(section['blocks']))
             body = blocks(section['blocks'][:split], data) + paper_approach(section['approach']) + blocks(section['blocks'][split:], data)
         sections.append(f'<section id="{ident}" data-section="{esc(section["title"])}">{head}{carried}{body}</section>')
+    if 'right_approach' in data:
+        if layout != 'paper': raise ValueError('right_approach needs the paper layout')
+        if 'right-approach' in seen: raise ValueError('Use unique section IDs')
+        # The verdict follows the mechanism it judges: after the change section.
+        ids = [section['id'] for section in data.get('sections', [])]
+        after = next((ids.index(i) for i in ('change', 'the-change') if i in ids), 0 if ids else -1)
+        offset = len(sections) - len(ids)
+        sections.insert(offset + after + 1, paper_right_approach(data['right_approach']))
     # Number findings in render order so the verdict's links can open them.
     numbers=itertools.count(1)
     findings_html=re.sub(re.escape(FINDING_OPEN), lambda _: f'<details class="review-finding" id="finding-{next(numbers)}">', review_markdown(review['markdown'], data))
@@ -958,7 +1006,7 @@ def render(data):
         layers = paper_layers(data)
         why = paper_why(data['why']) if 'why' in data else ''
         overview = (f'<h1>{esc(data["title"])}</h1>{why}{assessment}<div class="actions"><span class="pr-link">{pr}</span></div>'
-                    f'<p class="outcome">{esc(data["outcome"])}</p>')
+                    f'<p class="outcome">{esc(data["outcome"])}</p>{paper_before_after(data["why"]) if "why" in data else ""}')
         content = (f'<main class="paper-page" data-kind="{esc(data["glance"]["kind"])}"><header data-section="Overview">{topbar}{walk_heading(data)}{overview}</header>'
                    f'{layers}<div class="paper-sections">{"".join(sections[:end])}</div>'
                    f'<details class="paper-tail"><summary>Questions, verification and sources</summary>{tail}'
