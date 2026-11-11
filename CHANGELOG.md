@@ -5,6 +5,10 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## 2026-11-11 · no pull request
+
+- Ask AI on a code excerpt in the AI review opens the chat beside the report instead of switching to Code changes.
+
 ## 2026-11-10 · no pull request
 
 - Fixed: GitHub sync no longer stops at 100 PRs per source and warns, which happened once team review requests passed 100.
