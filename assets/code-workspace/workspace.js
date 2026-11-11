@@ -1544,12 +1544,11 @@ import { installChatResize } from "./chat-resize.mjs";
       notify("The referenced lines are unavailable in this comparison.");
       return;
     }
-    await jump(
-      index,
-      rows.map((row) => row.id),
-      target.side,
-    );
-    if (event.data.action === "ask") attachContext(selection);
+    const ids = rows.map((row) => row.id);
+    // Asking keeps the reader in the AI review; only inspecting opens Code changes.
+    if (event.data.action === "ask")
+      attachContext(selectionFor(data, index, ids[0], ids.at(-1), target.side));
+    else await jump(index, ids, target.side);
   });
   init();
 })();

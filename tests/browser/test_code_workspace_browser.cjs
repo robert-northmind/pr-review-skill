@@ -67,6 +67,14 @@ const {chromium}=require(process.env.PR_REVIEW_PLAYWRIGHT_MODULE||'playwright');
   await page.locator('#review-tab').click();
   await page.frameLocator('.review-frame').getByRole('heading',{name:'Fixture AI review'}).waitFor();
   assert.equal(await page.locator('.review-frame').getAttribute('sandbox'),'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+  // Asking about a report excerpt opens chat beside the report instead of leaving it.
+  await page.frameLocator('.review-frame').getByRole('link',{name:'Inspect guard'}).locator('xpath=following-sibling::button[1]').click();
+  await page.locator('#chat-context',{hasText:'batch.ts'}).waitFor();
+  assert.equal(await page.locator('#ai-view').isHidden(),false);
+  assert.equal(await page.locator('#code-view').isHidden(),true);
+  await page.frameLocator('.review-frame').getByRole('link',{name:'Inspect guard'}).click();
+  await page.locator('#code-view').waitFor();
+  await page.locator('#review-tab').click();
   // Continuing copies the finished review's fork command or a handoff prompt.
   await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(page.url()).origin});
   await page.getByRole('button',{name:'Continue in Claude Code'}).click();
