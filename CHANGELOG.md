@@ -5,7 +5,7 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
-## 2026-11-11 · no pull request
+## #35 · Keep the AI review open when asking about an excerpt
 
 - Ask AI on a code excerpt in the AI review opens the chat beside the report instead of switching to Code changes.
 
