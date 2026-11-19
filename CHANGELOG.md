@@ -5,6 +5,11 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #37 · Offer the GPT-6.2 Codex models
+
+- GPT-6.2 Astra, GPT-6.2 Sol and GPT-6.1 Terra are offered for Codex.
+- Codex review now defaults to GPT-6.2 Astra and Codex chat to GPT-6.2 Sol; saved settings don't change.
+
 ## #35 · Keep the AI review open when asking about an excerpt
 
 - Ask AI on a code excerpt in the AI review opens the chat beside the report instead of switching to Code changes.
