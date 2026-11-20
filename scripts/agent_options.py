@@ -1,5 +1,8 @@
 """Maintained AI presets, shared by every feature. Update here on model releases.
 
+New Codex models also need the openai-codex pin in requirements-triage.txt to be
+at least as new as the Codex CLI that lists them; see AGENTS.md "AI models".
+
 Verified 2026-11-19: installed Codex 0.170.0 models_cache.json; Claude models/effort docs:
 https://platform.claude.com/docs/en/models/overview
 https://platform.claude.com/docs/en/build-with-claude/effort

@@ -5,6 +5,10 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #38 · Run Codex reviews with the GPT-6.2 models
+
+- Fixed: Codex reviews and chats with GPT-6.2 Astra, GPT-6.2 Sol and GPT-6.1 Terra failed because the bundled Codex runtime was too old. Reinstall `requirements-triage.txt` into `.venv` and restart the dashboard.
+
 ## #37 · Offer the GPT-6.2 Codex models
 
 - GPT-6.2 Astra, GPT-6.2 Sol and GPT-6.1 Terra are offered for Codex.
