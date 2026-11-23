@@ -5,7 +5,7 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
-## Run the app in reviews and leave out minor comments
+## #41 · Run the app in reviews and leave out minor comments
 
 - AI reviews of UI changes run the app: a web page in Chrome, a mobile app on an Android emulator or iOS simulator, or an SDK's example app. They run outside the reviewer's sandbox, only for repositories trusted under Settings, Repositories.
 - Reviews running at the same time share the Mac: by default two browsers and one emulator or simulator in total, only while enough memory and CPU are free. A waiting review says in its activity which review has the device.
