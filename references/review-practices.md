@@ -28,6 +28,14 @@ when a review depends on an uncertain or changing external API or contract.
   maintainability; distinguish a demonstrated defect or relevant optional
   improvement from personal style preferences.
 
+In November 2026 a review traced a guard flag correctly for an app that
+stayed in the foreground, but missed that a periodic timer kept running while
+the app was hidden, when the pause handler had already cleared that flag. The
+defect sat across a script-layer timer and native state that two reviewers
+split between them, and the example app never enabled the option that reached
+it. That motivates the state-transition trace, the single owner for
+cross-boundary paths and the non-default configuration run.
+
 Do not import another skill wholesale or copy its vendor/model restrictions,
 auto-posting steps, or assumptions about access. Use the existing sandbox and
 permissions, and keep final verification independent of reviewer agreement.
