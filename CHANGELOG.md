@@ -5,6 +5,13 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #42 · Trace lifecycle states and cross-boundary paths in reviews
+
+- Reviews follow each timer, async callback and lifecycle hook through the states it can run in, such as hidden or backgrounded, and check documented behavior in each of them.
+- Older code that a pull request deprecates, re-documents or wraps is reviewed for its behavior, not only its wording.
+- A path that crosses layers, such as script code calling native code, is reviewed by one reviewer instead of being split between them.
+- App runs also try a changed option's non-default value and keep the app hidden long enough for timers to fire.
+
 ## #41 · Run the app in reviews and leave out minor comments
 
 - AI reviews of UI changes run the app: a web page in Chrome, a mobile app on an Android emulator or iOS simulator, or an SDK's example app. They run outside the reviewer's sandbox, only for repositories trusted under Settings, Repositories.

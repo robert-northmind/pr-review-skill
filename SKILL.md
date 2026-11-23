@@ -217,6 +217,15 @@ as needed to cover the inventory. Each reviewer may report cross-cutting issues 
      repository patterns. Trace changed execution and data flows.
    - Look for logic errors, regressions, invalid assumptions, race conditions,
      error-path failures, and missed edge cases.
+   - For each timer, scheduled job, async callback or lifecycle hook the change
+     adds or touches, list the states it can run in (for example foreground,
+     inactive, hidden or backgrounded, resumed, disposed, shutting down). Follow
+     every flag or guard it reads or writes through the transitions between
+     those states, including the platform's own lifecycle handlers, not only
+     the steady state. A guard that is correct while an app stays in the
+     foreground can fail when a tick lands while it is hidden.
+   - Treat behavior the PR documents ("has no effect", "only does X", "runs
+     while visible") as a claim to check in every state above, like a test.
 
 2. **Tests, contracts, and compatibility**
    - Check whether tests exercise changed behavior and failure modes, and
@@ -247,6 +256,9 @@ Each candidate finding must include:
 Report only actionable defects introduced or exposed by the PR. Exclude style
 preferences, broad refactoring suggestions, speculative concerns without a
 plausible failure path, and pre-existing issues unrelated to the change.
+Older code the PR deprecates, re-documents, wraps or newly relies on is
+exposed by the PR: trace whether its behavior is harmful before reducing a
+finding to wording, and say when the defect already existed on the base.
 
 ### Runtime verification
 

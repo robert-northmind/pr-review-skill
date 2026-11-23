@@ -19,6 +19,12 @@ PR intent and critical surrounding code. Look for:
 - **Uncertainty:** unclear intent, missing context, weak tests, unavailable
   dependencies or an execution environment that cannot reproduce the behavior.
 
+When behavior crosses a boundary, such as a script layer calling native code
+over a bridge, a client acting on server state, or a scheduler driving a
+component that has its own lifecycle, give the whole path to one reviewer or
+to a separate focused check. Splitting it by language or layer leaves each
+reviewer half of the interaction.
+
 Size estimates workload; it does not establish risk. Do not use a line-count
 threshold, PR title, label or author assurance as the sole classifier. Spot-check
 claims of mechanical change and inspect exceptions. Missing evidence must not

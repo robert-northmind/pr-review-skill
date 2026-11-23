@@ -315,6 +315,13 @@ load under 1.25 per core for devices; `app_run_limits` in
    an interaction occurred. Capture relevant responsive/keyboard states when
    the change concerns them, without inventing an exhaustive device matrix.
 
+5. When the change adds, changes or deprecates a configuration option, run
+   once with that option set to its non-default value as well; the example
+   or default configuration may never reach that path. When it touches
+   timers, scheduling or lifecycle handling, include a background or hidden
+   period long enough for at least one timer to fire, then return to the
+   foreground and check what ran while hidden and what ran on return.
+
 If the target cannot be reached, report the furthest screen reached and why
 (for example unavailable local auth, missing fixture or unsupported platform).
 Use component tests or another available check for partial coverage, and keep
