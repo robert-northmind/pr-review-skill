@@ -91,6 +91,18 @@ stands alone and adds detail; never restate the layer above.
    changed behavior from changed files: “tracing code is unchanged” is not
    “tracing signals are unaffected”.
 
+10. **Try it yourself** (optional section, id `try-it`), only when the change
+   has behavior a person can see or trigger: UI, an app journey, a CLI, an
+   SDK path its example app exercises. Skip it for docs, CI, refactors and
+   internal logic. `title` “Try it” and a `claim` heading (“Try it: the Save button now confirms”),
+   then an ordered `list` of two to four steps, at most 60 words: how to start
+   it (command, example app, flag or setting to turn on), where to go, and
+   what to look for, including the edge the change is about. Build the steps
+   from what the review actually ran (the app journey, its commands and
+   setup); add one sentence saying so (“The review ran these steps in Chrome
+   at the pinned head”) or, when it could not run them, that they are
+   source-derived and untested. Never invent a flag, route or command.
+
 Findings, self-check, verification and provenance follow from the review object.
 Headings state claims (“Retries stop after three failures”), not topics
 (“Retry logic”), so a reader who reads only headings still gets the story.

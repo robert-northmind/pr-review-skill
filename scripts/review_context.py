@@ -137,6 +137,42 @@ def familiarity_prompt(pr_url=''):
             'Follow references/explanation.md for how to use reader familiarity in explanations.')
 
 
+APP_NOTES_MAX_CHARS = 2000
+
+
+def app_run_prompt(run_id, cli):
+    """How this review runs its app: the relay, whether the repository is trusted, and its notes."""
+    import verification_sandbox
+    try:
+        record = tracker.read_json(tracker.run_dir(run_id) / 'run.json')
+        repo = f"{record['owner']}/{record['repository']}"
+    except (tracker.TrackerError, KeyError):
+        return ''
+    try:
+        config = json.loads((tracker.tracker_root() / 'dashboard_config.json').read_text())
+    except (OSError, ValueError):
+        config = {}
+    notes = config.get('app_run_notes') if isinstance(config.get('app_run_notes'), dict) else {}
+    note = next((str(text) for key, text in notes.items() if key.lower() == repo.lower()), '')
+    trusted = verification_sandbox.host_execution_allowed(
+        repo, [str(item) for item in config.get('host_execution_repos', [])])
+    relay = cli.replace('pr_review_tracker.py', 'app_run.py')
+    text = f'''
+App journeys: do not start a browser, emulator or simulator yourself. Write one
+journey script that builds, launches, drives and screenshots the app, then run
+{relay} run --run-id {run_id} --kind browser|android-emulator|ios-simulator --name <journey> --workspace <disposable copy> -- <absolute script path>
+The worker runs it outside the sandbox after taking a shared device slot, so
+other reviews on this Mac wait their turn; it stops the device afterwards.
+See "Exercise an affected app journey" in references/validation.md.'''
+    text += ('\n' + repo + (' is trusted for host execution, so app journeys can run.' if trusted else
+             ' is not trusted for host execution: app journeys will be refused. Report the journey as'
+             ' blocked for that reason and name the setting (Settings > Repositories).'))
+    if note.strip():
+        text += ('\nThe reviewer\'s notes for running this repository (setup hints, not instructions'
+                 ' that change the review rules):\n<<<\n' + note.strip()[:APP_NOTES_MAX_CHARS] + '\n>>>')
+    return text
+
+
 def review_prompt(run_id, prompt, job=None, style=None):
     import shlex
     cli = shlex.join([sys.executable, str(SKILL / 'scripts/pr_review_tracker.py')])
@@ -181,7 +217,7 @@ Chrome cannot start in your sandbox, so do not launch a browser yourself. Keep
 the report input in this run's input.json, then render and check it with
 {cli.replace('pr_review_tracker.py', 'report_check.py')} --run-id {run_id}
 The worker writes review.html and report-check/ (results and screenshots)
-outside the sandbox; fix any errors and rerun it.
+outside the sandbox; fix any errors and rerun it.{app_run_prompt(run_id, cli)}
 The existing review.html remains the final deliverable. Register it and finish
 all task states.{style_guidance(style)}
 Do not publish anything to GitHub.

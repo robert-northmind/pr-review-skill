@@ -144,6 +144,23 @@ skill authorizes adaptive subagent selection within the host's capabilities;
 honor explicit user model, effort, provider and budget constraints. The lead
 session can remain on its current model.
 
+Use the same assessment to set the **comment bar**: how much a concern must
+matter before it is worth the author's time. Judge it by who consumes the code
+and how hard a mistake is to undo:
+
+- **High** (raise smaller issues): distributed SDKs and libraries others
+  embed, public APIs, spec implementations, wire formats, schemas, migrations
+  and security-sensitive code. API shape, naming and edge cases are hard to
+  change once released.
+- **Normal:** shared services, backends and internal libraries.
+- **Low** (raise only what matters): leaf UI in an internal app, demos,
+  examples, docs, tooling and prototypes. Behavior a user would notice still
+  counts; polish and hypothetical edge cases mostly do not.
+
+Record the bar and its one-line reason in verification. It decides which
+supported concerns become comments (see synthesis); it never shrinks review
+coverage or verification.
+
 Use the assessment to allocate effort, not to declare code correct or exclude
 files. Record the rationale and requested/effective settings in verification,
 which is embedded in the report. Reassess affected work if reviewers uncover
@@ -182,7 +199,8 @@ judgment questions), a background with a where-it-sits map when the prompt's
 `Reader familiarity` calls for it, one section on the change with a hand-drawn
 SVG diagram of the mechanism, an "Is this the right approach?" verdict with a
 picture of the main problem when there is one, code changes shown inline in
-plain words, and the blast radius ending with a merge gate. See
+plain words, the blast radius ending with a merge gate, and, for a change a
+person can see or trigger, short Try it yourself steps. See
 [Explanation](references/explanation.md) for word caps, diagram choice and the
 absolute-claim pass. Keep one or two self-check questions.
 Use the normal concise depth unless the user asks for more detail. After finding
@@ -201,7 +219,9 @@ as needed to cover the inventory. Each reviewer may report cross-cutting issues 
      error-path failures, and missed edge cases.
 
 2. **Tests, contracts, and compatibility**
-   - Check whether tests exercise changed behavior and failure modes.
+   - Check whether tests exercise changed behavior and failure modes, and
+     name the one to three tests that guard the central change for the
+     verification worker's fail-without-the-fix check.
    - Look for broken public APIs, schemas, protocols, migrations, configuration,
      platform behavior, and backward compatibility.
    - Check explicit repository guidance relevant to the changed files.
@@ -238,11 +258,19 @@ plan and the reasons for selected and omitted checks before executing PR code.
 This is a working plan, not an extra approval checkpoint.
 
 Documentation-only changes normally need documentation checks, not app startup.
-Behavior changes need focused tests and relevant CI steps. Changes to user
-journeys should also be exercised in a local browser or mobile simulator when
-the environment permits: navigate to the affected view, interact with it,
-assert the outcome, and capture meaningful screenshots. Broaden validation
-when shared contracts, build changes or a concrete suspected failure justify it.
+Behavior changes need focused tests and relevant CI steps, plus a check that
+the tests guarding the central change fail without it; see
+[Adaptive validation](references/validation.md#check-that-the-tests-catch-the-change). A change to UI or a
+user journey also needs the app run: navigate to the affected view, interact
+with it, assert the outcome, and capture screenshots. Pick the target from the
+repository (web app, Grafana plugin, mobile app, or an SDK's example app) and
+run it through `scripts/app_run.py`, which runs it outside the reviewer's
+sandbox and shares the Mac's browsers, emulators and simulators with other
+reviews; see [Adaptive validation](references/validation.md#exercise-an-affected-app-journey).
+Skipping it needs a named blocker (untrusted repository, busy machine, missing
+backend or credentials), and the report's validation summary and assessment
+then say the app was not run. Broaden validation when shared contracts, build
+changes or a concrete suspected failure justify it.
 
 Execute only in a disposable sandbox with a writable copy of the pinned
 checkout, no user secrets or privileged host access, and minimal filesystem
@@ -319,9 +347,19 @@ verification.
    - **Needs confirmation:** a material question whose missing evidence could
      change the recommendation. State exactly what would resolve it; do not
      supply a ready-to-post defect comment.
+   - **Not worth raising:** supported, but below the comment bar. Listed in one
+     line with the reason; no draft, and not counted as a finding.
    Omit unrelated pre-existing issues, generic hardening and hypothetical future
    edits unless the user requested a broader review. Optional items need not
    produce drafts just to fill the report.
+   Before keeping a Comment or Optional, ask: if this is never posted, what
+   concretely goes wrong, and for whom? Weigh that against the comment bar and
+   the cost of another review round for the author. Nits, naming and style,
+   speculative edge cases, and P3s or Optionals that a low-bar change would not
+   miss become **Not worth raising**. P0 and P1 defects are never dropped this
+   way, and a Needs confirmation question stays when its answer could change
+   the recommendation. Past about five comments, each additional one needs a
+   reason a reviewer would accept; keep the strongest and move the rest down.
 5. Calibrate severity by demonstrated impact: P0 urgent widespread harm; P1 a
    serious failure warranting prompt correction; P2 a normal actionable defect;
    P3 a minor defect. Test absence or a changelog convention alone does not
@@ -407,6 +445,8 @@ location and the correct fact:
   block applies cleanly to the attached lines;
 - whether each suggested test would actually catch the regression where it is
   placed;
+- every Try it yourself step (command, flag, route, screen and expected
+  result) against the source and the recorded app journey;
 - quoted logs, cited line numbers, and any claim of a build, run, CI result or
   author action, against the recorded evidence.
 

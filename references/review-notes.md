@@ -223,7 +223,29 @@ For a reproduced defect, include concise actions and expected/observed behavior
 with its screenshot or log links beside the finding, outside the copyable body.
 For a clean review, these may be the entire findings Markdown; the HTML still
 includes the change explanation above it.
-No arbitrary minimum or maximum finding count applies.
+No arbitrary minimum or maximum finding count applies; the comment bar and
+the "would we miss it?" test in SKILL.md decide what becomes a comment.
+
+List concerns that were checked but are below the comment bar after the
+findings, in one collapsed plain disclosure (not `review-finding`, so they are
+not counted):
+
+```markdown
+<details>
+<summary>Not worth raising (2)</summary>
+
+- **P3 · The empty-state text says "Nothing here"** · internal leaf UI; users
+  are not confused by it.
+- **Optional · A test for a 0-item page** · the 1-item test already covers
+  the boundary.
+
+</details>
+```
+
+One line each: what it is and why it stays out. Do not list rejected
+hypotheses here; those were not supported and belong in verification history.
+Mention the bar in the assessment only when it shaped the outcome, for
+example "Two minor polish items left out: internal leaf UI."
 
 ## Draft boundaries and rendering
 

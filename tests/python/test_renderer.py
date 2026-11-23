@@ -619,6 +619,16 @@ class PaperReportTests(unittest.TestCase):
             self.assertNotIn('// Reader-advanced visual steps',output)
             self.assertNotIn('/* Layered code walk',output)
 
+    def test_ordered_list_for_try_it_steps(self):
+        d=self.paper()
+        d['sections'].append({'id':'try-it','title':'Try it','claim':'Try it: Save now confirms','blocks':[
+            {'type':'list','ordered':True,'items':['Run npm run dev.','Open Settings and press Save.']},
+            {'type':'paragraph','text':'The review ran these steps in Chrome.'}]})
+        output=render(d)
+        self.assertIn('<ol><li>Run npm run dev.</li><li>Open Settings and press Save.</li></ol>',output)
+        d['sections'][-1]['blocks'][0]['ordered']='yes'
+        self.assertIn('<ul><li>Run npm run dev.</li>',render(d))
+
     def test_stepper_flow_and_finding_link(self):
         d=self.paper();d['review']['markdown']='<details class="review-finding">\n<summary>P2 · Wrong value</summary>\n\nThe value is wrong.\n\n</details>'
         stepper=self.stepper();stepper['steps'][1]['finding']='Finding 1'

@@ -241,7 +241,17 @@ Dashboard GitHub operations are read-only by default. An explicit confirmation o
 Checks the sandbox blocks run on your Mac only for repositories you list under
 Settings, Repositories, **Run blocked checks outside the sandbox**; they use a
 throwaway copy and a clean environment but can read your files and use the
-network, and reports label them. Runtime history and generated review artifacts are not included
+network, and reports label them. For UI changes in those repositories, AI
+reviews also run the app (a browser, an Android emulator or an iOS simulator)
+through the same boundary. **How to run each app** in the same settings page
+holds a note per repository, such as the example app folder or local stack to
+use, which new reviews receive. Reviews on this Mac share devices: by default
+two browsers and one emulator or simulator in total, granted only while enough
+memory and CPU are free, counting devices you started yourself. A waiting
+review says in its activity which review holds the device, and continues
+without the app after 20 minutes. `python3 scripts/app_run.py slots` shows
+current use; `app_run_limits` in `dashboard_config.json` changes the limits.
+Runtime history and generated review artifacts are not included
 in this repository. Keep those out of commits and screenshots.
 
 ## In-app AI reviews

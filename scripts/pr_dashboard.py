@@ -114,6 +114,8 @@ def load_config() -> dict[str, Any]:
     merged = {**DEFAULT_CONFIG, **stored}
     merged["watched_repos"] = list(stored.get("watched_repos", []))
     merged["host_execution_repos"] = list(stored.get("host_execution_repos", []))
+    notes = stored.get("app_run_notes")
+    merged["app_run_notes"] = {str(k): str(v) for k, v in notes.items()} if isinstance(notes, dict) else {}
     profiles = {agent: {"model": "", "effort": ""} for agent in AGENTS}
     for agent, profile in stored.get("agent_profiles", {}).items():
         if agent in profiles:
@@ -204,6 +206,25 @@ def remove_host_execution_repo(repo: str) -> str:
     if remaining != config["host_execution_repos"]:
         config["host_execution_repos"] = remaining
         tracker.atomic_write(config_path(), config)
+    return canonical
+
+
+APP_RUN_NOTE_LIMIT = 2000
+
+
+@serialized
+def set_app_run_note(repo: str, note: str) -> str:
+    """How to run a repository's app in a review; an empty note removes it."""
+    canonical = normalize_repo(repo)
+    note = note.strip()
+    if len(note) > APP_RUN_NOTE_LIMIT:
+        raise DashboardError(f"Keep the note under {APP_RUN_NOTE_LIMIT} characters.")
+    config = load_config()
+    notes = {k: v for k, v in config["app_run_notes"].items() if k.lower() != canonical.lower()}
+    if note:
+        notes[canonical] = note
+    config["app_run_notes"] = notes
+    tracker.atomic_write(config_path(), config)
     return canonical
 
 

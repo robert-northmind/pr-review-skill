@@ -760,7 +760,8 @@ def blocks(items, data):
         if kind == 'paragraph':
             output.append(f'<p>{esc(block["text"])}</p>')
         elif kind == 'list':
-            output.append('<ul>' + ''.join(f'<li>{esc(unnumbered(x))}</li>' for x in block['items']) + '</ul>')
+            tag = 'ol' if block.get('ordered') is True else 'ul'
+            output.append(f'<{tag}>' + ''.join(f'<li>{esc(unnumbered(x))}</li>' for x in block['items']) + f'</{tag}>')
         elif kind == 'comparison':
             lanes = []
             for lane in block['lanes']:

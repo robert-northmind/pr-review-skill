@@ -386,6 +386,16 @@ Repositories under **Run blocked checks outside the sandbox** are stored as
 `host_execution_repos` (`owner/repo` or `owner/*`). `verification_sandbox.py
 --host` reads this list itself and refuses any other repository; see
 [trusted host execution](validation.md#trusted-host-execution).
+The same list gates app journeys: `app_run.py` refuses other repositories.
+**How to run each app** stores one note per repository as `app_run_notes`
+(`owner/repo` → text, at most 2,000 characters); `review_context.py` adds the
+note and the repository's trust state to the review prompt as setup hints. The
+review worker serves `app_run.py` requests the way it serves report checks,
+and takes device slots from `device_slots.py`, whose state is
+`device-slots.json` under the tracker root. Optional `app_run_limits` in
+`dashboard_config.json` overrides the per-kind slots, `heavy_devices` and the
+memory and load thresholds; see
+[sharing the Mac](validation.md#share-the-mac-with-other-reviews).
 
 When changing server Python modules, restart the launchd job after validation.
 Asset-only changes are picked up on page reload. Validate with the
