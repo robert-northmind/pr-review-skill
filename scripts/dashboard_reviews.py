@@ -13,6 +13,7 @@ import time
 import ai_cost
 import ai_runtime
 import pr_discussion
+import app_run
 import report_check
 import storage_cleanup
 from review_context import WRAP_UP_PROMPT, message_prompt, review_prompt, style_skill_for_job
@@ -113,6 +114,8 @@ class ReviewWorker:
         self.inbox_offset = 0
         # The reviewer's sandbox cannot launch Chrome; this worker renders and checks the report for it.
         self.report_check = report_check.Service(run_id)
+        # Same for app journeys, which also wait in line for the Mac's shared devices.
+        self.app_run = app_run.Service(run_id, report=lambda text: self.activity.emit('update', text))
 
     def event(self, kind, text):
         if kind == 'attention':
@@ -186,6 +189,7 @@ class ReviewWorker:
                 pass  # The inbox is retried on the next tick.
             try:
                 self.report_check.poll()
+                self.app_run.poll()
             except (OSError, tracker.TrackerError):
                 pass  # The request is retried on the next tick.
             if time.monotonic() - heartbeat >= HEARTBEAT_SECONDS:

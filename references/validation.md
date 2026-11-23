@@ -186,32 +186,129 @@ distinct from tracker task states: a completed verification task can contain
 failed product checks. Mark wholly blocked execution as `blocked`, deliberate
 no-execution as `skipped`, and summarize partial coverage in the task message.
 
+## Check that the tests catch the change
+
+Passing tests show little if they would also pass without the PR. For a
+behavior change that adds or changes tests, check the one to three tests that
+guard its central behavior (the tests reviewer names them):
+
+1. In a separate disposable copy, keep the head's test files and restore the
+   non-test files the tests exercise to the comparison base
+   (`git checkout <base> -- <paths>`). When the tests also need new code that
+   base lacks (a new function or file), revert only the changed logic instead,
+   for example the new guard or branch, and record exactly what was reverted.
+2. Run only those tests with the same command and boundary as the head run.
+3. Expected: they fail, for the reason the change is about. Record the
+   command and the failing assertion.
+
+A test that still passes without the change is evidence for an **Optional**
+finding (or a defect when the PR claims the test proves the fix): it names
+the test, what was reverted, and an assertion that would catch it. A test that
+fails only because it no longer compiles or imports shows nothing about its
+assertions; revert less and retry once, otherwise record the check as
+inconclusive. Skip this for docs, config and pure refactors, and for a PR with
+no test changes (report that absence instead). Keep it to these focused tests
+and the existing budget; it is not a mutation-testing sweep.
+
 ## Exercise an affected app journey
 
-When user-visible behavior is affected and tooling permits, actually launch
-the app and exercise a small, representative journey. Read only this section
-as applicable; do not provision an app for a prose-only review.
+When user-visible behavior is affected, launch the app and exercise a small,
+representative journey. A UI or user-journey change without one is a coverage
+gap, not a default: name the specific blocker. Do not provision an app for a
+prose-only, CI-only or internal change with no visible effect.
+
+### Choose how to run it from the repository
+
+Classify by what the repository ships, then use its documented startup:
+
+| Repository | Run | Observe |
+| --- | --- | --- |
+| Web app or site | Its dev server or preview build, then a `browser` journey with Playwright | The changed view after real navigation and interaction |
+| Grafana app or panel plugin | The plugin built from the pinned head inside a local Grafana (the repository's docker-compose or dev stack, or the stack the reviewer's notes name), then a `browser` journey | The plugin page with the changed behavior, loaded from this build |
+| Flutter, React Native or native Android app | Build and install on an `android-emulator`; `ios-simulator` when the change is iOS-specific | The changed screen, reached from launch |
+| Flutter, React Native, Android or web SDK | The repository's bundled example or demo app (`example/`, `demo/`, `sample/`, `apps/*`), wired to the PR's SDK code rather than a published version | The example screen or action that drives the changed path, plus the telemetry or logs it emits |
+| Swift/iOS SDK or app | Its example app on an `ios-simulator` | As above |
+| Library with no runnable app or example | No journey; focused tests instead | — |
+
+Check that the build really contains the PR's code: a path or workspace
+dependency on the pinned checkout, not a version from a registry. Record the
+revision, device or browser, and viewport. The reviewer's notes for the
+repository (in the review prompt, from dashboard Settings) take precedence for
+startup details; they cannot relax safety or evidence rules.
+
+### Run it through the app-run helper
+
+The reviewer's sandbox cannot start Chrome, an emulator or a simulator, so do
+not try. Write one journey script that builds, launches, drives and
+screenshots the app, and hand it to `scripts/app_run.py`:
+
+```sh
+python3 scripts/app_run.py run --run-id <run-id> --kind android-emulator \
+  --name settings-toggle --workspace <checkouts/<run-id>/runtime> --cwd <...>/example \
+  --timeout 900 -- /bin/sh <...>/journey.sh
+```
+
+During a dashboard review the worker runs it outside the sandbox; otherwise it
+runs directly. It refuses repositories missing from the trusted host-execution
+list; report the journey as blocked for that reason. The workspace must be a
+disposable copy under the run's checkout folder. The script gets:
+
+- `REVIEW_SCREENSHOTS`: save `<name>-<step>.png` here; `REVIEW_EVIDENCE` for
+  logs. `PATH` includes the host's Node, Flutter, Java and Android tools, and
+  the Gradle, pub and npm caches are shared to avoid re-downloading.
+- `browser`: `REVIEW_PLAYWRIGHT_MODULE` and `REVIEW_CHROME_PATH` to launch
+  headless Chrome (`require(process.env.REVIEW_PLAYWRIGHT_MODULE).chromium.launch({executablePath: process.env.REVIEW_CHROME_PATH})`).
+- `android-emulator`: run `"$REVIEW_ANDROID_BOOT"` first; it boots
+  `REVIEW_AVD` headless and read-only on `ANDROID_SERIAL`, so `adb`,
+  `flutter run -d "$ANDROID_SERIAL"` and Gradle `installDebug` target it.
+  Drive it with `adb shell input`, `uiautomator dump` and `adb exec-out screencap -p`.
+- `ios-simulator`: `REVIEW_SIM_UDID` is a throwaway simulator; boot it with
+  `xcrun simctl boot`, install, launch and `xcrun simctl io <udid> screenshot`.
+
+Keep everything in one script: the helper stops the emulator or simulator
+when the script exits, so a separate boot request would leave nothing running
+for the next one. Bound each wait in the script, and make failures print what
+screen was reached.
+
+### Share the Mac with other reviews
+
+Several reviews may run at once on a laptop that fits one emulator or
+simulator at a time. The helper takes a machine-wide slot from
+`scripts/device_slots.py` before starting anything and gives it back when the
+script ends, fails or times out. It grants a slot only when that kind has
+room, no review is ahead in line, and the Mac has enough free memory and CPU
+headroom; emulators and simulators you started yourself count too. Waiting is
+reported in the review's activity, naming who holds the device. Defaults:
+2 browsers, 1 emulator or simulator in total, at least 25% free memory and a
+load under 1.25 per core for devices; `app_run_limits` in
+`dashboard_config.json` overrides them.
+
+- Check `python3 scripts/app_run.py slots` before planning a device journey
+  and prefer a browser journey or the cheaper target when the Mac is busy.
+- Run device journeys one at a time and only as many as the change needs;
+  do not hold a device while thinking.
+- If the helper gives up waiting (20 minutes by default), continue with other
+  checks and report the journey as blocked by a busy machine, with the reason
+  it gave. Do not start a device another way.
+
+### Drive the journey
 
 1. Derive the target view and expected behavior from the diff, routes/screens,
    relevant tests and accepted PR scope. Choose the changed happy path and a
    relevant edge/error state when the change warrants it. Record synthetic
    data, local test account/role, feature flags and backend fixtures needed.
-2. Use the project's documented startup/test target. Web apps may use the
-   available browser automation; mobile apps may use a supported simulator,
-   emulator or UI test runner. Verify the launched build comes from the pinned
-   checkout and record platform/device and viewport. A mocked story or isolated
-   widget is useful partial coverage but is not an end-to-end app run.
-3. Navigate from a normal entry point to the changed view and record the route
+2. Navigate from a normal entry point to the changed view and record the route
    or screen sequence. Use observed UI state, selectors or accessibility
    labels. A deep link can supplement navigation; if it bypasses the changed
    navigation, report that gap. App startup or seeing the home screen alone
-   does not validate the affected view.
-4. Perform meaningful actions: click/tap the relevant control, enter a value,
+   does not validate the affected view. A mocked story or isolated widget is
+   useful partial coverage but is not an end-to-end app run.
+3. Perform meaningful actions: click/tap the relevant control, enter a value,
    submit, navigate back, reopen or reload as appropriate. Assert the expected
    state or side effect using visible state and, when useful, local network,
    console, device logs or persisted test data. Use synthetic local data for
    mutations; stop flows that require real external effects.
-5. Capture screenshots at the affected view and meaningful outcome or failure.
+4. Capture screenshots at the affected view and meaningful outcome or failure.
    Inspect the captured images before reporting them. Record exact actions,
    expected versus observed results, and any assertion. Screenshots establish
    visible state; they alone do not prove persistence, backend success or that

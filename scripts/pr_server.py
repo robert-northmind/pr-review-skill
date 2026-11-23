@@ -33,7 +33,7 @@ import workspace_context
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 MUTATIONS = {'/ai-config','/triage-config','/triage-feedback','/triage-run','/triage-reestimate','/artifact-opened','/queue','/refresh-queue','/recover-reviews','/refresh-reporting','/refresh','/hide','/unhide','/snooze','/unsnooze','/set-config',
-             '/add-repo','/remove-repo','/add-host-repo','/remove-host-repo','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/review-message','/workspace-save','/workspace-chat','/workspace-chat-cancel','/workspace-comment'}
+             '/add-repo','/remove-repo','/add-host-repo','/remove-host-repo','/set-app-note','/regenerate-review','/regenerate-explainer','/copy-prompt','/review-cancel','/review-message','/workspace-save','/workspace-chat','/workspace-chat-cancel','/workspace-comment'}
 
 
 class Server(ThreadingHTTPServer):
@@ -318,6 +318,8 @@ class Handler(BaseHTTPRequestHandler):
                 dashboard.add_host_execution_repo(str(data.get('repo','')))
             elif path == '/remove-host-repo':
                 dashboard.remove_host_execution_repo(str(data.get('repo','')))
+            elif path == '/set-app-note':
+                dashboard.set_app_run_note(str(data.get('repo','')), str(data.get('note','')))
             else:
                 dashboard.set_flag(str(data.get('url','')), 'hidden',path == '/hide')
             self._send(200,{'ok':True})

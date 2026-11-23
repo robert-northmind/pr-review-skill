@@ -127,6 +127,9 @@
       </section>
       <section class="watch-settings host-settings"><h2>Run blocked checks outside the sandbox</h2><p class="muted">When a check can't run in the review sandbox, AI reviews may run it directly on this Mac for these repositories. It uses a throwaway copy and a clean environment, but can read your files and use the network. Reports label these checks. Use owner/* for every repository of an owner.</p><ul id="host-repos"></ul>
         <form id="host-repo-form"><label>Add repository<input id="add-host-repo" name="repo" placeholder="owner/repository or owner/*" required></label><button class="button" type="submit">Trust</button></form>
+      </section>
+      <section class="watch-settings host-settings app-note-settings"><h2>How to run each app</h2><p class="muted">AI reviews run the app for UI changes in a browser, Android emulator or iOS simulator, only for trusted repositories above. Tell them how to start a repository's app: the command, the example app folder, the local stack to use, a feature flag. They share one emulator or simulator at a time across reviews.</p><ul id="app-notes"></ul>
+        <form id="app-note-form"><label>Repository<input id="app-note-repo" name="repo" placeholder="owner/repository" required></label><label>How to run it<textarea id="app-note-text" name="note" rows="3" maxlength="2000" placeholder="e.g. Run example/ with flutter run on the Android emulator; the changed screen is Settings &gt; Tracing" required></textarea></label><button class="button" type="submit">Save</button></form>
       </section></section>
   <section id="appearance-settings" data-settings-section hidden><h2>Appearance</h2><label class="theme-control">Theme<select id="theme" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></section>
 </dialog>

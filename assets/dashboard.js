@@ -450,6 +450,7 @@ function renderState(){
  renderPickers();
  $('watched-repos').innerHTML=config.watched_repos.map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-repo="${esc(repo)}" aria-label="Stop watching ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No watched repositories yet.</li>';
  $('host-repos').innerHTML=(config.host_execution_repos||[]).map(repo=>`<li><span>${esc(repo)}</span><button class="text-button" data-remove-host-repo="${esc(repo)}" aria-label="Stop trusting ${esc(repo)}">Remove</button></li>`).join('')||'<li class="muted">No trusted repositories. Blocked checks are reported as blocked.</li>';
+ $('app-notes').innerHTML=Object.entries(config.app_run_notes||{}).map(([repo,note])=>`<li><div><strong>${esc(repo)}</strong><p class="muted">${esc(note)}</p></div><span><button class="text-button" data-edit-app-note="${esc(repo)}" aria-label="Edit how to run ${esc(repo)}">Edit</button><button class="text-button" data-remove-app-note="${esc(repo)}" aria-label="Remove how to run ${esc(repo)}">Remove</button></span></li>`).join('')||'<li class="muted">No notes yet. Reviews work out how to run the app themselves.</li>';
  renderList();
  if(typeof renderQueue==='function')renderQueue();
  restoreOverviewScroll();
@@ -466,6 +467,8 @@ document.addEventListener('click',async event=>{
  const copy=event.target.closest('[data-copy]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);notify('Session reference copied.');}catch{notify('Could not access the clipboard. Session: '+copy.dataset.copy);}return;}
  const promptButton=event.target.closest('[data-copy-prompt]');if(promptButton){await copyPrompt(promptButton);return;}
  const remove=event.target.closest('[data-remove-repo]');if(remove){try{await post('/remove-repo',{repo:remove.dataset.removeRepo});notify('Repository removed. Sync GitHub to update the inbox.');await loadState();}catch(error){notify(error.message);}return;}
+ const editNote=event.target.closest('[data-edit-app-note]');if(editNote){const repo=editNote.dataset.editAppNote;$('app-note-repo').value=repo;$('app-note-text').value=(state.config.app_run_notes||{})[repo]||'';$('app-note-text').focus();return;}
+ const dropNote=event.target.closest('[data-remove-app-note]');if(dropNote){try{await post('/set-app-note',{repo:dropNote.dataset.removeAppNote,note:''});notify('Note removed.');await loadState();}catch(error){notify(error.message);}return;}
  const untrust=event.target.closest('[data-remove-host-repo]');if(untrust){try{await post('/remove-host-repo',{repo:untrust.dataset.removeHostRepo});notify('Repository removed. Its blocked checks stay blocked.');await loadState();}catch(error){notify(error.message);}return;}
  const guided=event.target.closest('[data-review-guidance]');if(guided){guided.closest('.action-disclosure')?.removeAttribute('open');openGuidance(guided.dataset.url);return;}
  const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
@@ -533,6 +536,7 @@ $('filter-preset-save').addEventListener('click',saveCurrentPreset);
 document.addEventListener('error',event=>{if(event.target.matches?.('.author-avatar'))event.target.hidden=true;},true);
 $('repo-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/add-repo',{repo:$('add-repo').value});$('add-repo').value='';notify('Repository added. Sync GitHub to load its PRs.');await loadState();}catch(error){notify(error.message);}});
 $('host-repo-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/add-host-repo',{repo:$('add-host-repo').value});$('add-host-repo').value='';notify('Repository trusted. New AI reviews may run its blocked checks outside the sandbox.');await loadState();}catch(error){notify(error.message);}});
+$('app-note-form').addEventListener('submit',async event=>{event.preventDefault();try{await post('/set-app-note',{repo:$('app-note-repo').value,note:$('app-note-text').value});$('app-note-repo').value='';$('app-note-text').value='';notify('Saved. New AI reviews of that repository get the note.');await loadState();}catch(error){notify(error.message);}});
 $('refresh').addEventListener('click',syncGitHub);
 syncFilterControls();
 document.addEventListener('DOMContentLoaded',()=>{(async function poll(){await Promise.allSettled([loadState(),loadReporting()]);setTimeout(poll,5000);})();});

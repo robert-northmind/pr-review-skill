@@ -5,6 +5,16 @@ request gets its own section, and the pull request shows when it merged. Older
 sections also carry their merge day. Changes that went to `main` without a pull
 request are grouped by day.
 
+## #41 · Run the app in reviews and leave out minor comments
+
+- AI reviews of UI changes run the app: a web page in Chrome, a mobile app on an Android emulator or iOS simulator, or an SDK's example app. They run outside the reviewer's sandbox, only for repositories trusted under Settings, Repositories.
+- Reviews running at the same time share the Mac: by default two browsers and one emulator or simulator in total, only while enough memory and CPU are free. A waiting review says in its activity which review has the device.
+- Settings, Repositories has **How to run each app**: a note per repository, such as which example app or local stack to use, that new reviews follow.
+- Reports say when the app was not run, and why.
+- Reviews check that the tests guarding a change fail without it; a test that still passes becomes an optional finding.
+- Reports for changes you can see or trigger end with short **Try it yourself** steps: how to start it, where to go, what to look for.
+- Reviews set a comment bar from who uses the code: higher for SDKs, public APIs and schemas, lower for internal leaf UI. Supported concerns below the bar go to a collapsed "Not worth raising" list instead of becoming comments.
+
 ## #38 · Run Codex reviews with the GPT-6.2 models
 
 - Fixed: Codex reviews and chats with GPT-6.2 Astra, GPT-6.2 Sol and GPT-6.1 Terra failed because the bundled Codex runtime was too old. Reinstall `requirements-triage.txt` into `.venv` and restart the dashboard.

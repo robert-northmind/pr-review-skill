@@ -282,7 +282,7 @@ def stop_watchdog(watchdog, write):
 
 def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
               loopback=False, output=None, presets=(), network=False, host=False,
-              repository=None):
+              repository=None, extra_env=None):
     if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').exists():
         raise ValueError('This helper requires macOS sandbox-exec; use an equivalent sandbox on other hosts.')
     if timeout <= 0:
@@ -307,7 +307,7 @@ def run_check(workspace, command, *, read_only=(), cwd=None, timeout=120,
     tag = f'review-check-{uuid.uuid4().hex[:12]}'
     sandbox = None if host else profile(workspace, [*read_only, *preset_reads], loopback,
                                         network=network, extra_rules=preset_rules, tag=tag)
-    environment = clean_environment(workspace, executable, preset_env)
+    environment = clean_environment(workspace, executable, {**preset_env, **(extra_env or {})})
     if 'yarn' in presets:
         copy_yarn_rc(workspace, cwd)
     destination = Path(output).resolve() if output else None

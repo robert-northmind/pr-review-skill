@@ -207,7 +207,7 @@ one concern. A small report can use only a cases grid or diagram and one source 
 Additional block shapes:
 
 - Paragraph: `{"type":"paragraph","text":"Plain prose."}`
-- List: `{"type":"list","items":["A specific condition and consequence."]}`
+- List: `{"type":"list","items":["A specific condition and consequence."]}`; add `"ordered": true` for steps that must happen in order, such as Try it yourself
 - Table: `{"type":"table","headers":["Input","Result"],"rows":[["x","y"]]}`
 - Comparison (two lanes of steps; prefer a cases grid or diagram): `{"type":"comparison","lanes":[{"title":"Before","steps":["..."]},{"title":"After","steps":["..."]}],"caption":"..."}`
 - Background: `{"type":"details","title":"New to this component?","blocks":[...]}`
